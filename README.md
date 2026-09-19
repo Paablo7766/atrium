@@ -1,196 +1,271 @@
 <p align="center">
-  <img src="docs/assets/logo.png" alt="Atrium" width="96" height="96" style="border-radius:22%" />
+  <img src="docs/assets/logo.png" width="88" height="88" alt="Atrium" style="border-radius:22%" />
 </p>
 
 <h1 align="center">Atrium</h1>
 
 <p align="center">
-  <strong>Premium desktop trading journal</strong> · Electron · React · TypeScript<br/>
-  Multi-account analytics · Broker CSV/XLSX import · Psychology journal · Share cards<br/>
-  Fully bilingual <strong>English / Español</strong>
+  <em>The trading journal built for process — not just P&amp;L.</em><br/>
+  <em>El diario de trading pensado para el proceso — no solo para el resultado.</em>
 </p>
 
 <p align="center">
-  <a href="#-english"><img src="https://img.shields.io/badge/lang-English-4ade80?style=for-the-badge&labelColor=0e0e10" alt="English" /></a>
-  <a href="#-español"><img src="https://img.shields.io/badge/lang-Español-38bdf8?style=for-the-badge&labelColor=0e0e10" alt="Español" /></a>
-  <img src="https://img.shields.io/badge/platform-Windows-222228?style=for-the-badge&logo=windows&logoColor=white" alt="Windows" />
-  <img src="https://img.shields.io/badge/Electron-44-47848F?style=for-the-badge&logo=electron&logoColor=white" alt="Electron" />
-  <img src="https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React" />
+  <img src="https://img.shields.io/badge/Windows-Desktop-0e0e10?style=flat-square&logo=windows&logoColor=white" alt="Windows" />
+  <img src="https://img.shields.io/badge/Electron-44-47848F?style=flat-square&logo=electron&logoColor=white" alt="Electron" />
+  <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React" />
+  <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/i18n-EN%20%2F%20ES-4ade80?style=flat-square&labelColor=0e0e10" alt="i18n" />
+</p>
+
+<br/>
+
+<p align="center">
+  <img src="docs/assets/hero-dashboard.png" alt="Atrium — Dashboard / Resumen" width="920" />
 </p>
 
 <p align="center">
-  <img src="docs/assets/hero-dashboard.png" alt="Atrium — Dashboard" width="100%" />
+  <sub>
+    <strong>Dashboard</strong> — equity, KPIs and P&amp;L flow at a glance<br/>
+    <strong>Resumen</strong> — equity, KPIs y flujo de P&amp;L de un vistazo
+  </sub>
 </p>
 
-<p align="center"><sub>Real screenshots from the running app · Capturas reales de la aplicación</sub></p>
+<p align="center">
+  <a href="#product-tour--recorrido-del-producto">Product tour</a>
+  ·
+  <a href="#english">English docs</a>
+  ·
+  <a href="#español">Docs en español</a>
+  ·
+  <a href="docs/README.md">Full documentation</a>
+</p>
 
 ---
 
-# 🇬🇧 English
+## Why Atrium · Por qué Atrium
 
-> **Atrium** is a professional desktop trading journal: track every trade, import from your broker, measure edge with deep analytics, and reflect with a psychology journal — all in a polished dark UI.
+<table>
+<tr>
+<td width="50%" valign="top">
 
-**Docs:** [Features](docs/en/FEATURES.md) · [Getting started](docs/en/GETTING_STARTED.md) · [Import](docs/en/IMPORT.md) · [Architecture](docs/en/ARCHITECTURE.md)
+**English**
 
-## Highlights
+Atrium is a desktop trading journal for serious process work: multi-account books, broker import, deep analytics, psychology notes and shareable recap cards — offline-first, with optional cloud sync.
 
-| | Tool | What you get |
-|---|------|----------------|
-| 📊 | **Dashboard** | Equity & flow charts, KPIs, recent trades, strategy rank, daily loss-limit alerts |
-| 📒 | **Trades** | Filter, search, sort, edit, duplicate, CSV export, share a single trade |
-| 📅 | **Calendar** | Heatmap by P&L or journal events, day panel with notes |
-| 📈 | **Analytics** | Win rate, PF, expectancy, drawdown, R-distribution, weekday/hour, emotions & mistakes |
-| 🧠 | **Journal** | Mood-tagged daily notes linked to trading days |
-| ⚙️ | **Settings** | Accounts, risk desk, playbook checklists, import/export, backups |
-| 📥 | **Broker import** | XTB · Interactive Brokers · DEGIRO · Fomo · Axiom · Auto-detect (CSV / XLSX) |
-| 🃏 | **Share cards** | Week / month / trade cards (1600×900) — themes: Orbit, Editorial, Signal, Folio |
-| ☁️ | **Cloud (optional)** | Supabase auth (magic link / Google) + trade sync |
-| 🌐 | **i18n** | English & Español at runtime |
+</td>
+<td width="50%" valign="top">
+
+**Español**
+
+Atrium es un diario de trading de escritorio para el proceso en serio: varias cuentas, importación de bróker, analítica profunda, notas psicológicas y tarjetas de recap — primero local, con sync opcional en la nube.
+
+</td>
+</tr>
+</table>
+
+| | Capability · Capacidad |
+|:--:|:--|
+| **01** | Multi-account books — live, demo, prop, paper |
+| **02** | Broker CSV / XLSX — XTB, IBKR, DEGIRO + auto-detect |
+| **03** | Analytics — win rate, PF, expectancy, R, drawdown, emotions |
+| **04** | Calendar heatmap + psychology journal |
+| **05** | Share cards 1600×900 — Orbit, Editorial, Signal, Folio |
+| **06** | Optional Supabase auth & sync · EN / ES runtime |
+
+---
+
+## Product tour · Recorrido del producto
+
+Capturas reales de la app en ejecución.  
+*Real screenshots from the running application.*
+
+<br/>
+
+### Analytics · Analítica
+
+Edge, expectancy, long/short origin and category breakdown — where your edge actually lives.  
+*Ventaja, expectativa, origen long/short y desglose por categoría.*
 
 <p align="center">
-  <img src="docs/assets/feature-analytics.png" alt="Analytics" width="48%" />
-  &nbsp;
-  <img src="docs/assets/feature-calendar.png" alt="Calendar" width="48%" />
-</p>
-<p align="center">
-  <img src="docs/assets/feature-trades.png" alt="Trades" width="48%" />
-  &nbsp;
-  <img src="docs/assets/feature-journal.png" alt="Journal" width="48%" />
-</p>
-<p align="center">
-  <img src="docs/assets/feature-import.png" alt="Import / Settings" width="48%" />
-  &nbsp;
-  <img src="docs/assets/feature-share-card.png" alt="Share card" width="48%" />
+  <img src="docs/assets/feature-analytics.png" alt="Atrium Analytics" width="920" />
 </p>
 
-## Quick start
+<br/>
+
+### Calendar · Calendario
+
+Month heatmap by P&amp;L, with day detail and journal context.  
+*Mapa de calor mensual por P&amp;L, con detalle del día y contexto del diario.*
+
+<p align="center">
+  <img src="docs/assets/feature-calendar.png" alt="Atrium Calendar" width="920" />
+</p>
+
+<br/>
+
+### Trades · Operaciones
+
+Searchable trade book — filters, strategies, tags, expand-to-edit.  
+*Libro de operaciones con búsqueda, filtros, estrategias, tags y edición.*
+
+<p align="center">
+  <img src="docs/assets/feature-trades.png" alt="Atrium Trades" width="920" />
+</p>
+
+<br/>
+
+### Journal · Diario
+
+Mood-tagged session notes linked to trading days.  
+*Notas de sesión con estado de ánimo, vinculadas a cada día de trading.*
+
+<p align="center">
+  <img src="docs/assets/feature-journal.png" alt="Atrium Journal" width="920" />
+</p>
+
+<br/>
+
+### Import · Importación
+
+JSON backups and broker CSV/XLSX — XTB, Interactive Brokers, DEGIRO, Fomo, Axiom, auto-detect.  
+*Copias JSON y CSV/XLSX de bróker — XTB, Interactive Brokers, DEGIRO, Fomo, Axiom, auto-detección.*
+
+<p align="center">
+  <img src="docs/assets/feature-import.png" alt="Atrium Import" width="920" />
+</p>
+
+<br/>
+
+### Share cards · Tarjetas
+
+Week, month or single-trade recaps ready to download as PNG 1600×900.  
+*Recaps de semana, mes u operación listos para descargar en PNG 1600×900.*
+
+<p align="center">
+  <img src="docs/assets/feature-share-card.png" alt="Atrium Share Card" width="920" />
+</p>
+
+---
+
+<a id="english"></a>
+
+## English
+
+**Guides:** [Features](docs/en/FEATURES.md) · [Getting started](docs/en/GETTING_STARTED.md) · [Import](docs/en/IMPORT.md) · [Architecture](docs/en/ARCHITECTURE.md) · [Screenshots](docs/en/SCREENSHOTS.md)
+
+### Quick start
 
 ```bash
 npm install
-cp .env.example .env   # optional
-npm run dev
+cp .env.example .env   # optional — cloud / logos
+npm run dev            # Vite + Electron
 ```
 
-Or double-click **`Abrir Atrium.bat`** on Windows.
+Windows shortcut: double-click **`Abrir Atrium.bat`**.
 
-| Script | Purpose |
-|--------|---------|
+| Command | What it does |
+|---------|----------------|
 | `npm run dev` | Development (Vite + Electron) |
-| `npm run build` | Production web build |
-| `npm run dist` | Windows installer (NSIS + portable) → `release/` |
+| `npm run build` | Production web bundle |
+| `npm run dist` | Windows installer → `release/` |
 | `npm run typecheck` | TypeScript check |
 | `npm run test:import` | Import engine tests |
-| `npm run shots` | Capture real README screenshots |
+| `npm run shots` | Regenerate real README screenshots |
 
 ### Environment
 
 | Variable | Required | Purpose |
-|----------|----------|---------|
-| `VITE_SUPABASE_URL` | No | Cloud auth + sync (omit = local-only) |
-| `VITE_SUPABASE_ANON_KEY` | No | Supabase anon key |
-| `VITE_FMP_API_KEY` | No | Ticker / company logos (Financial Modeling Prep) |
+|----------|:--------:|---------|
+| `VITE_SUPABASE_URL` | — | Cloud auth + sync (omit = local-only) |
+| `VITE_SUPABASE_ANON_KEY` | — | Supabase anon key |
+| `VITE_FMP_API_KEY` | — | Ticker logos (Financial Modeling Prep) |
 
-## Tech stack
+### Stack
 
-```text
-React 19 · TypeScript · Vite 8 · Tailwind CSS 4 · Zustand
-Electron 44 · electron-builder · Recharts · date-fns · xlsx
-Supabase (optional) · Prisma schema · FMP logos API
-```
+`React 19` · `TypeScript` · `Vite 8` · `Tailwind CSS 4` · `Zustand` · `Electron 44` · `Recharts` · `xlsx` · `Supabase` (optional)
 
-## Project structure
+### Shortcuts
 
-```text
-├── electron/          Desktop shell (IPC, JSON persistence, backups)
-├── src/
-│   ├── pages/         Dashboard · Trades · Calendar · Analytics · Journal · Settings · Login
-│   ├── components/    UI kit, charts, analytics modules, ShareCard, Tour…
-│   ├── lib/import/    Broker adapters + CSV/XLSX pipeline
-│   ├── auth/          Supabase session gate
-│   └── assets/        Brand logo
-├── prisma/            Cloud data model
-├── supabase/          SQL migrations + RLS
-├── docs/              Bilingual documentation + real screenshots
-└── public/            App icons (.png / .ico)
-```
-
-## Keyboard shortcuts
-
-| Shortcut | Action |
-|----------|--------|
+| Key | Action |
+|-----|--------|
 | `1`–`6` | Switch pages |
 | `Ctrl/Cmd + N` | New trade |
 | `Ctrl/Cmd + B` | Toggle sidebar |
 
-## Author
-
-**Pablo Sanz** — Atrium `v1.0.0`
-
 ---
 
-# 🇪🇸 Español
+<a id="español"></a>
 
-> **Atrium** es un diario de trading profesional para escritorio: registra cada operación, importa desde tu broker, mide tu ventaja con analítica profunda y reflexiona con un diario psicológico — todo en una interfaz oscura premium.
+## Español
 
-**Docs:** [Funciones](docs/es/FUNCIONES.md) · [Primeros pasos](docs/es/PRIMEROS_PASOS.md) · [Importación](docs/es/IMPORTACION.md) · [Arquitectura](docs/es/ARQUITECTURA.md)
+**Guías:** [Funciones](docs/es/FUNCIONES.md) · [Primeros pasos](docs/es/PRIMEROS_PASOS.md) · [Importación](docs/es/IMPORTACION.md) · [Arquitectura](docs/es/ARQUITECTURA.md) · [Capturas](docs/es/CAPTURAS.md)
 
-## Destacados
-
-| | Herramienta | Qué ofrece |
-|---|-------------|------------|
-| 📊 | **Dashboard** | Curvas de equity y flujo, KPIs, operaciones recientes, ranking de estrategias, alertas de pérdida diaria |
-| 📒 | **Operaciones** | Filtrar, buscar, ordenar, editar, duplicar, exportar CSV, compartir una operación |
-| 📅 | **Calendario** | Mapa de calor por P&L o eventos del diario, panel del día con notas |
-| 📈 | **Analítica** | Win rate, factor de beneficio, expectativa, drawdown, distribución en R, día/hora, emociones y errores |
-| 🧠 | **Diario** | Notas diarias con estado de ánimo vinculadas a días de trading |
-| ⚙️ | **Ajustes** | Cuentas, mesa de riesgo, playbook con checklists, importar/exportar, copias de seguridad |
-| 📥 | **Importación** | XTB · Interactive Brokers · DEGIRO · Fomo · Axiom · Auto-detección (CSV / XLSX) |
-| 🃏 | **Tarjetas** | Semana / mes / trade (1600×900) — temas Orbit, Editorial, Signal, Folio |
-| ☁️ | **Nube (opcional)** | Auth Supabase (magic link / Google) + sincronización |
-| 🌐 | **i18n** | Inglés y Español en tiempo real |
-
-## Inicio rápido
+### Inicio rápido
 
 ```bash
 npm install
-cp .env.example .env   # opcional
-npm run dev
+cp .env.example .env   # opcional — nube / logos
+npm run dev            # Vite + Electron
 ```
 
-O haz doble clic en **`Abrir Atrium.bat`**.
+Atajo Windows: doble clic en **`Abrir Atrium.bat`**.
 
-| Script | Propósito |
-|--------|-----------|
+| Comando | Qué hace |
+|---------|----------|
 | `npm run dev` | Desarrollo (Vite + Electron) |
-| `npm run build` | Build web de producción |
-| `npm run dist` | Instalador Windows (NSIS + portable) → `release/` |
+| `npm run build` | Bundle web de producción |
+| `npm run dist` | Instalador Windows → `release/` |
 | `npm run typecheck` | Comprobación TypeScript |
 | `npm run test:import` | Tests del motor de importación |
-| `npm run shots` | Capturas reales para el README |
+| `npm run shots` | Regenerar capturas reales del README |
 
 ### Variables de entorno
 
 | Variable | Obligatoria | Propósito |
-|----------|-------------|-----------|
-| `VITE_SUPABASE_URL` | No | Auth y sync en la nube (sin ella = solo local) |
-| `VITE_SUPABASE_ANON_KEY` | No | Clave anon de Supabase |
-| `VITE_FMP_API_KEY` | No | Logos de tickers (Financial Modeling Prep) |
+|----------|:-----------:|-----------|
+| `VITE_SUPABASE_URL` | — | Auth y sync (sin ella = solo local) |
+| `VITE_SUPABASE_ANON_KEY` | — | Clave anon de Supabase |
+| `VITE_FMP_API_KEY` | — | Logos de tickers (Financial Modeling Prep) |
 
-## Atajos de teclado
+### Stack
 
-| Atajo | Acción |
+`React 19` · `TypeScript` · `Vite 8` · `Tailwind CSS 4` · `Zustand` · `Electron 44` · `Recharts` · `xlsx` · `Supabase` (opcional)
+
+### Atajos
+
+| Tecla | Acción |
 |-------|--------|
 | `1`–`6` | Cambiar de página |
 | `Ctrl/Cmd + N` | Nueva operación |
-| `Ctrl/Cmd + B` | Mostrar/ocultar barra lateral |
+| `Ctrl/Cmd + B` | Mostrar / ocultar barra lateral |
 
-## Autor
+---
 
-**Pablo Sanz** — Atrium `v1.0.0`
+## Repository layout · Estructura
+
+```text
+atrium/
+├── electron/           Desktop shell · persistence · backups
+├── src/
+│   ├── pages/          Dashboard · Trades · Calendar · Analytics · Journal · Settings
+│   ├── components/     Design system · charts · ShareCard · Tour
+│   ├── lib/import/     Broker adapters · CSV / XLSX pipeline
+│   ├── auth/           Optional Supabase gate
+│   └── assets/         Brand mark
+├── prisma/             Cloud schema
+├── supabase/           Migrations + RLS
+├── docs/               Bilingual docs + screenshot gallery
+├── scripts/            Launcher · verification · capture-screenshots
+└── public/             App icons
+```
 
 ---
 
 <p align="center">
-  <img src="docs/assets/logo.png" alt="Atrium" width="48" height="48" style="border-radius:22%" /><br/>
+  <img src="docs/assets/logo.png" width="40" height="40" alt="Atrium" style="border-radius:22%" />
+</p>
+
+<p align="center">
+  <strong>Pablo Sanz</strong> · Atrium <code>v1.0.0</code><br/>
   <sub>Built for serious traders · Hecho para traders serios</sub>
 </p>

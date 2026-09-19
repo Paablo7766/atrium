@@ -1,22 +1,64 @@
-# Documentation index
+<p align="center">
+  <img src="assets/logo.png" width="64" height="64" alt="Atrium" style="border-radius:22%" />
+</p>
 
-| English | Español |
-|---------|---------|
-| [Features](en/FEATURES.md) | [Funciones](es/FUNCIONES.md) |
-| [Getting started](en/GETTING_STARTED.md) | [Primeros pasos](es/PRIMEROS_PASOS.md) |
-| [Import](en/IMPORT.md) | [Importación](es/IMPORTACION.md) |
-| [Architecture](en/ARCHITECTURE.md) | [Arquitectura](es/ARQUITECTURA.md) |
+<h1 align="center">Atrium Docs</h1>
 
-## Assets
+<p align="center">
+  Bilingual documentation · Documentación bilingüe<br/>
+  <a href="../README.md">← Back to README</a>
+</p>
 
-| File | Use |
-|------|-----|
-| `assets/logo.png` | Brand mark |
-| `assets/icon.png` | App icon |
-| `assets/hero-dashboard.png` | README hero |
-| `assets/feature-analytics.png` | Analytics preview |
-| `assets/feature-calendar.png` | Calendar preview |
-| `assets/feature-import.png` | Import preview |
-| `assets/feature-share-card.png` | Share card preview |
+---
 
-← Back to [README](../README.md)
+## Guides · Guías
+
+<table>
+<tr>
+<th align="left" width="50%">English</th>
+<th align="left" width="50%">Español</th>
+</tr>
+<tr>
+<td valign="top">
+
+- [Features](en/FEATURES.md) — full tool catalogue  
+- [Getting started](en/GETTING_STARTED.md) — install & run  
+- [Import](en/IMPORT.md) — broker CSV / XLSX  
+- [Architecture](en/ARCHITECTURE.md) — stack & data flow  
+- [Screenshots](en/SCREENSHOTS.md) — product gallery  
+
+</td>
+<td valign="top">
+
+- [Funciones](es/FUNCIONES.md) — catálogo de herramientas  
+- [Primeros pasos](es/PRIMEROS_PASOS.md) — instalar y ejecutar  
+- [Importación](es/IMPORTACION.md) — CSV / XLSX de bróker  
+- [Arquitectura](es/ARQUITECTURA.md) — stack y datos  
+- [Capturas](es/CAPTURAS.md) — galería del producto  
+
+</td>
+</tr>
+</table>
+
+---
+
+## Brand assets · Marca
+
+| Asset | Path |
+|-------|------|
+| Logo | [`assets/logo.png`](assets/logo.png) |
+| App icon | [`assets/icon.png`](assets/icon.png) |
+
+## Screenshot set · Set de capturas
+
+| Screen | EN | ES | File |
+|--------|----|----|------|
+| Dashboard | [View](en/SCREENSHOTS.md#dashboard) | [Ver](es/CAPTURAS.md#resumen) | `assets/hero-dashboard.png` |
+| Analytics | [View](en/SCREENSHOTS.md#analytics) | [Ver](es/CAPTURAS.md#analítica) | `assets/feature-analytics.png` |
+| Calendar | [View](en/SCREENSHOTS.md#calendar) | [Ver](es/CAPTURAS.md#calendario) | `assets/feature-calendar.png` |
+| Trades | [View](en/SCREENSHOTS.md#trades) | [Ver](es/CAPTURAS.md#operaciones) | `assets/feature-trades.png` |
+| Journal | [View](en/SCREENSHOTS.md#journal) | [Ver](es/CAPTURAS.md#diario) | `assets/feature-journal.png` |
+| Import | [View](en/SCREENSHOTS.md#import) | [Ver](es/CAPTURAS.md#importación) | `assets/feature-import.png` |
+| Share card | [View](en/SCREENSHOTS.md#share-card) | [Ver](es/CAPTURAS.md#tarjeta) | `assets/feature-share-card.png` |
+
+> Regenerate: `npx vite --config vite.web.mts` then `npm run shots`.
