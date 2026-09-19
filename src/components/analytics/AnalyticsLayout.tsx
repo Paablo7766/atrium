@@ -36,28 +36,36 @@ export function AnalyticsLayout({
 }) {
   return (
     <div className="page">
-      {hero}
+      <div data-analytics-section="hero">{hero}</div>
 
       {originLabel != null && <SectionLabel className="animate-rise delay-2">{originLabel}</SectionLabel>}
-      {origin}
+      {origin != null && <div data-analytics-section="origin">{origin}</div>}
 
-      {category}
+      {category != null && <div data-analytics-section="category">{category}</div>}
 
       {timeLabel != null && <SectionLabel className="animate-rise delay-3">{timeLabel}</SectionLabel>}
-      {timeWeekday}
-      {timeEntry}
-
-      {riskLabel != null && <SectionLabel className="animate-rise delay-4">{riskLabel}</SectionLabel>}
-      {(riskRDist || riskDrawdown) && (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 lg:gap-6 animate-rise delay-4">
-          {riskRDist}
-          {riskDrawdown}
+      {(timeWeekday || timeEntry) && (
+        <div data-analytics-section="time">
+          {timeWeekday}
+          {timeEntry}
         </div>
       )}
-      {riskEdge}
+
+      {riskLabel != null && <SectionLabel className="animate-rise delay-4">{riskLabel}</SectionLabel>}
+      {(riskRDist || riskDrawdown || riskEdge) && (
+        <div data-analytics-section="risk">
+          {(riskRDist || riskDrawdown) && (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 lg:gap-6 animate-rise delay-4">
+              {riskRDist}
+              {riskDrawdown}
+            </div>
+          )}
+          {riskEdge}
+        </div>
+      )}
 
       {processLabel != null && <SectionLabel className="animate-rise delay-5">{processLabel}</SectionLabel>}
-      {process}
+      {process != null && <div data-analytics-section="process">{process}</div>}
     </div>
   )
 }

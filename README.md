@@ -83,12 +83,64 @@ Capturas reales de la app en ejecución.
 
 ### Analytics · Analítica
 
-Edge, expectancy, long/short origin and category breakdown — where your edge actually lives.  
-*Ventaja, expectativa, origen long/short y desglose por categoría.*
+Deep edge measurement across the whole book — not a single KPI strip.  
+*Medición profunda de la ventaja en todo el libro — no solo una franja de KPIs.*
+
+| Block · Bloque | What you see · Qué ves |
+|----------------|------------------------|
+| **Overview** | Net P&L, win rate, profit factor, expectancy, avg R, payoff |
+| **Insights** | Auto highlights — process leaks, best weekday, leading strategy |
+| **P&L origin** | Long vs short contribution |
+| **By category** | Strategy · symbol · market · tag · setup |
+| **Time** | Weekday, hour-of-day, monthly seasonality |
+| **Risk** | R-distribution, drawdown curve, streaks, Sharpe, recovery |
+| **Process** | Emotions, perceived quality, mistake tags |
 
 <p align="center">
-  <img src="docs/assets/analytics.png" alt="Atrium Analytics" width="920" />
+  <img src="docs/assets/analytics.png" alt="Atrium Analytics — overview, insights, P&amp;L origin" width="920" />
 </p>
+
+<p align="center">
+  <sub>
+    <strong>EN</strong> — hero KPIs, smart insights, long/short origin and category table<br/>
+    <strong>ES</strong> — KPIs, insights, origen long/short y tabla por categoría
+  </sub>
+</p>
+
+<p align="center">
+  <img src="docs/assets/analytics-time.png" alt="Atrium Analytics — time breakdown" width="920" />
+</p>
+
+<p align="center">
+  <sub>
+    <strong>EN</strong> — when the edge shows up (weekday · hour · month)<br/>
+    <strong>ES</strong> — cuándo aparece la ventaja (día · hora · mes)
+  </sub>
+</p>
+
+<p align="center">
+  <img src="docs/assets/analytics-risk.png" alt="Atrium Analytics — risk and R distribution" width="920" />
+</p>
+
+<p align="center">
+  <sub>
+    <strong>EN</strong> — R histogram, drawdown, streak quality and risk metrics<br/>
+    <strong>ES</strong> — histograma en R, drawdown, calidad de rachas y métricas de riesgo
+  </sub>
+</p>
+
+<p align="center">
+  <img src="docs/assets/analytics-process.png" alt="Atrium Analytics — psychology / process" width="920" />
+</p>
+
+<p align="center">
+  <sub>
+    <strong>EN</strong> — emotions, star ratings and mistake tags vs P&amp;L<br/>
+    <strong>ES</strong> — emociones, estrellas y etiquetas de error frente al P&amp;L
+  </sub>
+</p>
+
+Full write-up: [Features → Analytics](docs/en/FEATURES.md#4-analytics) · [Funciones → Analítica](docs/es/FUNCIONES.md#4-analítica)
 
 <br/>
 

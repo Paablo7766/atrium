@@ -83,6 +83,14 @@ async function shot(page: Page, name: string) {
   console.log('saved', name)
 }
 
+async function scrollToSection(page: Page, section: string) {
+  const el = page.locator(`[data-analytics-section="${section}"]`).first()
+  if (await el.count()) {
+    await el.scrollIntoViewIfNeeded()
+    await page.waitForTimeout(500)
+  }
+}
+
 async function main() {
   await mkdir(OUT, { recursive: true })
   const seed = buildSeed()
@@ -115,6 +123,15 @@ async function main() {
   await goPage(page, 'analytics')
   await page.waitForTimeout(1400)
   await shot(page, 'analytics.png')
+
+  await scrollToSection(page, 'time')
+  await shot(page, 'analytics-time.png')
+
+  await scrollToSection(page, 'risk')
+  await shot(page, 'analytics-risk.png')
+
+  await scrollToSection(page, 'process')
+  await shot(page, 'analytics-process.png')
 
   await goPage(page, 'journal')
   await shot(page, 'journal.png')

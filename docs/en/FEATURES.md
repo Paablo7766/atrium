@@ -48,17 +48,19 @@ Visual month of your trading life.
 
 ## 4. Analytics
 
-Deep edge measurement (`src/lib/stats.ts` + Recharts).
+Deep edge measurement (`src/lib/stats.ts` + Recharts). Filter by period (7D · 30D · 90D · month · year · all) and get automatic insights.
 
 | Block | Metrics |
 |-------|---------|
-| Overview | Win rate, PF, expectancy, Sharpe-style, avg win/loss |
-| P&L origin | Where profits and losses come from |
-| By category | Strategy, market, direction (long/short) |
+| Overview | Net P&L, win rate, PF, expectancy, avg R, payoff |
+| Insights | Process leaks, best weekday, leading strategy |
+| P&L origin | Long vs short contribution |
+| By category | Strategy · symbol · market · tag · setup |
 | Time | Weekday, hour of day, month seasonality |
-| Risk | Drawdown curve, streaks |
-| Psychology | Emotions, star ratings, mistake tags |
-| R-distribution | Histogram of R-multiples |
+| Risk | R histogram, drawdown curve, streaks, Sharpe, recovery |
+| Process | Emotions, perceived star ratings, mistake tags |
+
+Screenshots: [overview](../assets/analytics.png) · [time](../assets/analytics-time.png) · [risk](../assets/analytics-risk.png) · [process](../assets/analytics-process.png) — see also [SCREENSHOTS.md](./SCREENSHOTS.md).
 
 ---
 

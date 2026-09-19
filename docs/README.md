@@ -54,7 +54,10 @@
 | Screen | EN | ES | File |
 |--------|----|----|------|
 | Dashboard | [View](en/SCREENSHOTS.md#dashboard) | [Ver](es/CAPTURAS.md#resumen) | `assets/dashboard.png` |
-| Analytics | [View](en/SCREENSHOTS.md#analytics) | [Ver](es/CAPTURAS.md#analítica) | `assets/analytics.png` |
+| Analytics overview | [View](en/SCREENSHOTS.md#analytics--overview) | [Ver](es/CAPTURAS.md#analítica--overview) | `assets/analytics.png` |
+| Analytics time | [View](en/SCREENSHOTS.md#analytics--time) | [Ver](es/CAPTURAS.md#analítica--tiempo) | `assets/analytics-time.png` |
+| Analytics risk | [View](en/SCREENSHOTS.md#analytics--risk) | [Ver](es/CAPTURAS.md#analítica--riesgo) | `assets/analytics-risk.png` |
+| Analytics process | [View](en/SCREENSHOTS.md#analytics--process) | [Ver](es/CAPTURAS.md#analítica--proceso) | `assets/analytics-process.png` |
 | Calendar | [View](en/SCREENSHOTS.md#calendar) | [Ver](es/CAPTURAS.md#calendario) | `assets/calendar.png` |
 | Trades | [View](en/SCREENSHOTS.md#trades) | [Ver](es/CAPTURAS.md#operaciones) | `assets/trades.png` |
 | Journal | [View](en/SCREENSHOTS.md#journal) | [Ver](es/CAPTURAS.md#diario) | `assets/journal.png` |

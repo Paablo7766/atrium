@@ -48,17 +48,19 @@ Mes visual de tu trading.
 
 ## 4. Analítica
 
-Medición profunda de la ventaja (`src/lib/stats.ts` + Recharts).
+Medición profunda de la ventaja (`src/lib/stats.ts` + Recharts). Filtra por periodo (7D · 30D · 90D · mes · año · todo) y alimenta insights automáticos.
 
 | Bloque | Métricas |
 |--------|----------|
-| Resumen | Win rate, PF, expectativa, estilo Sharpe, media win/loss |
-| Origen del P&L | De dónde salen beneficios y pérdidas |
-| Por categoría | Estrategia, mercado, dirección (long/short) |
+| Resumen | P&L neto, win rate, PF, expectativa, R medio, payoff |
+| Insights | Fugas de proceso, mejor día, estrategia líder |
+| Origen del P&L | Contribución long vs short |
+| Por categoría | Estrategia · símbolo · mercado · etiqueta · setup |
 | Tiempo | Día de la semana, hora, estacionalidad mensual |
-| Riesgo | Curva de drawdown, rachas |
-| Psicología | Emociones, estrellas, etiquetas de error |
-| Distribución en R | Histograma de R-múltiples |
+| Riesgo | Histograma en R, curva de drawdown, rachas, Sharpe, recuperación |
+| Proceso | Emociones, estrellas percibidas, etiquetas de error |
+
+Capturas: [overview](../assets/analytics.png) · [tiempo](../assets/analytics-time.png) · [riesgo](../assets/analytics-risk.png) · [proceso](../assets/analytics-process.png) — ver también [CAPTURAS.md](./CAPTURAS.md).
 
 ---
 
