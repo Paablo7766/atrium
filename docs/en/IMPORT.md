@@ -1,6 +1,6 @@
 # Broker import
 
-Atrium Journal imports **CSV, TXT, XLSX, and XLS** broker statements, normalizes executions, groups them into trades, deduplicates, and optionally syncs to Supabase.
+Atrium imports **CSV, TXT, XLSX, and XLS** broker statements, normalizes executions, groups them into trades, deduplicates, and optionally syncs to Supabase.
 
 Pipeline: `src/lib/import/` → parse → adapters → group → map → dedupe → UI / cloud.
 

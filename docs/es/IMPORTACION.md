@@ -1,6 +1,6 @@
 # Importación desde brokers
 
-Atrium Journal importa extractos **CSV, TXT, XLSX y XLS**, normaliza ejecuciones, las agrupa en operaciones, evita duplicados y opcionalmente sincroniza con Supabase.
+Atrium importa extractos **CSV, TXT, XLSX y XLS**, normaliza ejecuciones, las agrupa en operaciones, evita duplicados y opcionalmente sincroniza con Supabase.
 
 Pipeline: `src/lib/import/` → parsear → adapters → agrupar → mapear → dedupe → UI / nube.
 

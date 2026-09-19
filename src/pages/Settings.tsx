@@ -919,7 +919,7 @@ export function SettingsPage() {
                       danger
                     />
                   </div>
-                  <p className="text-[11px] text-dim text-center pt-5">Atrium Journal · v1.0.0 · Los datos se guardan únicamente en tu equipo.</p>
+                  <p className="text-[11px] text-dim text-center pt-5">Atrium · v1.0.0 · Los datos se guardan únicamente en tu equipo.</p>
                 </Panel>
               )}
             </div>

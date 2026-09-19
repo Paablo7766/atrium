@@ -101,7 +101,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 640,
     backgroundColor: '#080809',
-    title: 'Atrium Journal',
+    title: 'Atrium',
     icon: path.join(app.isPackaged ? DIST : path.join(__dirname, '../public'), process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     titleBarStyle: 'hidden',
     titleBarOverlay: {

@@ -1,6 +1,6 @@
 # Funciones
 
-Catálogo completo de herramientas de **Atrium Journal**.
+Catálogo completo de herramientas de **Atrium**.
 
 ---
 

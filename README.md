@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/assets/logo.png" alt="Atrium Journal" width="96" height="96" style="border-radius:22%" />
+  <img src="docs/assets/logo.png" alt="Atrium" width="96" height="96" style="border-radius:22%" />
 </p>
 
-<h1 align="center">Atrium Journal</h1>
+<h1 align="center">Atrium</h1>
 
 <p align="center">
   <strong>Premium desktop trading journal</strong> · Electron · React · TypeScript<br/>
@@ -16,18 +16,19 @@
   <img src="https://img.shields.io/badge/platform-Windows-222228?style=for-the-badge&logo=windows&logoColor=white" alt="Windows" />
   <img src="https://img.shields.io/badge/Electron-44-47848F?style=for-the-badge&logo=electron&logoColor=white" alt="Electron" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React" />
-  <img src="https://img.shields.io/badge/license-Private-5b5b65?style=for-the-badge&labelColor=0e0e10" alt="License" />
 </p>
 
 <p align="center">
-  <img src="docs/assets/hero-dashboard.png" alt="Atrium Journal — Dashboard" width="100%" />
+  <img src="docs/assets/hero-dashboard.png" alt="Atrium — Dashboard" width="100%" />
 </p>
+
+<p align="center"><sub>Real screenshots from the running app · Capturas reales de la aplicación</sub></p>
 
 ---
 
 # 🇬🇧 English
 
-> **Atrium Journal** is a professional desktop trading journal: track every trade, import from your broker, measure edge with deep analytics, and reflect with a psychology journal — all in a polished dark UI.
+> **Atrium** is a professional desktop trading journal: track every trade, import from your broker, measure edge with deep analytics, and reflect with a psychology journal — all in a polished dark UI.
 
 **Docs:** [Features](docs/en/FEATURES.md) · [Getting started](docs/en/GETTING_STARTED.md) · [Import](docs/en/IMPORT.md) · [Architecture](docs/en/ARCHITECTURE.md)
 
@@ -52,7 +53,12 @@
   <img src="docs/assets/feature-calendar.png" alt="Calendar" width="48%" />
 </p>
 <p align="center">
-  <img src="docs/assets/feature-import.png" alt="Broker import" width="48%" />
+  <img src="docs/assets/feature-trades.png" alt="Trades" width="48%" />
+  &nbsp;
+  <img src="docs/assets/feature-journal.png" alt="Journal" width="48%" />
+</p>
+<p align="center">
+  <img src="docs/assets/feature-import.png" alt="Import / Settings" width="48%" />
   &nbsp;
   <img src="docs/assets/feature-share-card.png" alt="Share card" width="48%" />
 </p>
@@ -60,13 +66,8 @@
 ## Quick start
 
 ```bash
-# 1. Install
 npm install
-
-# 2. Optional: copy env and fill keys
-cp .env.example .env
-
-# 3. Run (Vite + Electron)
+cp .env.example .env   # optional
 npm run dev
 ```
 
@@ -79,6 +80,7 @@ Or double-click **`Abrir Atrium.bat`** on Windows.
 | `npm run dist` | Windows installer (NSIS + portable) → `release/` |
 | `npm run typecheck` | TypeScript check |
 | `npm run test:import` | Import engine tests |
+| `npm run shots` | Capture real README screenshots |
 
 ### Environment
 
@@ -108,7 +110,7 @@ Supabase (optional) · Prisma schema · FMP logos API
 │   └── assets/        Brand logo
 ├── prisma/            Cloud data model
 ├── supabase/          SQL migrations + RLS
-├── docs/              Bilingual documentation + marketing assets
+├── docs/              Bilingual documentation + real screenshots
 └── public/            App icons (.png / .ico)
 ```
 
@@ -122,13 +124,13 @@ Supabase (optional) · Prisma schema · FMP logos API
 
 ## Author
 
-**Pablo Sanz** — Atrium Journal `v1.0.0`
+**Pablo Sanz** — Atrium `v1.0.0`
 
 ---
 
 # 🇪🇸 Español
 
-> **Atrium Journal** es un diario de trading profesional para escritorio: registra cada operación, importa desde tu broker, mide tu ventaja con analítica profunda y reflexiona con un diario psicológico — todo en una interfaz oscura premium.
+> **Atrium** es un diario de trading profesional para escritorio: registra cada operación, importa desde tu broker, mide tu ventaja con analítica profunda y reflexiona con un diario psicológico — todo en una interfaz oscura premium.
 
 **Docs:** [Funciones](docs/es/FUNCIONES.md) · [Primeros pasos](docs/es/PRIMEROS_PASOS.md) · [Importación](docs/es/IMPORTACION.md) · [Arquitectura](docs/es/ARQUITECTURA.md)
 
@@ -150,13 +152,8 @@ Supabase (optional) · Prisma schema · FMP logos API
 ## Inicio rápido
 
 ```bash
-# 1. Instalar
 npm install
-
-# 2. Opcional: copiar entorno y rellenar claves
-cp .env.example .env
-
-# 3. Ejecutar (Vite + Electron)
+cp .env.example .env   # opcional
 npm run dev
 ```
 
@@ -169,6 +166,7 @@ O haz doble clic en **`Abrir Atrium.bat`**.
 | `npm run dist` | Instalador Windows (NSIS + portable) → `release/` |
 | `npm run typecheck` | Comprobación TypeScript |
 | `npm run test:import` | Tests del motor de importación |
+| `npm run shots` | Capturas reales para el README |
 
 ### Variables de entorno
 
@@ -188,7 +186,7 @@ O haz doble clic en **`Abrir Atrium.bat`**.
 
 ## Autor
 
-**Pablo Sanz** — Atrium Journal `v1.0.0`
+**Pablo Sanz** — Atrium `v1.0.0`
 
 ---
 

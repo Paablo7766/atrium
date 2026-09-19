@@ -1,6 +1,6 @@
 @echo off
 setlocal
-title Atrium Journal
+title Atrium
 cd /d "%~dp0"
 
 REM Node.js no siempre esta en el PATH al hacer doble clic

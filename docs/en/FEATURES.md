@@ -1,6 +1,6 @@
 # Features
 
-Complete catalogue of tools inside **Atrium Journal**.
+Complete catalogue of tools inside **Atrium**.
 
 ---
 

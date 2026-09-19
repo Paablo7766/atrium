@@ -616,17 +616,11 @@ function Welcome({
           Atrium
         </div>
         <div
-          className={clsx('mt-2.5 text-[10px] uppercase tracking-[0.38em] text-dim', motion('animate-intro-kicker'))}
-          style={at(820)}
-        >
-          Journal
-        </div>
-        <div
           className={clsx('mt-7 h-px w-14 bg-accent origin-center', motion('animate-intro-line'))}
-          style={at(1100)}
+          style={at(820)}
         />
 
-        <div className={clsx('mt-8', motion('animate-intro-kicker'))} style={at(1200)} onClick={(e) => e.stopPropagation()}>
+        <div className={clsx('mt-8', motion('animate-intro-kicker'))} style={at(1000)} onClick={(e) => e.stopPropagation()}>
           <LanguageSwitch value={locale} onChange={onLocale} size="sm" />
         </div>
 

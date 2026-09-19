@@ -1,6 +1,6 @@
 {
-  "name": "atrium-journal",
-  "productName": "Atrium Journal",
+  "name": "atrium",
+  "productName": "Atrium",
   "version": "1.0.0",
   "description": "Diario de trading profesional para escritorio",
   "private": true,
@@ -13,13 +13,14 @@
     "test:import": "npx --yes tsx scripts/verify-import-engine.mts",
     "test:mapper": "npx --yes tsx scripts/verify-trade-mapper.mts",
     "test:xlsx": "npx --yes tsx scripts/verify-xlsx-import.mts",
+    "shots": "npx --yes tsx scripts/capture-screenshots.mts",
     "build": "vite build",
     "dist": "vite build && electron-builder --win",
     "preview": "vite preview"
   },
   "build": {
     "appId": "com.pablosanz.tradingjournal",
-    "productName": "Atrium Journal",
+    "productName": "Atrium",
     "directories": {
       "output": "release"
     },
@@ -60,6 +61,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "electron": "^44.4.2",
     "electron-builder": "^26.15.3",
+    "playwright": "^1.63.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.3.0",

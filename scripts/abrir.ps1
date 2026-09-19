@@ -1,8 +1,8 @@
-# Atrium Journal launcher — used by the .bat files
+# Atrium launcher — used by the .bat files
 $ErrorActionPreference = 'Continue'
 $Root = Resolve-Path (Join-Path $PSScriptRoot '..')
 Set-Location $Root
-try { $Host.UI.RawUI.WindowTitle = 'Atrium Journal' } catch {}
+try { $Host.UI.RawUI.WindowTitle = 'Atrium' } catch {}
 
 $env:Path = "C:\Program Files\nodejs;$env:APPDATA\npm;$env:Path"
 
@@ -49,7 +49,7 @@ function Stop-Stale {
 }
 
 Write-Host ''
-Write-Host '  Atrium Journal'
+Write-Host '  Atrium'
 Write-Host "  $Root"
 Write-Host ''
 

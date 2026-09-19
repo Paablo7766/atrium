@@ -363,7 +363,7 @@ function drawBrandHeader(
   ctx.textAlign = 'right'
   ctx.font = `500 13px ${FONT}`
   ctx.fillStyle = light ? '#a1a1aa' : '#52525b'
-  ctx.fillText(opts?.rightLabel ?? 'ATRIUM  Journal', SHARE_W - 72, y + 36)
+  ctx.fillText(opts?.rightLabel ?? 'ATRIUM', SHARE_W - 72, y + 36)
   ctx.textAlign = 'left'
 }
 

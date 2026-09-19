@@ -10,7 +10,7 @@
 
 ```bash
 git clone <url-del-repo>
-cd atrium-journal   # o el nombre de la carpeta
+cd atrium   # o el nombre de la carpeta
 npm install
 cp .env.example .env   # opcional
 npm run dev

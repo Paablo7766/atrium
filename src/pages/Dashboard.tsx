@@ -3,16 +3,18 @@ import { clsx } from 'clsx'
 import { AlertTriangle, Sparkles, ArrowRight, Share2, Loader2 } from 'lucide-react'
 import { useStore } from '@/store'
 import { useTrades } from '@/hooks/useTrades'
+import { useLiveQuotes } from '@/hooks/useLiveQuotes'
 import { Topbar } from '@/components/Topbar'
 import { AssetLogo } from '@/components/AssetLogo'
 import { Button, Card, Confirm, Empty, Pnl, Segmented, Stat, StatGrid, DirectionGlyph } from '@/components/ui'
 import { PeriodStats } from '@/components/PeriodStats'
 import { FlowChart, DailyPnlChart, EquityChart } from '@/components/charts'
-import { computeStats, dailyFlow, dailyPnl, equityCurve, groupPerformance, tradePnl, sortByExit } from '@/lib/stats'
+import { computeStats, dailyFlow, dailyPnl, equityCurve, groupPerformance, tradePnl, unrealizedPnl, sortByExit } from '@/lib/stats'
 import { accountEquity } from '@/lib/capital'
 import { looksLikeDemoDesk } from '@/lib/demo'
 import { todayKey, dateKeyFromDate, fmtMoney, fmtNum, fmtPct, fmtDate } from '@/lib/format'
 import { deltaPct, equityBefore, filterByPreviousRange, filterByRange, filterCashflowsByPreviousRange, filterCashflowsByRange, priorEquity, previousRangeStart } from '@/lib/range'
+import { cleanTicker } from '@/lib/ticker'
 import type { Trade } from '@/types'
 import { useT } from '@/lib/useI18n'
 import { rangeHint, rangeOptions } from '@/lib/i18n'
@@ -69,6 +71,14 @@ export function Dashboard() {
     return [...open, ...closed].slice(0, 7)
   }, [filtered])
   const openCount = useMemo(() => filtered.filter((t) => t.status === 'OPEN').length, [filtered])
+  const openPositions = useMemo(
+    () =>
+      trades
+        .filter((t) => t.status === 'OPEN')
+        .sort((a, b) => new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime()),
+    [trades],
+  )
+  const { quotes, isLoadingQuotes } = useLiveQuotes(trades)
 
   const equity = accountEquity(settings.startingBalance, trades, cashflows)
   const returnPct = baseEquity ? (stats.netPnl / baseEquity) * 100 : null
@@ -361,6 +371,47 @@ export function Dashboard() {
           )}
         </Card>
 
+        {openPositions.length > 0 && (
+          <Card
+            title={t('dash.openPositions')}
+            subtitle={isLoadingQuotes ? t('dash.openUpdating') : t('dash.openPositionsSub')}
+            action={
+              isLoadingQuotes ? (
+                <Loader2 size={14} className="text-muted animate-spin" />
+              ) : (
+                <Button variant="ghost" size="sm" onClick={() => setPage('trades')}>
+                  {t('dash.seeAll')} <ArrowRight size={14} />
+                </Button>
+              )
+            }
+            padded={false}
+            className="overflow-hidden"
+          >
+            <div className="border-t border-border overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+                    <th className="px-5 py-2.5 font-semibold">{t('dash.openColSymbol')}</th>
+                    <th className="px-3 py-2.5 font-semibold text-right">{t('dash.openColEntry')}</th>
+                    <th className="px-3 py-2.5 font-semibold text-right">{t('dash.openColLive')}</th>
+                    <th className="px-5 py-2.5 font-semibold text-right">{t('dash.openColPnl')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {openPositions.map((tr) => (
+                    <OpenPositionRow
+                      key={tr.id}
+                      trade={tr}
+                      livePrice={quotes[cleanTicker(tr.symbol)]}
+                      onClick={() => openTradeModal(tr)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
+
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-5 lg:gap-6">
           <Card
             title={t('dash.recent')}
@@ -375,9 +426,13 @@ export function Dashboard() {
           >
             {recent.length ? (
               <ul>
-                {recent.map((t) => (
-                  <li key={t.id} className="border-t border-border">
-                    <RecentRow t={t} onClick={() => openTradeModal(t)} />
+                {recent.map((tr) => (
+                  <li key={tr.id} className="border-t border-border">
+                    <RecentRow
+                      t={tr}
+                      livePrice={tr.status === 'OPEN' ? quotes[cleanTicker(tr.symbol)] : undefined}
+                      onClick={() => openTradeModal(tr)}
+                    />
                   </li>
                 ))}
               </ul>
@@ -458,13 +513,83 @@ function MiniBars({ values }: { values: number[] }) {
   )
 }
 
-function RecentRow({ t, onClick }: { t: Trade; onClick: () => void }) {
+function OpenPositionRow({
+  trade,
+  livePrice,
+  onClick,
+}: {
+  trade: Trade
+  livePrice: number | undefined
+  onClick: () => void
+}) {
   const settings = useStore((s) => s.settings)
   const tx = useT()
-  const pnl = tradePnl(t)
+  const hasQuote = livePrice !== undefined && Number.isFinite(livePrice)
+  const pnl = hasQuote ? unrealizedPnl(trade, livePrice) : null
+  const rail =
+    pnl === null ? 'bg-sky' : pnl > 0 ? 'bg-accent' : pnl < 0 ? 'bg-loss' : 'bg-border-3'
+
+  return (
+    <tr
+      className="border-t border-border hover:bg-surface-2 transition-colors cursor-pointer"
+      onClick={onClick}
+    >
+      <td className="relative px-5 py-3">
+        <span className={clsx('absolute left-0 top-2.5 bottom-2.5 w-[2px] rounded-full', rail)} />
+        <div className="flex items-center gap-2.5 min-w-0">
+          <DirectionGlyph direction={trade.direction} />
+          <AssetLogo ticker={trade.symbol} size="sm" />
+          <span className="font-semibold mono text-[13px] tracking-tight truncate">{trade.symbol}</span>
+        </div>
+      </td>
+      <td className="px-3 py-3 text-right">
+        <span className="num text-[13px] text-muted">{fmtNum(trade.entryPrice, 2)}</span>
+      </td>
+      <td className="px-3 py-3 text-right">
+        {hasQuote ? (
+          <span className="num text-[13px] font-medium">{fmtNum(livePrice, 2)}</span>
+        ) : (
+          <span className="text-[12px] text-dim">{tx('dash.openNoQuote')}</span>
+        )}
+      </td>
+      <td className="px-5 py-3 text-right">
+        {pnl !== null ? (
+          <Pnl value={pnl} className="font-semibold text-[13px] tracking-tight">
+            {fmtMoney(pnl, settings.currency, { sign: true })}
+          </Pnl>
+        ) : (
+          <span className="text-[12px] font-medium text-sky">{tx('common.inProgress')}</span>
+        )}
+      </td>
+    </tr>
+  )
+}
+
+function RecentRow({
+  t,
+  livePrice,
+  onClick,
+}: {
+  t: Trade
+  livePrice?: number
+  onClick: () => void
+}) {
+  const settings = useStore((s) => s.settings)
+  const tx = useT()
   const open = t.status === 'OPEN'
+  const hasQuote = open && livePrice !== undefined && Number.isFinite(livePrice)
+  const pnl = open ? (hasQuote ? unrealizedPnl(t, livePrice) : null) : tradePnl(t)
   const when = t.exitDate ?? t.entryDate
-  const rail = open ? 'bg-sky' : pnl > 0 ? 'bg-accent' : pnl < 0 ? 'bg-loss' : 'bg-border-3'
+  const rail =
+    open && pnl === null
+      ? 'bg-sky'
+      : pnl !== null && pnl > 0
+        ? 'bg-accent'
+        : pnl !== null && pnl < 0
+          ? 'bg-loss'
+          : open
+            ? 'bg-sky'
+            : 'bg-border-3'
 
   return (
     <button
@@ -490,13 +615,13 @@ function RecentRow({ t, onClick }: { t: Trade; onClick: () => void }) {
       <div className="text-[12px] text-muted truncate">{t.strategy || '—'}</div>
 
       <div className="text-right min-w-0">
-        {open ? (
+        {open && pnl === null ? (
           <span className="text-[12px] font-medium text-sky">{tx('common.inProgress')}</span>
-        ) : (
+        ) : pnl !== null ? (
           <Pnl value={pnl} className="font-semibold text-[13px] tracking-tight">
             {fmtMoney(pnl, settings.currency, { sign: true })}
           </Pnl>
-        )}
+        ) : null}
       </div>
     </button>
   )

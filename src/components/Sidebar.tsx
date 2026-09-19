@@ -81,10 +81,7 @@ export function Sidebar() {
         <div className="no-drag flex items-center gap-2.5 min-w-0">
           <BrandMark size={28} className="shadow-[0_0_20px_-6px_rgba(74,222,128,0.45)]" />
           {!collapsed && (
-            <div className="leading-none">
-              <div className="text-[13px] font-semibold tracking-tight">Atrium</div>
-              <div className="text-[10px] text-dim mt-0.5 uppercase tracking-[0.18em]">Journal</div>
-            </div>
+            <div className="text-[13px] font-semibold tracking-tight leading-none">Atrium</div>
           )}
         </div>
         {!collapsed && (

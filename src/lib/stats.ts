@@ -33,6 +33,16 @@ export function tradePnl(t: Trade): number {
   return gross - (t.fees || 0)
 }
 
+/** P&L no realizado: misma fórmula que cerrado, usando cotización en vivo. */
+export function unrealizedPnl(t: Trade, livePrice: number): number {
+  if (t.status !== 'OPEN') return 0
+  if (t.direction !== 'LONG' && t.direction !== 'SHORT') return 0
+  if (!Number.isFinite(livePrice)) return 0
+  const dir = t.direction === 'SHORT' ? -1 : 1
+  const gross = (livePrice - t.entryPrice) * dir * t.quantity * (t.multiplier || 1)
+  return gross - (t.fees || 0)
+}
+
 export function tradeGrossPnl(t: Trade): number {
   return tradePnl(t) + (t.fees || 0)
 }
