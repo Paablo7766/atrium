@@ -20,7 +20,7 @@
 <br/>
 
 <p align="center">
-  <img src="docs/assets/hero-dashboard.png" alt="Atrium — Dashboard / Resumen" width="920" />
+  <img src="docs/assets/dashboard.png" alt="Atrium — Dashboard / Resumen" width="920" />
 </p>
 
 <p align="center">
@@ -87,7 +87,7 @@ Edge, expectancy, long/short origin and category breakdown — where your edge a
 *Ventaja, expectativa, origen long/short y desglose por categoría.*
 
 <p align="center">
-  <img src="docs/assets/feature-analytics.png" alt="Atrium Analytics" width="920" />
+  <img src="docs/assets/analytics.png" alt="Atrium Analytics" width="920" />
 </p>
 
 <br/>
@@ -98,7 +98,7 @@ Month heatmap by P&amp;L, with day detail and journal context.
 *Mapa de calor mensual por P&amp;L, con detalle del día y contexto del diario.*
 
 <p align="center">
-  <img src="docs/assets/feature-calendar.png" alt="Atrium Calendar" width="920" />
+  <img src="docs/assets/calendar.png" alt="Atrium Calendar" width="920" />
 </p>
 
 <br/>
@@ -109,7 +109,7 @@ Searchable trade book — filters, strategies, tags, expand-to-edit.
 *Libro de operaciones con búsqueda, filtros, estrategias, tags y edición.*
 
 <p align="center">
-  <img src="docs/assets/feature-trades.png" alt="Atrium Trades" width="920" />
+  <img src="docs/assets/trades.png" alt="Atrium Trades" width="920" />
 </p>
 
 <br/>
@@ -120,7 +120,7 @@ Mood-tagged session notes linked to trading days.
 *Notas de sesión con estado de ánimo, vinculadas a cada día de trading.*
 
 <p align="center">
-  <img src="docs/assets/feature-journal.png" alt="Atrium Journal" width="920" />
+  <img src="docs/assets/journal.png" alt="Atrium — Diario" width="920" />
 </p>
 
 <br/>
@@ -131,7 +131,7 @@ JSON backups and broker CSV/XLSX — XTB, Interactive Brokers, DEGIRO, Fomo, Axi
 *Copias JSON y CSV/XLSX de bróker — XTB, Interactive Brokers, DEGIRO, Fomo, Axiom, auto-detección.*
 
 <p align="center">
-  <img src="docs/assets/feature-import.png" alt="Atrium Import" width="920" />
+  <img src="docs/assets/import.png" alt="Atrium Import" width="920" />
 </p>
 
 <br/>
@@ -142,7 +142,7 @@ Week, month or single-trade recaps ready to download as PNG 1600×900.
 *Recaps de semana, mes u operación listos para descargar en PNG 1600×900.*
 
 <p align="center">
-  <img src="docs/assets/feature-share-card.png" alt="Atrium Share Card" width="920" />
+  <img src="docs/assets/share-card.png" alt="Atrium Share Card" width="920" />
 </p>
 
 ---

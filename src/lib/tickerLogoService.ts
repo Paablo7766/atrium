@@ -51,19 +51,9 @@ function isFreshNegative(entry: CacheEntry): boolean {
   return entry.url === null && Date.now() - entry.at < NEGATIVE_TTL_MS
 }
 
-function apiKey(): string | undefined {
-  const key = import.meta.env.VITE_FMP_API_KEY as string | undefined
-  return key?.trim() || undefined
-}
-
 async function fetchFmpLogo(symbol: string): Promise<string | null> {
-  const key = apiKey()
-  if (!key) return null
-
-  const res = await fetch(
-    `https://financialmodelingprep.com/api/v3/profile/${encodeURIComponent(symbol)}?apikey=${encodeURIComponent(key)}`,
-  )
-  if (!res.ok) return null
+  const res = await fetch(`/api/logo?symbol=${encodeURIComponent(symbol)}`)
+  if (res.status === 503 || !res.ok) return null
 
   const data = (await res.json()) as Array<{ image?: string }> | { 'Error Message'?: string }
   if (!Array.isArray(data) || data.length === 0) return null

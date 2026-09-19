@@ -104,20 +104,20 @@ async function main() {
   await page.goto(BASE, { waitUntil: 'networkidle', timeout: 90000 })
   await waitAppReady(page)
 
-  await shot(page, 'hero-dashboard.png')
+  await shot(page, 'dashboard.png')
 
   await goPage(page, 'trades')
-  await shot(page, 'feature-trades.png')
+  await shot(page, 'trades.png')
 
   await goPage(page, 'calendar')
-  await shot(page, 'feature-calendar.png')
+  await shot(page, 'calendar.png')
 
   await goPage(page, 'analytics')
   await page.waitForTimeout(1400)
-  await shot(page, 'feature-analytics.png')
+  await shot(page, 'analytics.png')
 
   await goPage(page, 'journal')
-  await shot(page, 'feature-journal.png')
+  await shot(page, 'journal.png')
 
   await goPage(page, 'settings')
   await page.waitForTimeout(700)
@@ -135,7 +135,7 @@ async function main() {
     if (await importCsv.count()) await importCsv.scrollIntoViewIfNeeded()
     await page.waitForTimeout(500)
   }
-  await shot(page, 'feature-import.png')
+  await shot(page, 'import.png')
 
   await goPage(page, 'dashboard')
   await page.waitForTimeout(700)
@@ -143,11 +143,11 @@ async function main() {
   if (await shareWeek.count()) {
     await shareWeek.click()
     await page.waitForTimeout(1400)
-    await shot(page, 'feature-share-card.png')
+    await shot(page, 'share-card.png')
     await page.keyboard.press('Escape')
   } else {
     await writeFile(path.join(OUT, '.share-missing'), 'share button not found\n')
-    await shot(page, 'feature-share-card.png')
+    await shot(page, 'share-card.png')
   }
 
   await browser.close()

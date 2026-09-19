@@ -53,12 +53,12 @@
 
 | Screen | EN | ES | File |
 |--------|----|----|------|
-| Dashboard | [View](en/SCREENSHOTS.md#dashboard) | [Ver](es/CAPTURAS.md#resumen) | `assets/hero-dashboard.png` |
-| Analytics | [View](en/SCREENSHOTS.md#analytics) | [Ver](es/CAPTURAS.md#analítica) | `assets/feature-analytics.png` |
-| Calendar | [View](en/SCREENSHOTS.md#calendar) | [Ver](es/CAPTURAS.md#calendario) | `assets/feature-calendar.png` |
-| Trades | [View](en/SCREENSHOTS.md#trades) | [Ver](es/CAPTURAS.md#operaciones) | `assets/feature-trades.png` |
-| Journal | [View](en/SCREENSHOTS.md#journal) | [Ver](es/CAPTURAS.md#diario) | `assets/feature-journal.png` |
-| Import | [View](en/SCREENSHOTS.md#import) | [Ver](es/CAPTURAS.md#importación) | `assets/feature-import.png` |
-| Share card | [View](en/SCREENSHOTS.md#share-card) | [Ver](es/CAPTURAS.md#tarjeta) | `assets/feature-share-card.png` |
+| Dashboard | [View](en/SCREENSHOTS.md#dashboard) | [Ver](es/CAPTURAS.md#resumen) | `assets/dashboard.png` |
+| Analytics | [View](en/SCREENSHOTS.md#analytics) | [Ver](es/CAPTURAS.md#analítica) | `assets/analytics.png` |
+| Calendar | [View](en/SCREENSHOTS.md#calendar) | [Ver](es/CAPTURAS.md#calendario) | `assets/calendar.png` |
+| Trades | [View](en/SCREENSHOTS.md#trades) | [Ver](es/CAPTURAS.md#operaciones) | `assets/trades.png` |
+| Journal | [View](en/SCREENSHOTS.md#journal) | [Ver](es/CAPTURAS.md#diario) | `assets/journal.png` |
+| Import | [View](en/SCREENSHOTS.md#import) | [Ver](es/CAPTURAS.md#importación) | `assets/import.png` |
+| Share card | [View](en/SCREENSHOTS.md#share-card) | [Ver](es/CAPTURAS.md#tarjeta) | `assets/share-card.png` |
 
 > Regenerate: `npx vite --config vite.web.mts` then `npm run shots`.

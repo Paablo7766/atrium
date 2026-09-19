@@ -14,8 +14,8 @@ export type UseLiveQuotesResult = {
 }
 
 /**
- * Cotizaciones en vivo para posiciones OPEN vía FMP Stock Batch Quote.
- * Una sola petición por ciclo (todos los tickers únicos) y polling cada 60s.
+ * Cotizaciones en vivo para posiciones OPEN vía proxy `/api/quotes` (FMP batch-quote).
+ * La API key nunca sale del servidor / middleware de Vite.
  */
 export function useLiveQuotes(trades: Trade[]): UseLiveQuotesResult {
   const symbols = useMemo(() => {
@@ -42,26 +42,23 @@ export function useLiveQuotes(trades: Trade[]): UseLiveQuotesResult {
       return
     }
 
-    const apiKey = import.meta.env.VITE_FMP_API_KEY?.trim()
-    if (!apiKey) {
-      setQuotes({})
-      setIsLoadingQuotes(false)
-      setError(null)
-      return
-    }
-
     let cancelled = false
 
     async function fetchQuotes() {
       setIsLoadingQuotes(true)
       try {
-        const url =
-          `https://financialmodelingprep.com/api/v3/batch-quote` +
-          `?symbols=${encodeURIComponent(symbolsKey)}` +
-          `&apikey=${encodeURIComponent(apiKey!)}`
+        const res = await fetch(`/api/quotes?symbols=${encodeURIComponent(symbolsKey)}`)
 
-        const res = await fetch(url)
-        if (!res.ok) throw new Error(`FMP batch-quote ${res.status}`)
+        // Sin clave en servidor / Electron sin proxy → degradar en silencio
+        if (res.status === 503) {
+          if (!cancelled) {
+            setQuotes({})
+            setError(null)
+          }
+          return
+        }
+
+        if (!res.ok) throw new Error(`Quotes proxy ${res.status}`)
 
         const data: unknown = await res.json()
         if (cancelled) return

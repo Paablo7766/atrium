@@ -21,5 +21,5 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "electron", "vite.config.mts"]
+  "include": ["src", "electron", "api", "vite.config.mts"]
 }

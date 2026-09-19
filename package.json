@@ -14,7 +14,7 @@
     "test:mapper": "npx --yes tsx scripts/verify-trade-mapper.mts",
     "test:xlsx": "npx --yes tsx scripts/verify-xlsx-import.mts",
     "shots": "npx --yes tsx scripts/capture-screenshots.mts",
-    "build": "vite build",
+    "build": "tsc --noEmit && vite build",
     "dist": "vite build && electron-builder --win",
     "preview": "vite preview"
   },
