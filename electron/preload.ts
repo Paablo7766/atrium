@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('api', {
 
   openDataFolder: () => ipcRenderer.invoke('app:openDataFolder'),
 
+  wipeLocal: () => ipcRenderer.invoke('data:wipeLocal'),
+
   listBackups: () => ipcRenderer.invoke('data:listBackups'),
 
   restoreBackup: (id: string) => ipcRenderer.invoke('data:restoreBackup', id),

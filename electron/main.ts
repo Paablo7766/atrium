@@ -1,4 +1,9 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, screen, session } from 'electron'
+import path from 'node:path'
+
+// Windows DPAPI / Keychain identity — must stay stable in dev and production (see productName).
+app.setName('Atrium')
+app.setPath('userData', path.join(app.getPath('appData'), process.env.ATRIUM_USER_DATA || 'atrium'))
 
 import {
   getLitestreamStatus,
@@ -11,8 +16,6 @@ import {
   startLitestream,
   stopLitestream,
 } from './litestream/manager'
-
-import path from 'node:path'
 
 import fs from 'node:fs'
 
@@ -36,6 +39,8 @@ import {
 
   journalTryAutoUnlock,
 
+  journalWipeLocalStorage,
+
   listJournalBackups,
 
   restoreJournalBackup,
@@ -44,6 +49,8 @@ import {
 
 } from '@/lib/db/service'
 
+import { resolveNativeBindingPath, setNativeBindingPath } from '@/lib/db/connection'
+
 import { deriveSyncKeyHexFromPassword, getSyncKeyHex } from '@/lib/crypto/keyManagerMain'
 
 
@@ -51,6 +58,28 @@ import { deriveSyncKeyHexFromPassword, getSyncKeyHex } from '@/lib/crypto/keyMan
 const DIST = path.join(__dirname, '../dist')
 
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
+
+/**
+ * Native SQLCipher addon (.node cannot run from inside app.asar).
+ *
+ * Development (`npm run dev`):
+ *   <repo>/node_modules/better-sqlite3-multiple-ciphers/build/Release/better_sqlite3.node
+ *   or .../prebuilds/<platform>-<arch>.node
+ *   Do not use process.resourcesPath here — in dev it points at Electron's own
+ *   resources folder, not the project.
+ *
+ * Packaged (electron-builder, asarUnpack):
+ *   {process.resourcesPath}/app.asar.unpacked/node_modules/better-sqlite3-multiple-ciphers/...
+ */
+{
+  const nativeBinding = resolveNativeBindingPath({
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    projectRoot: path.join(__dirname, '..'),
+  })
+  console.error('[db] native binding', app.isPackaged ? 'packaged' : 'dev', nativeBinding)
+  setNativeBindingPath(nativeBinding)
+}
 
 
 
@@ -398,7 +427,11 @@ ipcMain.handle('crypto:setupPassword', async (e, password: unknown) => {
 
   if (!pwd) return { ok: false as const, error: 'Contraseña inválida' }
 
+  console.error('[crypto:setupPassword] starting setup')
+
   const result = journalSetupPassword(pwd)
+
+  if (!result.ok) console.error('[crypto:setupPassword] failed:', result.error)
 
   if (result.ok) await maybeStartLitestream()
 
@@ -412,7 +445,11 @@ ipcMain.handle('crypto:setupSecureStorage', async (e) => {
 
   if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
 
+  console.error('[crypto:setupSecureStorage] starting setup')
+
   const result = journalSetupSecureStorage()
+
+  if (!result.ok) console.error('[crypto:setupSecureStorage] failed:', result.error)
 
   if (result.ok) await maybeStartLitestream()
 
@@ -549,6 +586,16 @@ ipcMain.handle('app:openDataFolder', (e) => {
   if (!isTrustedSender(e)) return
 
   shell.showItemInFolder(journalDataPath())
+
+})
+
+
+
+ipcMain.handle('data:wipeLocal', (e) => {
+
+  if (!isTrustedSender(e)) return
+
+  journalWipeLocalStorage(userDataDir())
 
 })
 

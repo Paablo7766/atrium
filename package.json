@@ -20,7 +20,8 @@
     "download:litestream": "npx --yes tsx scripts/download-litestream.mts",
     "dist": "vite build && electron-builder --win",
     "dist:all": "npm run download:litestream && vite build && electron-builder --win --mac --linux",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "electron-rebuild -f -w better-sqlite3-multiple-ciphers"
   },
   "build": {
     "appId": "com.pablosanz.tradingjournal",
@@ -29,8 +30,12 @@
       "output": "release"
     },
     "files": [
-      "dist",
-      "dist-electron"
+      "dist/**/*",
+      "dist-electron/**/*",
+      "node_modules/better-sqlite3-multiple-ciphers/**/*",
+      "!node_modules/better-sqlite3-multiple-ciphers/src/**/*",
+      "!node_modules/better-sqlite3-multiple-ciphers/deps/**/*",
+      "!node_modules/better-sqlite3-multiple-ciphers/build/Release/obj/**/*"
     ],
     "extraResources": [
       {
@@ -42,7 +47,8 @@
       }
     ],
     "asarUnpack": [
-      "node_modules/better-sqlite3-multiple-ciphers/**"
+      "**/*.node",
+      "node_modules/better-sqlite3-multiple-ciphers/**/*"
     ],
     "win": {
       "target": [
@@ -72,6 +78,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.2.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.1",

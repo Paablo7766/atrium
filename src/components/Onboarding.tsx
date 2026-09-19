@@ -17,7 +17,7 @@ import {
   Shield,
 } from 'lucide-react'
 import { useStore } from '@/store'
-import { isDesktop } from '@/lib/db/client'
+import { isDesktop, wipeLocalStorage } from '@/lib/db/client'
 import { getCryptoStatus, setupMasterPassword, setupSecureStorageKey } from '@/lib/crypto/keyManager'
 import { BrandMark } from '@/components/BrandMark'
 import { LanguageSwitch } from '@/components/LanguageSwitch'
@@ -221,9 +221,22 @@ export function Onboarding() {
   const setupCrypto = async (): Promise<boolean> => {
     if (!isDesktop()) return true
     const status = await getCryptoStatus()
-    if (status.configured) return true
     setCryptoBusy(true)
     try {
+      if (status.configured && status.mode === 'secure-storage') {
+        let result = await setupSecureStorageKey()
+        if (!result.ok) {
+          await wipeLocalStorage()
+          result = await setupSecureStorageKey()
+        }
+        if (!result.ok) {
+          toast(result.error, 'error')
+          return false
+        }
+        return true
+      }
+      if (status.configured) return true
+
       const result =
         cryptoChoice === 'password'
           ? await setupMasterPassword(masterPassword)

@@ -122,6 +122,9 @@ export default defineConfig(({ mode }) => {
               main: {
                 entry: 'electron/main.ts',
                 vite: {
+                  ssr: {
+                    external: ['better-sqlite3-multiple-ciphers'],
+                  },
                   build: {
                     rollupOptions: {
                       external: ['better-sqlite3-multiple-ciphers'],

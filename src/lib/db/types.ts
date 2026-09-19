@@ -41,6 +41,7 @@ export interface DesktopApi {
   saveSync?: (data: PersistedData) => boolean
   dataPath: () => Promise<string>
   openDataFolder: () => Promise<void>
+  wipeLocal?: () => Promise<void>
   listBackups?: () => Promise<JournalBackup[]>
   restoreBackup?: (id: string) => Promise<{ ok: true } | { ok: false; error: string }>
   litestream?: {

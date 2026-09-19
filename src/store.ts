@@ -21,7 +21,7 @@ import {
   parseDirection,
   settingsFromAccount,
 } from '@/types'
-import { loadData, saveData, saveDataSync, parseJournalFile } from '@/lib/db/client'
+import { isDesktop, loadData, saveData, saveDataSync, parseJournalFile, wipeLocalStorage } from '@/lib/db/client'
 import { writeCloudSyncPref } from '@/lib/cloudSyncPref'
 import {
   bumpLocalMutationClock,
@@ -450,9 +450,12 @@ export const useStore = create<State>((set, get) => ({
   },
 
   discardCorruptFile: () => {
-    persistFailNotified = false
-    set({ ...hydrate(null), loaded: true, loadError: null })
-    persistNow(get)
+    void (async () => {
+      persistFailNotified = false
+      if (isDesktop()) await wipeLocalStorage()
+      set({ ...hydrate(null), loaded: true, loadError: null, dbLocked: false })
+      await get().init()
+    })()
   },
 
   setPage: (page) => {

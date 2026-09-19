@@ -127,6 +127,10 @@ export async function openDataFolder() {
   if (isDesktop()) await window.api!.openDataFolder()
 }
 
+export async function wipeLocalStorage() {
+  if (isDesktop() && window.api?.wipeLocal) await window.api.wipeLocal()
+}
+
 export async function listBackups(): Promise<JournalBackup[]> {
   if (!isDesktop() || !window.api?.listBackups) return []
   try {
