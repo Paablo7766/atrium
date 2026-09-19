@@ -1,0 +1,156 @@
+// Trading Journal — core schema (PostgreSQL / Supabase)
+// Executions = fills individuales del broker
+// Trades     = posición consolidada (1 Trade → N Executions)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum TradeDirection {
+  LONG
+  SHORT
+}
+
+enum TradeStatus {
+  OPEN
+  CLOSED
+}
+
+enum ExecutionSide {
+  BUY
+  SELL
+}
+
+enum InstrumentType {
+  STOCK
+  CFD
+  FOREX
+  FUTURE
+  OPTION
+  CRYPTO
+  OTHER
+}
+
+enum BrokerSource {
+  XTB
+  INTERACTIVE_BROKERS
+  DEGIRO
+  FOMO
+  AXIOM
+  MANUAL
+  OTHER
+}
+
+model Account {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  name      String
+  broker    BrokerSource @default(OTHER)
+  currency  String   @db.Char(3) // ISO 4217 account currency
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  trades     Trade[]
+  executions Execution[]
+  imports    ImportBatch[]
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model ImportBatch {
+  id           String       @id @default(cuid())
+  accountId    String       @map("account_id")
+  broker       BrokerSource
+  fileName     String?      @map("file_name")
+  rowCount     Int          @default(0) @map("row_count")
+  importedAt   DateTime     @default(now()) @map("imported_at")
+  checksum     String? // SHA-256 del archivo para dedupe
+
+  account    Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  executions Execution[]
+
+  @@index([accountId, importedAt])
+  @@map("import_batches")
+}
+
+/// Posición consolidada (round-trip o posición abierta).
+model Trade {
+  id              String         @id @default(cuid())
+  accountId       String         @map("account_id")
+  ticker          String
+  instrumentType  InstrumentType @default(OTHER) @map("instrument_type")
+  direction       TradeDirection
+  status          TradeStatus    @default(OPEN)
+
+  /// Tamaño total abierto (unidades). 0 cuando CLOSED.
+  quantity        Decimal        @db.Decimal(24, 8)
+  /// Cantidad cerrada acumulada (útil en cierres parciales).
+  quantityClosed  Decimal        @default(0) @map("quantity_closed") @db.Decimal(24, 8)
+
+  avgEntryPrice   Decimal        @map("avg_entry_price") @db.Decimal(24, 10)
+  avgExitPrice    Decimal?       @map("avg_exit_price") @db.Decimal(24, 10)
+
+  feesTotal       Decimal        @default(0) @map("fees_total") @db.Decimal(24, 8)
+  netPnl          Decimal?       @map("net_pnl") @db.Decimal(24, 8)
+
+  baseCurrency    String         @map("base_currency") @db.Char(3) // p.ej. EUR en EURUSD, o USD en AAPL
+  quoteCurrency   String         @map("quote_currency") @db.Char(3) // divisa de cotización / P&L
+  multiplier      Decimal        @default(1) @db.Decimal(18, 8)
+
+  openedAt        DateTime       @map("opened_at")
+  closedAt        DateTime?      @map("closed_at")
+
+  notes           String?
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  account    Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  executions Execution[]
+
+  @@index([accountId, ticker, status])
+  @@index([accountId, openedAt])
+  @@map("trades")
+}
+
+/// Fill / orden individual enviada o ejecutada en el broker.
+model Execution {
+  id              String         @id @default(cuid())
+  accountId       String         @map("account_id")
+  tradeId         String?        @map("trade_id") // null hasta agrupar
+  importBatchId   String?        @map("import_batch_id")
+
+  broker          BrokerSource
+  externalId      String?        @map("external_id") // order/exec id del broker
+  ticker          String
+  instrumentType  InstrumentType @default(OTHER) @map("instrument_type")
+  side            ExecutionSide
+
+  quantity        Decimal        @db.Decimal(24, 8)
+  price           Decimal        @db.Decimal(24, 10)
+  fees            Decimal        @default(0) @db.Decimal(24, 8)
+
+  baseCurrency    String         @map("base_currency") @db.Char(3)
+  quoteCurrency   String         @map("quote_currency") @db.Char(3)
+  multiplier      Decimal        @default(1) @db.Decimal(18, 8)
+
+  executedAt      DateTime       @map("executed_at")
+  rawRow          Json?          @map("raw_row") // fila CSV original para auditoría
+
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  account     Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  trade       Trade?       @relation(fields: [tradeId], references: [id], onDelete: SetNull)
+  importBatch ImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+
+  @@unique([accountId, broker, externalId])
+  @@index([accountId, ticker, executedAt])
+  @@index([tradeId])
+  @@map("executions")
+}
