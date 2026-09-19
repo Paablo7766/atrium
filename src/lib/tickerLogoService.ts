@@ -1,7 +1,8 @@
 import { cleanTicker } from '@/lib/ticker'
 import { localTickerLogo } from '@/lib/tickerAssets'
 
-const STORAGE_KEY = 'atrium.tickerLogoCache.v1'
+// v2: cache keys are always cleanTicker() results (no XTB suffixes like .US / .UK / .SE)
+const STORAGE_KEY = 'atrium.tickerLogoCache.v2'
 const NEGATIVE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 type CacheEntry = { url: string | null; at: number }
@@ -30,9 +31,13 @@ function writeStorage(all: Record<string, CacheEntry>) {
 
 function getCached(symbol: string): CacheEntry | undefined {
   const mem = memory.get(symbol)
-  if (mem) return mem
+  if (mem) {
+    if (mem.url && !isSafeLogoUrl(mem.url)) return undefined
+    return mem
+  }
   const stored = readStorage()[symbol]
   if (stored) {
+    if (stored.url && !isSafeLogoUrl(stored.url)) return undefined
     memory.set(symbol, stored)
     return stored
   }
@@ -51,20 +56,43 @@ function isFreshNegative(entry: CacheEntry): boolean {
   return entry.url === null && Date.now() - entry.at < NEGATIVE_TTL_MS
 }
 
-async function fetchFmpLogo(symbol: string): Promise<string | null> {
+function isSafeLogoUrl(url: string): boolean {
+  try {
+    if (url.startsWith('/') || url.startsWith('./') || url.startsWith('data:image/')) return true
+    const u = new URL(url)
+    return u.protocol === 'https:' || u.protocol === 'http:'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Network boundary: FMP must only ever see a cleaned symbol (no broker suffixes).
+ * Always re-runs cleanTicker here even if callers already cleaned.
+ */
+async function fetchFmpLogo(rawOrClean: string): Promise<string | null> {
+  const symbol = cleanTicker(rawOrClean)
+  if (!symbol) return null
+
   const res = await fetch(`/api/logo?symbol=${encodeURIComponent(symbol)}`)
   if (res.status === 503 || !res.ok) return null
 
-  const data = (await res.json()) as Array<{ image?: string }> | { 'Error Message'?: string }
+  const data: unknown = await res.json()
   if (!Array.isArray(data) || data.length === 0) return null
 
-  const image = data[0]?.image?.trim()
-  return image || null
+  const first = data[0]
+  if (!first || typeof first !== 'object') return null
+  const image = typeof (first as { image?: unknown }).image === 'string'
+    ? (first as { image: string }).image.trim()
+    : ''
+  if (!image || !isSafeLogoUrl(image)) return null
+  return image
 }
 
 /**
  * Resolve a logo URL for a ticker.
  * Order: local map → memory/localStorage cache → FMP profile API.
+ * Cache / FMP lookups always use cleanTicker(); UI may still display the raw ticker.
  */
 export async function resolveTickerLogo(rawTicker: string): Promise<string | null> {
   const symbol = cleanTicker(rawTicker)

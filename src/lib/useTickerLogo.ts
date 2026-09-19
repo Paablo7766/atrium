@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react'
 import { cleanTicker } from '@/lib/ticker'
 import { peekTickerLogo, resolveTickerLogo } from '@/lib/tickerLogoService'
 
+/**
+ * Resolves a logo URL for a raw broker ticker.
+ * `symbol` is always cleanTicker(raw) — use that only for network/cache keys,
+ * not for UI labels (pass the original ticker to AssetLogo / text).
+ */
 export function useTickerLogo(rawTicker: string | undefined | null) {
   const symbol = rawTicker ? cleanTicker(rawTicker) : ''
   const peeked = symbol ? peekTickerLogo(symbol) : null
@@ -16,7 +21,8 @@ export function useTickerLogo(rawTicker: string | undefined | null) {
       return
     }
 
-    const instant = peekTickerLogo(symbol)
+    // Pass raw through; service applies cleanTicker for cache + FMP URL
+    const instant = peekTickerLogo(rawTicker!)
     if (typeof instant === 'string') {
       setUrl(instant)
       setLoading(false)
@@ -31,7 +37,7 @@ export function useTickerLogo(rawTicker: string | undefined | null) {
     let cancelled = false
     setLoading(true)
 
-    void resolveTickerLogo(symbol).then((resolved) => {
+    void resolveTickerLogo(rawTicker!).then((resolved) => {
       if (cancelled) return
       setUrl(resolved)
       setLoading(false)
@@ -40,7 +46,7 @@ export function useTickerLogo(rawTicker: string | undefined | null) {
     return () => {
       cancelled = true
     }
-  }, [symbol])
+  }, [symbol, rawTicker])
 
   return { url, loading, symbol }
 }

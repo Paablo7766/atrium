@@ -70,7 +70,7 @@ Atrium es un diario de trading de escritorio para el proceso en serio: varias cu
 | **03** | Analytics — win rate, PF, expectancy, R, drawdown, emotions |
 | **04** | Calendar heatmap + psychology journal |
 | **05** | Share cards 1600×900 — Orbit, Editorial, Signal, Folio |
-| **06** | Optional Supabase auth & sync · EN / ES runtime |
+| **06** | Optional E2E-encrypted multi-device sync (Supabase blobs) · EN / ES |
 
 ---
 
@@ -209,7 +209,7 @@ Week, month or single-trade recaps ready to download as PNG 1600×900.
 
 ```bash
 npm install
-cp .env.example .env   # optional — cloud / logos
+cp .env.example .env   # optional — FMP logos; Supabase only if you want encrypted cloud sync
 npm run dev            # Vite + Electron
 ```
 
@@ -221,6 +221,7 @@ Windows shortcut: double-click **`Abrir Atrium.bat`**.
 | `npm run build` | Production web bundle |
 | `npm run dist` | Windows installer → `release/` |
 | `npm run typecheck` | TypeScript check |
+| `npm run test` | Vitest unit tests (crypto, repository, sync) |
 | `npm run test:import` | Import engine tests |
 | `npm run shots` | Regenerate real README screenshots |
 
@@ -228,8 +229,8 @@ Windows shortcut: double-click **`Abrir Atrium.bat`**.
 
 | Variable | Required | Purpose |
 |----------|:--------:|---------|
-| `VITE_SUPABASE_URL` | — | Cloud auth + sync (omit = local-only) |
-| `VITE_SUPABASE_ANON_KEY` | — | Supabase anon key |
+| `VITE_SUPABASE_URL` | — | Optional — enable Settings › Multi-device sync (E2E encrypted) |
+| `VITE_SUPABASE_ANON_KEY` | — | Supabase anon key (never `service_role`) |
 | `VITE_FMP_API_KEY` | — | Ticker logos (Financial Modeling Prep) |
 
 ### Stack
@@ -256,7 +257,7 @@ Windows shortcut: double-click **`Abrir Atrium.bat`**.
 
 ```bash
 npm install
-cp .env.example .env   # opcional — nube / logos
+cp .env.example .env   # opcional — logos FMP; Supabase solo si quieres sync cifrado en la nube
 npm run dev            # Vite + Electron
 ```
 
@@ -268,6 +269,7 @@ Atajo Windows: doble clic en **`Abrir Atrium.bat`**.
 | `npm run build` | Bundle web de producción |
 | `npm run dist` | Instalador Windows → `release/` |
 | `npm run typecheck` | Comprobación TypeScript |
+| `npm run test` | Tests unitarios Vitest (cifrado, repository, sync) |
 | `npm run test:import` | Tests del motor de importación |
 | `npm run shots` | Regenerar capturas reales del README |
 
@@ -275,8 +277,8 @@ Atajo Windows: doble clic en **`Abrir Atrium.bat`**.
 
 | Variable | Obligatoria | Propósito |
 |----------|:-----------:|-----------|
-| `VITE_SUPABASE_URL` | — | Auth y sync (sin ella = solo local) |
-| `VITE_SUPABASE_ANON_KEY` | — | Clave anon de Supabase |
+| `VITE_SUPABASE_URL` | — | Opcional — activar Ajustes › Sync multi-dispositivo (cifrado E2E) |
+| `VITE_SUPABASE_ANON_KEY` | — | Clave anon de Supabase (nunca `service_role`) |
 | `VITE_FMP_API_KEY` | — | Logos de tickers (Financial Modeling Prep) |
 
 ### Stack
@@ -302,10 +304,10 @@ atrium/
 │   ├── pages/          Dashboard · Trades · Calendar · Analytics · Journal · Settings
 │   ├── components/     Design system · charts · ShareCard · Tour
 │   ├── lib/import/     Broker adapters · CSV / XLSX pipeline
-│   ├── auth/           Optional Supabase gate
+│   ├── auth/           Optional login when cloud sync is enabled
 │   └── assets/         Brand mark
 ├── prisma/             Cloud schema
-├── supabase/           Migrations + RLS
+├── supabase/           Migrations + RLS (004 = encrypted_sync_snapshots)
 ├── docs/               Bilingual docs + screenshot gallery
 ├── scripts/            Launcher · verification · capture-screenshots
 └── public/             App icons

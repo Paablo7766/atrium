@@ -17,10 +17,12 @@ export function AssetLogo({
   size = 'sm',
   className,
 }: {
+  /** Raw broker ticker (e.g. AAPL.US). Shown in UI; network lookup uses cleanTicker(). */
   ticker: string
   size?: Size
   className?: string
 }) {
+  // Hook cleans for FMP / cache; UI keeps the original `ticker` string.
   const { url, symbol } = useTickerLogo(ticker)
   const [broken, setBroken] = useState(false)
   const dim = SIZES[size]
@@ -40,7 +42,7 @@ export function AssetLogo({
         className,
       )}
       style={{ width: dim.box, height: dim.box, fontSize: dim.text }}
-      title={symbol || ticker}
+      title={ticker}
       aria-hidden
     >
       <span className={clsx('leading-none tracking-tight', showImg && 'invisible')}>{initials}</span>

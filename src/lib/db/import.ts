@@ -39,11 +39,6 @@ export type JournalParseFail = { ok: false; error: string }
 
 export type JournalParseResult = JournalParseOk | JournalParseFail
 
-export type DiskLoad =
-  | { status: 'empty' }
-  | { status: 'ok'; data: PersistedData; skippedTrades: number; skippedNotes: number }
-  | { status: 'corrupt'; message: string }
-
 const CURRENCIES: Currency[] = ['USD', 'EUR', 'GBP']
 const FORM_MODES: TradeFormMode[] = ['simple', 'premium']
 const LOCALES: AppLocale[] = ['es', 'en']

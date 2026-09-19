@@ -153,6 +153,10 @@ export interface Settings {
   playbook: PlaybookSetup[]
   demoData?: boolean
   locale: AppLocale
+  /** Sync E2E opcional con Supabase (activado explícitamente por el usuario). */
+  cloudSyncEnabled?: boolean
+  /** ISO timestamp de la última sync cloud exitosa. */
+  lastCloudSyncAt?: string
 }
 
 export interface PersistedData {

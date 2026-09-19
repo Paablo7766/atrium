@@ -9,47 +9,48 @@ import {
 } from 'react'
 import type { Trade } from '@/types'
 import { useAuth } from '@/auth/AuthProvider'
+import { readCloudSyncPref } from '@/lib/cloudSyncPref'
 import { isSupabaseConfigured } from '@/lib/supabase'
-import { fetchUserTrades } from '@/lib/tradeSync'
-import { useStore } from '@/store'
+import { isCloudSyncActive, syncJournalWithCloud, computeJournalMutationAt, bumpLocalMutationClock } from '@/lib/tradeSync'
+import { useStore, flushPersist } from '@/store'
+import type { PersistedData } from '@/types'
 
 export type UseTradesResult = {
   trades: Trade[]
   isLoading: boolean
   error: string | null
   refetch: () => Promise<void>
-  /** true cuando hay sesión y Supabase configurado (fuente cloud activa). */
+  /** true cuando sync E2E multi-dispositivo está activo. */
   fromCloud: boolean
 }
 
 const TradesContext = createContext<UseTradesResult | null>(null)
 
+function journalPayload(): PersistedData {
+  const s = useStore.getState()
+  return {
+    version: 2,
+    settings: s.settings,
+    accounts: s.accounts,
+    trades: [],
+    notes: [],
+  }
+}
+
 /**
- * Carga `trades` del usuario autenticado y los hidrata en Zustand
- * para Dashboard / Trades / Analytics.
+ * Gestiona sync cifrado con Supabase cuando el usuario lo activa.
+ * La fuente de verdad sigue siendo la BD local; el cloud es réplica E2E opcional.
  */
 export function TradesProvider({ children }: { children: ReactNode }) {
-  const { user, cloudEnabled, isLoading: authLoading } = useAuth()
+  const { user, isLoading: authLoading } = useAuth()
   const storeTrades = useStore((s) => s.trades)
-  const [cloudTrades, setCloudTrades] = useState<Trade[] | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const fromCloud = cloudEnabled && !!user && isSupabaseConfigured()
-
-  const applyToStore = useCallback((trades: Trade[]) => {
-    useStore.setState((s) => {
-      const activeId = s.settings.activeAccountId
-      const accounts = s.accounts.map((a) =>
-        a.id === activeId ? { ...a, trades } : a,
-      )
-      return { trades, accounts }
-    })
-  }, [])
+  const fromCloud = isCloudSyncActive() && !!user
 
   const refetch = useCallback(async () => {
-    if (!fromCloud || !user) {
-      setCloudTrades(null)
+    if (!fromCloud) {
       setIsLoading(false)
       setError(null)
       return
@@ -58,52 +59,74 @@ export function TradesProvider({ children }: { children: ReactNode }) {
     setIsLoading(true)
     setError(null)
     try {
-      const rows = await fetchUserTrades(user.id)
-      setCloudTrades(rows)
-      applyToStore(rows)
+      flushPersist()
+      const payload = journalPayload()
+      const localAt = computeJournalMutationAt(payload)
+      bumpLocalMutationClock(localAt)
+      const result = await syncJournalWithCloud(payload, localAt)
+      if (!result.ok) {
+        setError(result.error)
+        return
+      }
+      if (result.applied === 'cloud') {
+        useStore.setState((s) => {
+          const activeId = result.data.settings.activeAccountId
+          const accounts = result.data.accounts ?? s.accounts
+          const active = accounts.find((a) => a.id === activeId) ?? accounts[0]
+          return {
+            settings: {
+              ...result.data.settings,
+              lastCloudSyncAt: new Date(result.at).toISOString(),
+            },
+            accounts,
+            trades: active?.trades ?? [],
+            notes: active?.notes ?? [],
+            cashflows: active?.cashflows ?? [],
+          }
+        })
+      } else if (result.applied === 'local') {
+        useStore.setState((s) => ({
+          settings: { ...s.settings, lastCloudSyncAt: new Date(result.at).toISOString() },
+        }))
+      }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Error al cargar operaciones'
-      setError(msg)
+      setError(err instanceof Error ? err.message : 'Error al sincronizar')
     } finally {
       setIsLoading(false)
     }
-  }, [fromCloud, user, applyToStore])
+  }, [fromCloud])
 
   useEffect(() => {
     if (authLoading) return
+    if (!fromCloud) return
     void refetch()
-  }, [authLoading, refetch])
+  }, [authLoading, fromCloud, refetch, user?.id])
 
   const value = useMemo<UseTradesResult>(
     () => ({
-      trades: fromCloud && cloudTrades != null ? cloudTrades : storeTrades,
+      trades: storeTrades,
       isLoading: authLoading || (fromCloud && isLoading),
       error,
       refetch,
       fromCloud,
     }),
-    [fromCloud, cloudTrades, storeTrades, authLoading, isLoading, error, refetch],
+    [fromCloud, storeTrades, authLoading, isLoading, error, refetch],
   )
 
   return <TradesContext.Provider value={value}>{children}</TradesContext.Provider>
 }
 
-/**
- * SELECT tipado de operaciones del usuario.
- * Debe usarse dentro de `TradesProvider` (shell autenticado).
- */
 export function useTrades(): UseTradesResult {
   const ctx = useContext(TradesContext)
   const storeTrades = useStore((s) => s.trades)
 
   if (ctx) return ctx
 
-  // Fallback seguro fuera del provider (p.ej. tests)
   return {
     trades: storeTrades,
     isLoading: false,
     error: null,
     refetch: async () => undefined,
-    fromCloud: false,
+    fromCloud: isSupabaseConfigured() && readCloudSyncPref(),
   }
 }

@@ -22,12 +22,14 @@ export function useLiveQuotes(trades: Trade[]): UseLiveQuotesResult {
     const set = new Set<string>()
     for (const t of trades) {
       if (t.status !== 'OPEN') continue
+      // Strip XTB/broker suffixes (.US, .UK, .SE, …) before FMP batch-quote
       const s = cleanTicker(t.symbol)
       if (s) set.add(s)
     }
     return [...set].sort()
   }, [trades])
 
+  // Comma-join of already-cleaned symbols only — never raw broker tickers
   const symbolsKey = symbols.join(',')
 
   const [quotes, setQuotes] = useState<Record<string, number>>({})

@@ -1,7 +1,9 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { LayoutDashboard, ListOrdered, CalendarDays, BarChart3, NotebookPen, Settings, Plus, Search, PanelLeftClose, PanelLeft, ChevronDown, X } from 'lucide-react'
 import { useStore, type Page } from '@/store'
+import { pathForPage } from '@/lib/routes'
 import { BrandMark } from '@/components/BrandMark'
 import { AvatarPhoto, traderInitials } from '@/components/Avatar'
 import { Menu, menuRowClass } from '@/components/ui'
@@ -12,6 +14,7 @@ import { ACCOUNT_COLORS } from '@/types'
 import { useT } from '@/lib/useI18n'
 
 export function Sidebar() {
+  const navigate = useNavigate()
   const page = useStore((s) => s.page)
   const setPage = useStore((s) => s.setPage)
   const openTradeModal = useStore((s) => s.openTradeModal)
@@ -30,6 +33,11 @@ export function Sidebar() {
   const searchRef = useRef<HTMLInputElement>(null)
   const accRef = useRef<HTMLButtonElement>(null)
 
+  const goTo = (id: Page) => {
+    setPage(id)
+    navigate(pathForPage(id))
+  }
+
   const stats = useMemo(() => computeStats(trades, settings.startingBalance, cashflows), [trades, settings.startingBalance, cashflows])
   const equity = accountEquity(settings.startingBalance, trades, cashflows)
   const invested = equity - stats.netPnl
@@ -46,7 +54,7 @@ export function Sidebar() {
   const search = (e: FormEvent) => {
     e.preventDefault()
     setTradesQuery(q.trim())
-    setPage('trades')
+    goTo('trades')
   }
 
   const Item = ({ id, label, icon: Icon }: (typeof NAV)[number]) => {
@@ -55,7 +63,7 @@ export function Sidebar() {
       <button
         data-page={id}
         title={collapsed ? label : undefined}
-        onClick={() => setPage(id)}
+        onClick={() => goTo(id)}
         className={clsx(
           'group relative flex items-center h-9 rounded-xl text-[13px] font-medium transition-all',
           collapsed ? 'w-10 mx-auto justify-center px-0' : 'w-full gap-3 px-3',
@@ -257,7 +265,7 @@ export function Sidebar() {
         <button
           data-page="settings"
           title={collapsed ? t('nav.settings') : undefined}
-          onClick={() => setPage('settings')}
+          onClick={() => goTo('settings')}
           className={clsx(
             'flex items-center rounded-xl text-[13px] font-medium transition-all',
             collapsed ? 'w-10 h-10 mx-auto justify-center' : 'mt-2 gap-2.5 w-full h-11 px-2.5',

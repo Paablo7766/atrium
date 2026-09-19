@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import electron from 'vite-plugin-electron/simple'
 import path from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { cleanSymbol, cleanSymbolsCsv } from './lib/fmpSecurity'
 
 /**
  * Electron solo en desktop local (`npm run dev` / `npm run build` / `npm run dist`).
@@ -40,6 +41,7 @@ function readUrl(req: IncomingMessage): URL {
   return new URL(req.url ?? '/', 'http://localhost')
 }
 
+
 /** Emula `/api/quotes` y `/api/logo` en `npm run dev` (sin vercel CLI). */
 function fmpDevApiProxy(env: EnvMap): Plugin {
   return {
@@ -72,7 +74,8 @@ function fmpDevApiProxy(env: EnvMap): Plugin {
         const url = readUrl(req)
 
         if (pathname === '/api/quotes') {
-          const symbols = url.searchParams.get('symbols')?.trim()
+          const raw = url.searchParams.get('symbols')?.trim()
+          const symbols = raw ? cleanSymbolsCsv(raw) : ''
           if (!symbols) {
             sendJson(res, 400, { error: 'Missing symbols query parameter' })
             return
@@ -86,7 +89,8 @@ function fmpDevApiProxy(env: EnvMap): Plugin {
           return
         }
 
-        const symbol = url.searchParams.get('symbol')?.trim()
+        const rawSymbol = url.searchParams.get('symbol')?.trim()
+        const symbol = rawSymbol ? cleanSymbol(rawSymbol) : ''
         if (!symbol) {
           sendJson(res, 400, { error: 'Missing symbol query parameter' })
           return
@@ -117,6 +121,13 @@ export default defineConfig(({ mode }) => {
             electron({
               main: {
                 entry: 'electron/main.ts',
+                vite: {
+                  build: {
+                    rollupOptions: {
+                      external: ['better-sqlite3-multiple-ciphers'],
+                    },
+                  },
+                },
               },
               preload: {
                 input: path.join(import.meta.dirname, 'electron/preload.ts'),

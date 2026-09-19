@@ -2,8 +2,8 @@ import { useCallback, useRef, useState, type ChangeEvent, type RefObject } from 
 import { useStore } from '@/store'
 import { dedupeTrades } from '@/lib/csv'
 import { useT } from '@/lib/useI18n'
-import { isSupabaseConfigured, supabase } from '@/lib/supabase'
-import { syncImportToSupabase } from '@/lib/tradeSync'
+import { isCloudSyncActive, pushLocalJournalToCloud } from '@/lib/tradeSync'
+import { flushPersist } from '@/store'
 import type { BrokerId, ImportEngineResult } from './types'
 import type { MappedTrade } from './tradeMapper'
 import { CSVImportEngine } from './engine'
@@ -80,6 +80,8 @@ function spreadsheetErrorMessage(
   }
   return t('import.unexpected')
 }
+
+const MAX_IMPORT_BYTES = 25 * 1024 * 1024
 
 /** File picker nativo del renderer (soporta .xlsx binario; evita leer Excel como utf-8). */
 function pickBrokerFile(): Promise<File | null> {
@@ -203,43 +205,20 @@ export function useImportCSV(options: UseImportCSVOptions = {}): UseImportCSVRet
         return fail
       }
 
-      // Persistencia cloud: executions + trades consolidados vinculados a user_id
-      if (isSupabaseConfigured()) {
+      if (isCloudSyncActive()) {
         try {
-          const { data: sessionData } = await supabase.auth.getSession()
-          const userId = sessionData.session?.user?.id
-          if (userId) {
-            // Solo sincronizar consolidated cuyo id está entre los unique mapeados
-            const uniqueSourceIds = new Set(
-              unique.flatMap((tr) => {
-                const m = /^source:(.+)$/m.exec(tr.notes)
-                return m ? [m[1]] : [tr.id.replace(/-(closed|open)$/, '')]
-              }),
-            )
-            const toSync = consolidated.filter((ct) => uniqueSourceIds.has(ct.id))
-            // Mapear executions asociadas a esos trades
-            const syncKeys = new Set(toSync.flatMap((ct) => ct.executionKeys))
-            const execToSync = executions.filter((ex, idx) => {
-              const key =
-                ex.externalId?.trim() ||
-                `${ex.ticker}|${ex.executedAt}|${ex.side}|${ex.quantity}|${ex.price}|${idx}`
-              return syncKeys.has(key)
-            })
-
-            await syncImportToSupabase({
-              userId,
-              accountName: settings.accountName,
-              currency: settings.currency,
-              broker: resolvedBroker,
-              fileName,
-              executions: execToSync.length ? execToSync : executions,
-              consolidated: toSync.length ? toSync : consolidated,
-            })
-          }
+          flushPersist()
+          const state = useStore.getState()
+          await pushLocalJournalToCloud({
+            version: 2,
+            settings: state.settings,
+            accounts: state.accounts,
+            trades: [],
+            notes: [],
+          })
         } catch (cloudErr) {
           const msg = cloudErr instanceof Error ? cloudErr.message : 'Error al sincronizar con la nube'
           toast(msg, 'error')
-          // El import local ya se aplicó; no fallamos el resultado
         }
       }
 
@@ -296,6 +275,12 @@ export function useImportCSV(options: UseImportCSVOptions = {}): UseImportCSVRet
     async (file: File, broker: ImportBroker = defaultBroker) => {
       setBusy(true)
       try {
+        if (file.size > MAX_IMPORT_BYTES) {
+          const fail = emptyFail(String(broker), ['El archivo es demasiado grande (máx. 25 MB).'], file.name)
+          setLastResult(fail)
+          toast('El archivo es demasiado grande (máx. 25 MB).', 'error')
+          return fail
+        }
         const parts = await fileToCsvTexts(file)
         if (!parts.length || parts.every((p) => !p.trim())) {
           const fail = emptyFail(String(broker), [t('import.emptyFile')], file.name)

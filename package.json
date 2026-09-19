@@ -13,9 +13,13 @@
     "test:import": "npx --yes tsx scripts/verify-import-engine.mts",
     "test:mapper": "npx --yes tsx scripts/verify-trade-mapper.mts",
     "test:xlsx": "npx --yes tsx scripts/verify-xlsx-import.mts",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "shots": "npx --yes tsx scripts/capture-screenshots.mts",
     "build": "tsc --noEmit && vite build",
+    "download:litestream": "npx --yes tsx scripts/download-litestream.mts",
     "dist": "vite build && electron-builder --win",
+    "dist:all": "npm run download:litestream && vite build && electron-builder --win --mac --linux",
     "preview": "vite preview"
   },
   "build": {
@@ -27,6 +31,18 @@
     "files": [
       "dist",
       "dist-electron"
+    ],
+    "extraResources": [
+      {
+        "from": "electron/resources/litestream",
+        "to": "litestream",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "asarUnpack": [
+      "node_modules/better-sqlite3-multiple-ciphers/**"
     ],
     "win": {
       "target": [
@@ -44,17 +60,20 @@
   "dependencies": {
     "@fontsource-variable/outfit": "^5.3.0",
     "@supabase/supabase-js": "^2.116.0",
+    "better-sqlite3-multiple-ciphers": "^13.0.3",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "lucide-react": "^1.47.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "react-router-dom": "^7.18.4",
     "recharts": "^3.10.1",
     "xlsx": "^0.18.5",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -65,6 +84,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.3.0",
-    "vite-plugin-electron": "^1.1.2"
+    "vite-plugin-electron": "^1.1.2",
+    "vitest": "^3.2.7"
   }
 }

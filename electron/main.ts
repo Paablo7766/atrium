@@ -1,274 +1,801 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, screen } from 'electron'
+import { app, BrowserWindow, ipcMain, dialog, shell, nativeTheme, screen, session } from 'electron'
+
+import {
+  getLitestreamStatus,
+  initLitestream,
+  openReplicaFolder,
+  resetLitestreamDestination,
+  restoreFromLitestreamReplica,
+  restartLitestream,
+  setLitestreamDestination,
+  startLitestream,
+  stopLitestream,
+} from './litestream/manager'
+
 import path from 'node:path'
+
 import fs from 'node:fs'
 
+import {
+
+  prepareJournalDb,
+
+  journalDataPath,
+
+  journalLoad,
+
+  journalSave,
+
+  journalCryptoStatus,
+
+  journalSetupPassword,
+
+  journalSetupSecureStorage,
+
+  journalUnlockPassword,
+
+  journalTryAutoUnlock,
+
+  listJournalBackups,
+
+  restoreJournalBackup,
+
+  shutdownJournalDb,
+
+} from '@/lib/db/service'
+
+import { deriveSyncKeyHexFromPassword, getSyncKeyHex } from '@/lib/crypto/keyManagerMain'
+
+
+
 const DIST = path.join(__dirname, '../dist')
+
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
+
+
+
+/** Max import payload (~25 MB) to avoid DoS via IPC. */
+
+const MAX_PAYLOAD_BYTES = 25 * 1024 * 1024
+
+
 
 let win: BrowserWindow | null = null
 
-const dataFile = () => path.join(app.getPath('userData'), 'journal-data.json')
-const backupsDir = () => path.join(path.dirname(dataFile()), 'backups')
-const immediateBak = () => `${dataFile()}.bak`
-const BACKUP_EVERY_MS = 10 * 60 * 1000
-const BACKUP_KEEP = 10
-let lastDatedBackup = 0
 
-function looksLikeJournal(raw: unknown): boolean {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false
-  const o = raw as Record<string, unknown>
-  return (!!o.settings && typeof o.settings === 'object') || Array.isArray(o.accounts) || Array.isArray(o.trades)
+
+const userDataDir = () => app.getPath('userData')
+
+async function maybeStartLitestream() {
+  await restartLitestream()
 }
 
-function insideDir(dir: string, file: string) {
-  const root = path.resolve(dir)
-  const target = path.resolve(file)
-  const prefix = root.toLowerCase()
-  const full = target.toLowerCase()
-  return full === prefix || full.startsWith(prefix + path.sep.toLowerCase())
-}
 
-function resolveBackup(id: string): string | null {
-  if (id === 'latest.bak') {
-    const p = path.resolve(immediateBak())
-    return fs.existsSync(p) ? p : null
-  }
-  if (!/^journal-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.json$/.test(id)) return null
-  const dir = backupsDir()
-  const p = path.join(dir, id)
-  if (!insideDir(dir, p) || !fs.existsSync(p)) return null
-  return p
-}
 
-function pruneDatedBackups(dir: string, keepName?: string) {
-  const files = fs
-    .readdirSync(dir)
-    .filter((f) => /^journal-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.json$/.test(f) && f !== keepName)
-    .sort()
-  while (files.length > BACKUP_KEEP) {
-    const old = files.shift()
-    if (old) fs.unlinkSync(path.join(dir, old))
-  }
-}
+function isTrustedSender(event: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent): boolean {
 
-function archiveCurrent(file: string, keepName?: string): boolean {
-  if (!fs.existsSync(file)) return false
   try {
-    const dir = backupsDir()
-    fs.mkdirSync(dir, { recursive: true })
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-    fs.copyFileSync(file, path.join(dir, `journal-${stamp}.json`))
-    pruneDatedBackups(dir, keepName)
-    return true
+
+    const wc = event.sender
+
+    if (!wc || wc.isDestroyed()) return false
+
+    if (!win || win.isDestroyed()) return false
+
+    return wc.id === win.webContents.id
+
   } catch {
+
     return false
+
   }
+
 }
 
-function rotateBackups(file: string) {
-  if (!fs.existsSync(file)) return
-  try {
-    fs.copyFileSync(file, `${file}.bak`)
-  } catch {
-    /* ignore */
-  }
-  const now = Date.now()
-  if (now - lastDatedBackup < BACKUP_EVERY_MS) return
-  if (archiveCurrent(file)) lastDatedBackup = now
-}
 
-function writeDataFile(data: unknown): boolean {
+
+function isSafeExternalUrl(url: string): boolean {
+
   try {
-    const file = dataFile()
-    fs.mkdirSync(path.dirname(file), { recursive: true })
-    rotateBackups(file)
-    const tmp = `${file}.tmp`
-    fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf-8')
-    fs.renameSync(tmp, file)
-    return true
+
+    const u = new URL(url)
+
+    return u.protocol === 'https:' || u.protocol === 'http:'
+
   } catch {
+
     return false
+
   }
+
 }
+
+
+
+function sanitizeFilters(raw: unknown): { name: string; extensions: string[] }[] {
+
+  if (!Array.isArray(raw)) return [{ name: 'All', extensions: ['*'] }]
+
+  const out: { name: string; extensions: string[] }[] = []
+
+  for (const item of raw) {
+
+    if (!item || typeof item !== 'object') continue
+
+    const name = typeof (item as { name?: unknown }).name === 'string' ? (item as { name: string }).name.slice(0, 80) : 'File'
+
+    const exts = Array.isArray((item as { extensions?: unknown }).extensions)
+
+      ? (item as { extensions: unknown[] }).extensions
+
+          .filter((e): e is string => typeof e === 'string' && /^[a-z0-9*]{1,12}$/i.test(e))
+
+          .slice(0, 20)
+
+      : []
+
+    if (exts.length) out.push({ name, extensions: exts })
+
+  }
+
+  return out.length ? out : [{ name: 'All', extensions: ['*'] }]
+
+}
+
+
+
+function sanitizePassword(raw: unknown): string | null {
+
+  if (typeof raw !== 'string') return null
+
+  const trimmed = raw.trim()
+
+  if (trimmed.length > 256) return null
+
+  return trimmed
+
+}
+
+
 
 function createWindow() {
+
   nativeTheme.themeSource = 'dark'
 
+
+
   const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize
+
   win = new BrowserWindow({
+
     width: Math.min(1480, sw - 24),
+
     height: Math.min(920, sh - 24),
+
     minWidth: 1024,
+
     minHeight: 640,
+
     backgroundColor: '#080809',
+
     title: 'Atrium',
+
     icon: path.join(app.isPackaged ? DIST : path.join(__dirname, '../public'), process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+
     titleBarStyle: 'hidden',
+
     titleBarOverlay: {
+
       color: '#080809',
+
       symbolColor: '#a1a1aa',
+
       height: 48,
+
     },
+
     show: true,
+
     webPreferences: {
+
       preload: path.join(__dirname, 'preload.js'),
+
       contextIsolation: true,
+
       nodeIntegration: false,
-      sandbox: false,
+
+      sandbox: true,
+
+      webSecurity: true,
+
+      allowRunningInsecureContent: false,
+
     },
+
   })
+
+
 
   const reveal = () => {
+
     if (!win || win.isDestroyed()) return
+
     if (win.isMinimized()) win.restore()
+
     win.show()
+
     win.focus()
+
   }
+
   win.once('ready-to-show', reveal)
+
   win.webContents.once('did-finish-load', reveal)
+
   win.webContents.on('did-fail-load', () => reveal())
+
   setTimeout(reveal, 2500)
 
+
+
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+
+    if (isSafeExternalUrl(url)) void shell.openExternal(url)
+
     return { action: 'deny' }
+
   })
+
+
+
+  win.webContents.on('will-navigate', (event, url) => {
+
+    const allowed =
+
+      (VITE_DEV_SERVER_URL && url.startsWith(VITE_DEV_SERVER_URL)) ||
+
+      url.startsWith('file://')
+
+    if (!allowed) {
+
+      event.preventDefault()
+
+      if (isSafeExternalUrl(url)) void shell.openExternal(url)
+
+    }
+
+  })
+
+
 
   if (VITE_DEV_SERVER_URL) {
+
     win.loadURL(VITE_DEV_SERVER_URL)
+
   } else {
+
     win.loadFile(path.join(DIST, 'index.html'))
+
   }
+
+
 
   win.on('closed', () => {
+
     win = null
+
   })
+
 }
 
-// ---------- Persistencia ----------
-ipcMain.handle('data:load', () => {
-  try {
-    const file = dataFile()
-    if (!fs.existsSync(file)) return { status: 'empty' }
-    const raw = fs.readFileSync(file, 'utf-8')
-    if (!raw.trim()) return { status: 'empty' }
-    try {
-      return { status: 'ok', data: JSON.parse(raw) }
-    } catch (e) {
-      return { status: 'corrupt', message: e instanceof Error ? e.message : 'JSON inválido' }
-    }
-  } catch (e) {
-    return { status: 'corrupt', message: e instanceof Error ? e.message : 'No se pudo leer el archivo' }
+
+
+function applyContentSecurityPolicy() {
+
+  const isDev = Boolean(VITE_DEV_SERVER_URL)
+
+  const connect = [
+
+    "'self'",
+
+    'https://*.supabase.co',
+
+    'wss://*.supabase.co',
+
+    'https://*.supabase.in',
+
+    'wss://*.supabase.in',
+
+  ]
+
+  if (isDev) {
+
+    connect.push(
+
+      'http://localhost:*',
+
+      'ws://localhost:*',
+
+      'http://127.0.0.1:*',
+
+      'ws://127.0.0.1:*',
+
+    )
+
   }
+
+  const scriptSrc = isDev
+
+    ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
+
+    : "script-src 'self'"
+
+  const csp = [
+
+    "default-src 'self'",
+
+    scriptSrc,
+
+    "style-src 'self' 'unsafe-inline'",
+
+    "img-src 'self' data: https: blob:",
+
+    "font-src 'self' data:",
+
+    `connect-src ${connect.join(' ')}`,
+
+    "worker-src 'self' blob:",
+
+    "object-src 'none'",
+
+    "base-uri 'self'",
+
+    "form-action 'self'",
+
+    "frame-ancestors 'none'",
+
+  ].join('; ')
+
+
+
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+
+    const headers = { ...details.responseHeaders }
+
+    headers['Content-Security-Policy'] = [csp]
+
+    headers['X-Content-Type-Options'] = ['nosniff']
+
+    callback({ responseHeaders: headers })
+
+  })
+
+}
+
+
+
+// ---------- Cifrado / clave maestra ----------
+
+ipcMain.handle('crypto:getStatus', (e) => {
+
+  if (!isTrustedSender(e)) {
+
+    return { configured: false, mode: null, secureStorageAvailable: false, needsUnlock: false }
+
+  }
+
+  return journalCryptoStatus()
+
 })
 
-ipcMain.handle('data:save', (_e, data: unknown) => writeDataFile(data))
+
+
+ipcMain.handle('crypto:setupPassword', async (e, password: unknown) => {
+
+  if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
+
+  const pwd = sanitizePassword(password)
+
+  if (!pwd) return { ok: false as const, error: 'Contraseña inválida' }
+
+  const result = journalSetupPassword(pwd)
+
+  if (result.ok) await maybeStartLitestream()
+
+  return result
+
+})
+
+
+
+ipcMain.handle('crypto:setupSecureStorage', async (e) => {
+
+  if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
+
+  const result = journalSetupSecureStorage()
+
+  if (result.ok) await maybeStartLitestream()
+
+  return result
+
+})
+
+
+
+ipcMain.handle('crypto:unlockPassword', async (e, password: unknown) => {
+
+  if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
+
+  const pwd = sanitizePassword(password)
+
+  if (!pwd) return { ok: false as const, error: 'Contraseña inválida' }
+
+  const result = journalUnlockPassword(pwd)
+
+  if (result.ok) await maybeStartLitestream()
+
+  return result
+
+})
+
+
+
+ipcMain.handle('crypto:tryAutoUnlock', async (e) => {
+
+  if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
+
+  const result = journalTryAutoUnlock()
+
+  if (result.ok) await maybeStartLitestream()
+
+  return result
+
+})
+
+
+
+ipcMain.handle('crypto:deriveSyncKey', (e) => {
+
+  if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
+
+  return getSyncKeyHex(userDataDir())
+
+})
+
+
+
+ipcMain.handle('crypto:deriveSyncKeyFromPassword', (e, password: unknown) => {
+
+  if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
+
+  const pwd = sanitizePassword(password)
+
+  if (!pwd) return { ok: false as const, error: 'Contraseña inválida' }
+
+  return deriveSyncKeyHexFromPassword(userDataDir(), pwd)
+
+})
+
+
+
+// ---------- Persistencia SQLite cifrada ----------
+
+ipcMain.handle('data:load', (e) => {
+
+  if (!isTrustedSender(e)) return { status: 'corrupt', message: 'IPC no autorizado' }
+
+  try {
+
+    return journalLoad()
+
+  } catch (err) {
+
+    return { status: 'corrupt', message: err instanceof Error ? err.message : 'No se pudo leer la base de datos' }
+
+  }
+
+})
+
+
+
+ipcMain.handle('data:save', (e, data: unknown) => {
+
+  if (!isTrustedSender(e)) return false
+
+  if (!data || typeof data !== 'object') return false
+
+  return journalSave(data as import('@/types').PersistedData, userDataDir())
+
+})
+
+
+
 ipcMain.on('data:save-sync', (e, data: unknown) => {
-  e.returnValue = writeDataFile(data)
-})
 
-ipcMain.handle('app:dataPath', () => dataFile())
+  if (!isTrustedSender(e)) {
 
-ipcMain.handle('app:openDataFolder', () => {
-  shell.showItemInFolder(dataFile())
-})
+    e.returnValue = false
 
-ipcMain.handle('data:listBackups', () => {
-  const items: { id: string; kind: 'immediate' | 'dated'; mtime: number; bytes: number }[] = []
-  try {
-    const bak = immediateBak()
-    if (fs.existsSync(bak)) {
-      const st = fs.statSync(bak)
-      items.push({ id: 'latest.bak', kind: 'immediate', mtime: st.mtimeMs, bytes: st.size })
-    }
-    const dir = backupsDir()
-    if (fs.existsSync(dir)) {
-      for (const name of fs.readdirSync(dir)) {
-        if (!/^journal-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}\.json$/.test(name)) continue
-        const p = path.join(dir, name)
-        if (!insideDir(dir, p)) continue
-        const st = fs.statSync(p)
-        items.push({ id: name, kind: 'dated', mtime: st.mtimeMs, bytes: st.size })
-      }
-    }
-  } catch {
-    /* ignore */
+    return
+
   }
-  return items.sort((a, b) => b.mtime - a.mtime)
+
+  if (!data || typeof data !== 'object') {
+
+    e.returnValue = false
+
+    return
+
+  }
+
+  e.returnValue = journalSave(data as import('@/types').PersistedData, userDataDir())
+
 })
 
-ipcMain.handle('data:restoreBackup', (_e, id: unknown) => {
+
+
+ipcMain.handle('app:dataPath', (e) => {
+
+  if (!isTrustedSender(e)) return ''
+
+  return journalDataPath()
+
+})
+
+
+
+ipcMain.handle('app:openDataFolder', (e) => {
+
+  if (!isTrustedSender(e)) return
+
+  shell.showItemInFolder(journalDataPath())
+
+})
+
+
+
+ipcMain.handle('data:listBackups', (e) => {
+
+  if (!isTrustedSender(e)) return []
+
+  return listJournalBackups(userDataDir())
+
+})
+
+
+
+ipcMain.handle('data:restoreBackup', (e, id: unknown) => {
+
+  if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
+
   if (typeof id !== 'string') return { ok: false as const, error: 'Identificador inválido' }
-  const backupFile = resolveBackup(id)
-  if (!backupFile) return { ok: false as const, error: 'No se encontró esa copia' }
-  try {
-    const parsed = JSON.parse(fs.readFileSync(backupFile, 'utf-8')) as unknown
-    if (!looksLikeJournal(parsed)) return { ok: false as const, error: 'Esa copia no es un diario de Atrium' }
-    const file = dataFile()
-    fs.mkdirSync(path.dirname(file), { recursive: true })
-    // Dated copy of whatever is current (including a corrupt file). Do not overwrite
-    // journal-data.json.bak when that file is the restore source.
-    archiveCurrent(file, id !== 'latest.bak' ? id : undefined)
-    if (id !== 'latest.bak' && fs.existsSync(file)) {
-      try {
-        fs.copyFileSync(file, immediateBak())
-      } catch {
-        /* ignore */
-      }
-    }
-    const tmp = `${file}.tmp`
-    fs.writeFileSync(tmp, JSON.stringify(parsed, null, 2), 'utf-8')
-    fs.renameSync(tmp, file)
-    return { ok: true as const }
-  } catch (e) {
-    return { ok: false as const, error: e instanceof Error ? e.message : 'No se pudo restaurar' }
-  }
+
+  return restoreJournalBackup(userDataDir(), id)
+
 })
+
+
+
+// ---------- Litestream (réplica continua) ----------
+
+ipcMain.handle('litestream:getStatus', (e) => {
+
+  if (!isTrustedSender(e)) {
+
+    return {
+
+      available: false,
+
+      active: false,
+
+      replicaPath: '',
+
+      isCustomDestination: false,
+
+      lastSync: null,
+
+      error: 'IPC no autorizado',
+
+    }
+
+  }
+
+  return getLitestreamStatus()
+
+})
+
+
+
+ipcMain.handle('litestream:chooseDestination', async (e) => {
+
+  if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
+
+  if (!win || win.isDestroyed()) return { ok: false as const, error: 'Ventana no disponible' }
+
+  const res = await dialog.showOpenDialog(win, {
+
+    properties: ['openDirectory', 'createDirectory'],
+
+    title: 'Carpeta de copias Litestream',
+
+  })
+
+  if (res.canceled || !res.filePaths[0]) return { ok: false as const, error: 'cancelled' }
+
+  return setLitestreamDestination(res.filePaths[0])
+
+})
+
+
+
+ipcMain.handle('litestream:resetDestination', async (e) => {
+
+  if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
+
+  return resetLitestreamDestination()
+
+})
+
+
+
+ipcMain.handle('litestream:restore', async (e) => {
+
+  if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
+
+  return restoreFromLitestreamReplica()
+
+})
+
+
+
+ipcMain.handle('litestream:openReplicaFolder', (e) => {
+
+  if (!isTrustedSender(e)) return
+
+  openReplicaFolder()
+
+})
+
+
 
 // ---------- Archivos ----------
+
 ipcMain.handle(
+
   'file:export',
+
   async (
-    _e,
+
+    e,
+
     payload: { content: string; defaultName: string; filters: { name: string; extensions: string[] }[] },
+
   ) => {
-    if (!win) return false
+
+    if (!isTrustedSender(e)) return false
+
+    if (!win || win.isDestroyed()) return false
+
+    if (!payload || typeof payload.content !== 'string') return false
+
+    if (payload.content.length > MAX_PAYLOAD_BYTES) return false
+
+    const defaultName =
+
+      typeof payload.defaultName === 'string' && payload.defaultName.trim()
+
+        ? path.basename(payload.defaultName).slice(0, 120)
+
+        : 'export.txt'
+
     const res = await dialog.showSaveDialog(win, {
-      defaultPath: payload.defaultName,
-      filters: payload.filters,
+
+      defaultPath: defaultName,
+
+      filters: sanitizeFilters(payload.filters),
+
     })
+
     if (res.canceled || !res.filePath) return false
+
     fs.writeFileSync(res.filePath, payload.content, 'utf-8')
+
     return true
+
   },
+
 )
 
-ipcMain.handle('file:import', async (_e, filters: { name: string; extensions: string[] }[]) => {
-  if (!win) return null
-  const res = await dialog.showOpenDialog(win, { properties: ['openFile'], filters })
+
+
+ipcMain.handle('file:import', async (e, filters: { name: string; extensions: string[] }[]) => {
+
+  if (!isTrustedSender(e)) return null
+
+  if (!win || win.isDestroyed()) return null
+
+  const res = await dialog.showOpenDialog(win, {
+
+    properties: ['openFile'],
+
+    filters: sanitizeFilters(filters),
+
+  })
+
   if (res.canceled || !res.filePaths[0]) return null
+
   const p = res.filePaths[0]
+
+  const st = fs.statSync(p)
+
+  if (st.size > MAX_PAYLOAD_BYTES) return null
+
   return { name: path.basename(p), content: fs.readFileSync(p, 'utf-8') }
+
 })
+
+
 
 // ---------- Ciclo de vida ----------
+
 const gotLock = app.requestSingleInstanceLock()
+
 if (!gotLock) {
+
   app.quit()
+
 } else {
+
   app.on('second-instance', () => {
+
     if (!win) return
+
     if (win.isMinimized()) win.restore()
+
     win.show()
+
     win.focus()
+
   })
-  app.whenReady().then(createWindow)
+
+  app.whenReady().then(async () => {
+
+    const dataDir = userDataDir()
+
+    prepareJournalDb(dataDir)
+
+    initLitestream(dataDir, journalDataPath())
+
+    await startLitestream()
+
+    applyContentSecurityPolicy()
+
+    createWindow()
+
+  })
+
 }
 
+
+
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+
+  void stopLitestream().finally(() => {
+
+    shutdownJournalDb()
+
+    if (process.platform !== 'darwin') app.quit()
+
+  })
+
 })
 
+
+
 app.on('activate', () => {
+
   if (BrowserWindow.getAllWindows().length === 0) createWindow()
+
 })
+
+

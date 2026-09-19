@@ -1,294 +1,269 @@
-import type { Trade } from '@/types'
-import type { BrokerId, ConsolidatedTrade, InstrumentType, NormalizedExecution } from '@/lib/import/types'
-import { marketFromInstrument } from '@/lib/import/tradeMapper'
+/**
+ * Sync opcional multi-dispositivo vía Supabase.
+ * Los datos se cifran en el cliente (AES-GCM) antes de subir — Supabase solo ve blobs.
+ * La fuente de verdad sigue siendo la base de datos local cifrada (SQLite).
+ */
+import type { PersistedData } from '@/types'
+import { readCloudSyncPref } from '@/lib/cloudSyncPref'
+import {
+  decryptJson,
+  deriveSyncKeyFromDbKeyHex,
+  encryptJson,
+  type EncryptedBlob,
+} from '@/lib/crypto/syncCrypto'
+import { deriveSyncKeyHex } from '@/lib/crypto/keyManager'
 import { isSupabaseConfigured, supabase } from '@/lib/supabase'
 
-/** Fila de `public.trades` (snake_case Supabase). */
-export interface DbTradeRow {
-  id: string
-  account_id: string
+const SNAPSHOT_TABLE = 'encrypted_sync_snapshots'
+
+export type EncryptedSnapshotRow = {
   user_id: string
-  ticker: string
-  instrument_type: InstrumentType
-  direction: 'LONG' | 'SHORT'
-  status: 'OPEN' | 'CLOSED'
-  quantity: number | string
-  quantity_closed: number | string
-  avg_entry_price: number | string
-  avg_exit_price: number | string | null
-  fees_total: number | string
-  net_pnl: number | string | null
-  base_currency: string
-  quote_currency: string
-  multiplier: number | string
-  opened_at: string
-  closed_at: string | null
-  notes: string | null
-  created_at: string
+  ciphertext: string
+  nonce: string
+  cipher_version: number
   updated_at: string
+  device_id: string | null
 }
 
-export interface DbExecutionInsert {
-  id?: string
-  account_id: string
-  user_id: string
-  trade_id?: string | null
-  import_batch_id?: string | null
-  broker: BrokerId
-  external_id?: string | null
-  ticker: string
-  instrument_type: InstrumentType
-  side: 'BUY' | 'SELL'
-  quantity: number
-  price: number
-  fees: number
-  base_currency: string
-  quote_currency: string
-  multiplier: number
-  executed_at: string
-  raw_row?: Record<string, string> | null
+export type CloudJournalSnapshot = {
+  updatedAt: number
+  data: PersistedData
 }
 
-function num(v: number | string | null | undefined, fallback = 0): number {
-  if (v == null) return fallback
-  const n = typeof v === 'number' ? v : Number(v)
-  return Number.isFinite(n) ? n : fallback
-}
+export type SyncPushResult = { ok: true; updatedAt: number } | { ok: false; error: string }
 
-/** Mapea una fila Supabase → Trade del Dashboard / store. */
-export function dbTradeToUiTrade(row: DbTradeRow): Trade {
-  const qtyOpen = num(row.quantity)
-  const qtyClosed = num(row.quantity_closed)
-  const quantity = row.status === 'CLOSED' ? Math.max(qtyClosed, qtyOpen, 0) || 1 : Math.max(qtyOpen, 0) || 1
-  const netPnl = row.net_pnl != null ? num(row.net_pnl) : undefined
+export type SyncPullResult =
+  | { ok: true; snapshot: CloudJournalSnapshot | null }
+  | { ok: false; error: string }
 
-  return {
-    id: row.id,
-    symbol: row.ticker.toUpperCase(),
-    market: marketFromInstrument(row.instrument_type, row.ticker),
-    direction: row.direction === 'SHORT' ? 'SHORT' : 'LONG',
-    status: row.status === 'CLOSED' ? 'CLOSED' : 'OPEN',
-    entryDate: row.opened_at,
-    exitDate: row.closed_at ?? undefined,
-    entryPrice: num(row.avg_entry_price),
-    exitPrice: row.avg_exit_price != null ? num(row.avg_exit_price) : undefined,
-    quantity,
-    multiplier: num(row.multiplier, 1) || 1,
-    fees: Math.abs(num(row.fees_total)),
-    strategy: 'Cloud',
-    tags: ['supabase'],
-    notes: row.notes ?? '',
-    rating: 0,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    ...(netPnl !== undefined && Number.isFinite(netPnl) ? { pnlOverride: netPnl } : {}),
+let localMutationAt = 0
+let cachedDeviceId: string | null = null
+
+function deviceId(): string {
+  if (cachedDeviceId) return cachedDeviceId
+  try {
+    const stored = localStorage.getItem('atrium:deviceId')
+    if (stored) {
+      cachedDeviceId = stored
+      return stored
+    }
+    const id = crypto.randomUUID()
+    localStorage.setItem('atrium:deviceId', id)
+    cachedDeviceId = id
+    return id
+  } catch {
+    cachedDeviceId = 'unknown-device'
+    return cachedDeviceId
   }
 }
 
-export async function fetchUserTrades(userId: string): Promise<Trade[]> {
-  if (!isSupabaseConfigured()) return []
+export function isCloudSyncActive(): boolean {
+  return isSupabaseConfigured() && readCloudSyncPref()
+}
 
-  const { data, error } = await supabase
-    .from('trades')
-    .select('*')
-    .eq('user_id', userId)
-    .order('opened_at', { ascending: false })
+export function bumpLocalMutationClock(at = Date.now()): void {
+  localMutationAt = at
+}
 
-  if (error) throw new Error(error.message)
-  return ((data ?? []) as DbTradeRow[]).map(dbTradeToUiTrade)
+export function getLocalMutationAt(): number {
+  return localMutationAt
+}
+
+/** Calcula el timestamp de última modificación a partir del journal. */
+export function computeJournalMutationAt(data: PersistedData): number {
+  let max = 0
+  const bump = (iso?: string) => {
+    if (!iso) return
+    const parsed = Date.parse(iso)
+    if (Number.isFinite(parsed) && parsed > max) max = parsed
+  }
+
+  for (const account of data.accounts ?? []) {
+    for (const trade of account.trades ?? []) {
+      bump(trade.updatedAt)
+      bump(trade.createdAt)
+    }
+    for (const note of account.notes ?? []) bump(note.updatedAt)
+    for (const flow of account.cashflows ?? []) bump(flow.date)
+  }
+
+  for (const setup of data.settings.playbook ?? []) {
+    bump(setup.updatedAt)
+    bump(setup.createdAt)
+  }
+
+  return max || Date.now()
+}
+
+/** Resolución de conflictos: última escritura gana (timestamp). */
+export function resolveSyncConflict(
+  local: PersistedData,
+  localAt: number,
+  cloud: PersistedData,
+  cloudAt: number,
+): { winner: 'local' | 'cloud'; data: PersistedData; at: number } {
+  if (cloudAt > localAt) return { winner: 'cloud', data: cloud, at: cloudAt }
+  return { winner: 'local', data: local, at: localAt }
+}
+
+async function requireSessionUserId(claimed?: string): Promise<string> {
+  const { data, error } = await supabase.auth.getUser()
+  if (error || !data.user) throw new Error('Sesión no válida. Vuelve a iniciar sesión.')
+  if (claimed && claimed !== data.user.id) {
+    throw new Error('No autorizado: el usuario de la sesión no coincide.')
+  }
+  return data.user.id
+}
+
+async function resolveSyncKey(): Promise<CryptoKey> {
+  const derived = await deriveSyncKeyHex()
+  if (!derived.ok) throw new Error(derived.error)
+  return deriveSyncKeyFromDbKeyHex(derived.keyHex)
+}
+
+function rowToBlob(row: EncryptedSnapshotRow): EncryptedBlob {
+  return {
+    ciphertext: row.ciphertext,
+    nonce: row.nonce,
+    cipherVersion: row.cipher_version,
+  }
+}
+
+export async function pullEncryptedJournal(userId?: string): Promise<SyncPullResult> {
+  if (!isCloudSyncActive()) return { ok: true, snapshot: null }
+
+  try {
+    const uid = await requireSessionUserId(userId)
+    const { data, error } = await supabase
+      .from(SNAPSHOT_TABLE)
+      .select('user_id,ciphertext,nonce,cipher_version,updated_at,device_id')
+      .eq('user_id', uid)
+      .maybeSingle()
+
+    if (error) return { ok: false, error: error.message }
+    if (!data) return { ok: true, snapshot: null }
+
+    const row = data as EncryptedSnapshotRow
+    const key = await resolveSyncKey()
+    const decrypted = await decryptJson<PersistedData>(rowToBlob(row), key)
+    const updatedAt = Date.parse(row.updated_at)
+    return {
+      ok: true,
+      snapshot: {
+        updatedAt: Number.isFinite(updatedAt) ? updatedAt : Date.now(),
+        data: decrypted,
+      },
+    }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'No se pudo descargar la réplica cifrada.' }
+  }
+}
+
+export async function pushEncryptedJournal(
+  data: PersistedData,
+  localUpdatedAt: number,
+  userId?: string,
+): Promise<SyncPushResult> {
+  if (!isCloudSyncActive()) return { ok: true, updatedAt: localUpdatedAt }
+
+  try {
+    const uid = await requireSessionUserId(userId)
+    const key = await resolveSyncKey()
+    const blob = await encryptJson(data, key)
+    const updatedIso = new Date(localUpdatedAt).toISOString()
+
+    const { data: existing, error: readErr } = await supabase
+      .from(SNAPSHOT_TABLE)
+      .select('updated_at')
+      .eq('user_id', uid)
+      .maybeSingle()
+
+    if (readErr) return { ok: false, error: readErr.message }
+
+    if (existing?.updated_at) {
+      const remoteAt = Date.parse(String(existing.updated_at))
+      if (Number.isFinite(remoteAt) && remoteAt > localUpdatedAt) {
+        return { ok: false, error: 'conflict:remote-newer' }
+      }
+    }
+
+    const { error } = await supabase.from(SNAPSHOT_TABLE).upsert(
+      {
+        user_id: uid,
+        ciphertext: blob.ciphertext,
+        nonce: blob.nonce,
+        cipher_version: blob.cipherVersion,
+        updated_at: updatedIso,
+        device_id: deviceId(),
+      },
+      { onConflict: 'user_id' },
+    )
+
+    if (error) return { ok: false, error: error.message }
+    return { ok: true, updatedAt: localUpdatedAt }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'No se pudo subir la réplica cifrada.' }
+  }
 }
 
 /**
- * Garantiza una cuenta cloud para el usuario (necesaria por FK de trades/executions).
- * Devuelve el `account_id`.
+ * Sincroniza bidireccionalmente con resolución LWW.
+ * Devuelve datos ganadores si el cloud es más reciente.
  */
-export async function ensureCloudAccount(opts: {
-  userId: string
-  name: string
-  currency: string
-  broker?: BrokerId | string
-}): Promise<string> {
-  if (!isSupabaseConfigured()) throw new Error('Supabase no está configurado.')
+export async function syncJournalWithCloud(
+  local: PersistedData,
+  localAt: number,
+): Promise<
+  | { ok: true; applied: 'none' | 'cloud' | 'local'; data: PersistedData; at: number }
+  | { ok: false; error: string }
+> {
+  if (!isCloudSyncActive()) {
+    return { ok: true, applied: 'none', data: local, at: localAt }
+  }
 
-  const broker = (opts.broker ?? 'OTHER') as BrokerId
-  const currency = (opts.currency || 'EUR').slice(0, 3).toUpperCase()
+  const pull = await pullEncryptedJournal()
+  if (!pull.ok) return pull
 
-  const { data: existing, error: selErr } = await supabase
-    .from('accounts')
-    .select('id')
-    .eq('user_id', opts.userId)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
+  if (!pull.snapshot) {
+    const push = await pushEncryptedJournal(local, localAt)
+    if (!push.ok) {
+      if (push.error === 'conflict:remote-newer') {
+        const retry = await pullEncryptedJournal()
+        if (retry.ok && retry.snapshot) {
+          return { ok: true, applied: 'cloud', data: retry.snapshot.data, at: retry.snapshot.updatedAt }
+        }
+      }
+      return push
+    }
+    bumpLocalMutationClock(push.updatedAt)
+    return { ok: true, applied: 'local', data: local, at: push.updatedAt }
+  }
 
-  if (selErr) throw new Error(selErr.message)
-  if (existing?.id) return existing.id as string
+  const resolved = resolveSyncConflict(local, localAt, pull.snapshot.data, pull.snapshot.updatedAt)
 
-  const { data: created, error: insErr } = await supabase
-    .from('accounts')
-    .insert({
-      user_id: opts.userId,
-      name: opts.name || 'Cuenta principal',
-      broker,
-      currency,
-    })
-    .select('id')
-    .single()
+  if (resolved.winner === 'cloud') {
+    bumpLocalMutationClock(resolved.at)
+    return { ok: true, applied: 'cloud', data: resolved.data, at: resolved.at }
+  }
 
-  if (insErr) throw new Error(insErr.message)
-  return created.id as string
+  const push = await pushEncryptedJournal(local, localAt)
+  if (!push.ok) {
+    if (push.error === 'conflict:remote-newer' && pull.snapshot) {
+      return { ok: true, applied: 'cloud', data: pull.snapshot.data, at: pull.snapshot.updatedAt }
+    }
+    return push
+  }
+
+  bumpLocalMutationClock(push.updatedAt)
+  return { ok: true, applied: 'local', data: local, at: push.updatedAt }
 }
 
-function consolidatedToDbRow(
-  ct: ConsolidatedTrade,
-  accountId: string,
-  userId: string,
-): Record<string, unknown> {
-  return {
-    id: ct.id,
-    account_id: accountId,
-    user_id: userId,
-    ticker: ct.ticker.toUpperCase(),
-    instrument_type: ct.instrumentType,
-    direction: ct.direction,
-    status: ct.status,
-    quantity: ct.quantity,
-    quantity_closed: ct.quantityClosed,
-    avg_entry_price: ct.avgEntryPrice,
-    avg_exit_price: ct.avgExitPrice,
-    fees_total: ct.feesTotal,
-    net_pnl: ct.netPnl,
-    base_currency: (ct.baseCurrency || 'USD').slice(0, 3).toUpperCase(),
-    quote_currency: (ct.quoteCurrency || 'USD').slice(0, 3).toUpperCase(),
-    multiplier: ct.multiplier || 1,
-    opened_at: ct.openedAt,
-    closed_at: ct.closedAt,
-    notes: null,
-  }
-}
-
-function executionToDbRow(
-  ex: NormalizedExecution,
-  accountId: string,
-  userId: string,
-  tradeId: string | null,
-  batchId: string | null,
-): DbExecutionInsert {
-  return {
-    account_id: accountId,
-    user_id: userId,
-    trade_id: tradeId,
-    import_batch_id: batchId,
-    broker: ex.broker,
-    external_id: ex.externalId ?? null,
-    ticker: ex.ticker.toUpperCase(),
-    instrument_type: ex.instrumentType,
-    side: ex.side,
-    quantity: ex.quantity,
-    price: ex.price,
-    fees: ex.fees,
-    base_currency: (ex.baseCurrency || 'USD').slice(0, 3).toUpperCase(),
-    quote_currency: (ex.quoteCurrency || 'USD').slice(0, 3).toUpperCase(),
-    multiplier: ex.multiplier || 1,
-    executed_at: ex.executedAt,
-    raw_row: ex.raw ?? null,
-  }
-}
-
-export type SyncImportPayload = {
-  userId: string
-  accountName: string
-  currency: string
-  broker: BrokerId
-  fileName?: string
-  executions: NormalizedExecution[]
-  consolidated: ConsolidatedTrade[]
-}
-
-export type SyncImportResult = {
-  accountId: string
-  batchId: string | null
-  tradesUpserted: number
-  executionsUpserted: number
-}
-
-/**
- * Persiste un import en Supabase:
- * 1) asegura cuenta
- * 2) crea import_batch
- * 3) upsert trades consolidados (vinculados a user_id)
- * 4) upsert executions (dedupe por account_id + broker + external_id)
- */
-export async function syncImportToSupabase(payload: SyncImportPayload): Promise<SyncImportResult> {
-  if (!isSupabaseConfigured()) {
-    return { accountId: '', batchId: null, tradesUpserted: 0, executionsUpserted: 0 }
-  }
-
-  const accountId = await ensureCloudAccount({
-    userId: payload.userId,
-    name: payload.accountName,
-    currency: payload.currency,
-    broker: payload.broker,
-  })
-
-  let batchId: string | null = null
-  const { data: batch, error: batchErr } = await supabase
-    .from('import_batches')
-    .insert({
-      account_id: accountId,
-      broker: payload.broker,
-      file_name: payload.fileName ?? null,
-      row_count: payload.executions.length,
-    })
-    .select('id')
-    .single()
-
-  if (batchErr) {
-    // No bloquear el sync de trades si el batch falla
-    console.warn('[tradeSync] import_batch:', batchErr.message)
-  } else {
-    batchId = batch.id as string
-  }
-
-  const tradeRows = payload.consolidated.map((ct) => consolidatedToDbRow(ct, accountId, payload.userId))
-  if (tradeRows.length) {
-    const { error } = await supabase.from('trades').upsert(tradeRows, { onConflict: 'id' })
-    if (error) throw new Error(`trades upsert: ${error.message}`)
-  }
-
-  // Relacionar executions → trade por executionKeys del agrupador FIFO
-  const keyToTradeId = new Map<string, string>()
-  for (const ct of payload.consolidated) {
-    for (const key of ct.executionKeys) keyToTradeId.set(key, ct.id)
-  }
-
-  const execRows = payload.executions.map((ex, idx) => {
-    const key =
-      ex.externalId?.trim() ||
-      `${ex.ticker}|${ex.executedAt}|${ex.side}|${ex.quantity}|${ex.price}|${idx}`
-    const tradeId = keyToTradeId.get(key) ?? null
-    return executionToDbRow(ex, accountId, payload.userId, tradeId, batchId)
-  })
-
-  // Solo upsert con external_id (unique constraint); sin id externo → insert simple
-  const withExternal = execRows.filter((r) => r.external_id)
-  const withoutExternal = execRows.filter((r) => !r.external_id)
-
-  if (withExternal.length) {
-    const { error } = await supabase
-      .from('executions')
-      .upsert(withExternal, { onConflict: 'account_id,broker,external_id', ignoreDuplicates: false })
-    if (error) throw new Error(`executions upsert: ${error.message}`)
-  }
-  if (withoutExternal.length) {
-    const { error } = await supabase.from('executions').insert(withoutExternal)
-    if (error) throw new Error(`executions insert: ${error.message}`)
-  }
-
-  return {
-    accountId,
-    batchId,
-    tradesUpserted: tradeRows.length,
-    executionsUpserted: execRows.length,
+/** Push debounced desde el store tras guardado local. */
+export async function pushLocalJournalToCloud(data: PersistedData): Promise<void> {
+  if (!isCloudSyncActive()) return
+  const at = Math.max(getLocalMutationAt(), computeJournalMutationAt(data))
+  const result = await pushEncryptedJournal(data, at)
+  if (!result.ok && result.error !== 'conflict:remote-newer') {
+    console.warn('[tradeSync] push:', result.error)
   }
 }

@@ -21,8 +21,15 @@ import {
   parseDirection,
   settingsFromAccount,
 } from '@/types'
-import { loadData, saveData, saveDataSync } from '@/lib/storage'
-import { parseJournalFile } from '@/lib/persist'
+import { loadData, saveData, saveDataSync, parseJournalFile } from '@/lib/db/client'
+import { writeCloudSyncPref } from '@/lib/cloudSyncPref'
+import {
+  bumpLocalMutationClock,
+  computeJournalMutationAt,
+  isCloudSyncActive,
+  pushLocalJournalToCloud,
+  syncJournalWithCloud,
+} from '@/lib/tradeSync'
 import { tradeFingerprint } from '@/lib/csv'
 import { uid } from '@/lib/format'
 import { generateDemoTrades, generateDemoNotes } from '@/lib/demo'
@@ -77,12 +84,14 @@ interface State {
   toasts: Toast[]
   tutorialActive: boolean
   loadError: string | null
+  dbLocked: boolean
   cashflows: Cashflow[]
 
   tradeModal: { open: boolean; trade?: Trade; presetDate?: string }
   shareTarget: ShareTarget | null
 
   init: () => Promise<void>
+  unlockDatabase: () => Promise<void>
   retryLoad: () => Promise<void>
   discardCorruptFile: () => void
   setPage: (p: Page) => void
@@ -147,6 +156,12 @@ function persistNow(get: () => State, sync = false) {
     try {
       saveDataSync(payload)
       persistFailNotified = false
+      bumpLocalMutationClock(computeJournalMutationAt(payload))
+      if (isCloudSyncActive()) {
+        void pushLocalJournalToCloud(payload).catch((e) => {
+          console.warn('[store] cloud push:', e instanceof Error ? e.message : e)
+        })
+      }
     } catch (e) {
       fail(e)
     }
@@ -155,6 +170,12 @@ function persistNow(get: () => State, sync = false) {
   void saveData(payload)
     .then(() => {
       persistFailNotified = false
+      bumpLocalMutationClock(computeJournalMutationAt(payload))
+      if (isCloudSyncActive()) {
+        void pushLocalJournalToCloud(payload).catch((e) => {
+          console.warn('[store] cloud push:', e instanceof Error ? e.message : e)
+        })
+      }
     })
     .catch(fail)
 }
@@ -313,6 +334,41 @@ function storedRange(): Range {
   return RANGE_OPTIONS.some((o) => o.value === v) ? (v as Range) : 'all'
 }
 
+async function applyCloudSyncAfterLoad(get: () => State): Promise<void> {
+  if (!isCloudSyncActive()) return
+  const { settings, accounts } = snapshot(get())
+  const payload: PersistedData = { version: 2, settings, accounts, trades: [], notes: [] }
+  const localAt = computeJournalMutationAt(payload)
+  bumpLocalMutationClock(localAt)
+  try {
+    const result = await syncJournalWithCloud(payload, localAt)
+    if (!result.ok) {
+      get().toast(result.error, 'error')
+      return
+    }
+    if (result.applied === 'cloud') {
+      const hydrated = hydrate(result.data)
+      setAppLocale(hydrated.settings.locale ?? 'es')
+      useStore.setState({
+        ...hydrated,
+        settings: {
+          ...hydrated.settings,
+          lastCloudSyncAt: new Date(result.at).toISOString(),
+        },
+      })
+      persistNow(get, true)
+      return
+    }
+    if (result.applied === 'local') {
+      useStore.setState((s) => ({
+        settings: { ...s.settings, lastCloudSyncAt: new Date(result.at).toISOString() },
+      }))
+    }
+  } catch (e) {
+    get().toast(e instanceof Error ? e.message : 'Error de sincronización', 'error')
+  }
+}
+
 function stripSetup(trades: Trade[], setupId: string): Trade[] {
   const now = new Date().toISOString()
   return trades.map((t) => {
@@ -338,18 +394,28 @@ export const useStore = create<State>((set, get) => ({
   toasts: [],
   tutorialActive: false,
   loadError: null,
+  dbLocked: false,
   tradeModal: { open: false },
   shareTarget: null,
 
   init: async () => {
     const result = await loadData()
+    if (result.status === 'locked') {
+      set({ loaded: true, dbLocked: true, loadError: null })
+      return
+    }
+    if (result.status === 'unrecoverable') {
+      set({ loaded: true, dbLocked: false, loadError: result.message })
+      return
+    }
     if (result.status === 'corrupt') {
-      set({ loaded: true, loadError: result.message })
+      set({ loaded: true, dbLocked: false, loadError: result.message })
       return
     }
     const hydrated = result.status === 'empty' ? hydrate(null) : hydrate(result.data)
     setAppLocale(hydrated.settings.locale ?? 'es')
-    set({ ...hydrated, loaded: true, loadError: null })
+    set({ ...hydrated, loaded: true, dbLocked: false, loadError: null })
+    writeCloudSyncPref(!!hydrated.settings.cloudSyncEnabled)
     if (result.status === 'ok' && (result.skippedTrades || result.skippedNotes)) {
       const loc = getAppLocale()
       const bits = [
@@ -358,10 +424,29 @@ export const useStore = create<State>((set, get) => ({
       ].filter(Boolean)
       get().toast(t(loc, 'err.skipLoad', { bits: bits.join(t(loc, 'err.and')) }), 'info')
     }
+    await applyCloudSyncAfterLoad(get)
   },
 
   retryLoad: async () => {
     await get().init()
+  },
+
+  unlockDatabase: async () => {
+    const result = await loadData()
+    if (result.status === 'locked') {
+      get().toast(t(getAppLocale(), 'crypto.stillLocked'), 'error')
+      return
+    }
+    if (result.status === 'unrecoverable' || result.status === 'corrupt') {
+      set({ loaded: true, dbLocked: false, loadError: result.message })
+      return
+    }
+    if (result.status !== 'ok' && result.status !== 'empty') return
+    const hydrated = result.status === 'empty' ? hydrate(null) : hydrate(result.data)
+    setAppLocale(hydrated.settings.locale ?? 'es')
+    set({ ...hydrated, loaded: true, dbLocked: false, loadError: null })
+    writeCloudSyncPref(!!hydrated.settings.cloudSyncEnabled)
+    await applyCloudSyncAfterLoad(get)
   },
 
   discardCorruptFile: () => {
@@ -450,6 +535,7 @@ export const useStore = create<State>((set, get) => ({
 
   updateSettings: (patch) => {
     if (patch.locale) setAppLocale(patch.locale)
+    if (patch.cloudSyncEnabled !== undefined) writeCloudSyncPref(!!patch.cloudSyncEnabled)
     set((s) => {
       const settings = { ...s.settings, ...patch }
       const touchesAccount = ACCOUNT_FIELDS.some((k) => patch[k] !== undefined)

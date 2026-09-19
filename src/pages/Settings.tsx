@@ -16,6 +16,9 @@ import {
   FileSpreadsheet,
   FolderOpen,
   History,
+  HardDrive,
+  RefreshCw,
+  Cloud,
   Gem,
   Globe,
   Layers,
@@ -30,12 +33,28 @@ import { useStore, flushPersist, getBackup } from '@/store'
 import { Topbar } from '@/components/Topbar'
 import { Button, ColorSwatches, Confirm, Empty, Field, Input, Select, Textarea } from '@/components/ui'
 import { AvatarPhoto, AvatarPicker, traderInitials } from '@/components/Avatar'
-import { exportFile, importFile, isDesktop, listBackups, restoreBackup, type JournalBackup } from '@/lib/storage'
+import { useAuth } from '@/auth/AuthProvider'
+import { useTrades } from '@/hooks/useTrades'
+import { isSupabaseConfigured } from '@/lib/supabase'
+import {
+  chooseLitestreamDestination,
+  exportFile,
+  getLitestreamStatus,
+  importFile,
+  isDesktop,
+  listBackups,
+  openLitestreamReplicaFolder,
+  resetLitestreamDestination,
+  restoreBackup,
+  restoreLitestreamReplica,
+  type JournalBackup,
+  type LitestreamStatus,
+} from '@/lib/db/client'
 import { csvToTrades, dedupeTrades, tradesToCsv } from '@/lib/csv'
 import { useImportCSV, type ImportBroker, BROKER_FILE_ACCEPT } from '@/lib/import'
 import { fmtDate, fmtMoney, todayKey } from '@/lib/format'
 import { accountEquity, netCashflow, netTradingPnl, signedCashflow } from '@/lib/capital'
-import { parseJournalText } from '@/lib/persist'
+import { parseJournalText } from '@/lib/db/client'
 import { LanguageSwitch } from '@/components/LanguageSwitch'
 import { useT } from '@/lib/useI18n'
 import { accountTypeHint, accountTypeLabel, marketBlurb, marketLabel } from '@/lib/i18n'
@@ -110,6 +129,9 @@ export function SettingsPage() {
   const retryLoad = useStore((s) => s.retryLoad)
   const t = useT()
   const locale = settings.locale ?? 'es'
+  const { user, signOut } = useAuth()
+  const { refetch: refetchCloud, isLoading: cloudSyncBusy, error: cloudSyncError } = useTrades()
+  const supabaseReady = isSupabaseConfigured()
 
   const NAV: { id: Section; label: string; hint: string; icon: typeof Building2 }[] = [
     { id: 'accounts', label: t('set.nav.accounts'), hint: t('set.nav.accountsHint'), icon: Building2 },
@@ -124,7 +146,9 @@ export function SettingsPage() {
   const [confirmDemo, setConfirmDemo] = useState(false)
   const [confirmDeleteAcc, setConfirmDeleteAcc] = useState(false)
   const [restoreId, setRestoreId] = useState<string | null>(null)
+  const [confirmLitestreamRestore, setConfirmLitestreamRestore] = useState(false)
   const [backups, setBackups] = useState<JournalBackup[]>([])
+  const [litestream, setLitestream] = useState<LitestreamStatus | null>(null)
   const [dataPath, setDataPath] = useState('')
   const [copied, setCopied] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -168,6 +192,22 @@ export function SettingsPage() {
   useEffect(() => {
     if (section !== 'data' || !isDesktop()) return
     void listBackups().then(setBackups)
+  }, [section])
+
+  useEffect(() => {
+    if (section !== 'data' || !isDesktop()) return
+    let cancelled = false
+    const refresh = () => {
+      void getLitestreamStatus().then((status) => {
+        if (!cancelled) setLitestream(status)
+      })
+    }
+    refresh()
+    const timer = window.setInterval(refresh, 5000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
   }, [section])
 
   useEffect(() => {
@@ -728,7 +768,7 @@ export function SettingsPage() {
                           {accounts.length} {accounts.length === 1 ? 'cuenta' : 'cuentas'} · esta: {trades.length} ops · {notes.length} notas
                         </div>
                         <div className="text-[11px] text-dim mt-1.5 leading-relaxed">
-                          Copia inmediata en journal-data.json.bak y hasta 10 copias en la carpeta backups.
+                          SQLite cifrado (journal.db). Copia inmediata en .bak y hasta 10 copias fechadas en backups/.
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
@@ -743,6 +783,188 @@ export function SettingsPage() {
                       </div>
                     </div>
                   </Panel>
+
+                  {supabaseReady && (
+                    <Panel title={t('set.cloudSync')} subtitle={t('set.cloudSyncSub')}>
+                      <div className="flex flex-col gap-4">
+                        <div className="rounded-2xl border border-border bg-surface-2/40 px-4 py-3.5 flex items-start gap-3">
+                          <div
+                            className={clsx(
+                              'w-10 h-10 rounded-xl border flex items-center justify-center shrink-0',
+                              settings.cloudSyncEnabled
+                                ? 'bg-accent/10 border-accent/30 text-accent'
+                                : 'bg-surface-3 border-border-2 text-dim',
+                            )}
+                          >
+                            <Cloud size={16} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[13px] font-semibold">
+                              {settings.cloudSyncEnabled ? t('set.cloudSyncOn') : t('set.cloudSyncOff')}
+                            </div>
+                            <div className="text-[11px] text-dim mt-1.5 leading-relaxed">{t('set.cloudSyncHint')}</div>
+                            {settings.lastCloudSyncAt && (
+                              <div className="text-[11px] text-muted mt-1.5">
+                                {t('set.cloudSyncLast')}: {backupWhen(Date.parse(settings.lastCloudSyncAt))}
+                              </div>
+                            )}
+                            {cloudSyncError && (
+                              <div className="text-[11px] text-red-400/90 mt-1.5">{cloudSyncError}</div>
+                            )}
+                          </div>
+                          <Button
+                            variant={settings.cloudSyncEnabled ? 'secondary' : 'outline'}
+                            size="sm"
+                            onClick={() => {
+                              const next = !settings.cloudSyncEnabled
+                              updateSettings({ cloudSyncEnabled: next })
+                              toast(next ? t('set.cloudSyncEnabledOk') : t('set.cloudSyncDisabledOk'), 'success')
+                            }}
+                          >
+                            {settings.cloudSyncEnabled ? t('set.disable') : t('set.enable')}
+                          </Button>
+                        </div>
+                        {settings.cloudSyncEnabled && (
+                          <div className="flex flex-wrap gap-2">
+                            {!user ? (
+                              <Button variant="outline" size="sm" onClick={() => window.location.assign('/login')}>
+                                {t('set.cloudSyncSignIn')}
+                              </Button>
+                            ) : (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={cloudSyncBusy}
+                                  onClick={() => {
+                                    void refetchCloud().then(() => toast(t('set.cloudSyncDone'), 'success'))
+                                  }}
+                                >
+                                  <RefreshCw size={14} className={cloudSyncBusy ? 'animate-spin' : ''} /> {t('set.cloudSyncNow')}
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => void signOut()}>
+                                  {t('set.cloudSyncSignOut')}
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </Panel>
+                  )}
+
+                  {isDesktop() && (
+                    <Panel title={t('set.continuousBackups')} subtitle={t('set.continuousBackupsSub')}>
+                      {!litestream?.available ? (
+                        <p className="text-[13px] text-muted leading-relaxed">{t('set.litestreamUnavailable')}</p>
+                      ) : (
+                        <div className="flex flex-col gap-4">
+                          <div className="rounded-2xl border border-border bg-surface-2/40 px-4 py-3.5 flex items-start gap-3">
+                            <div
+                              className={clsx(
+                                'w-10 h-10 rounded-xl border flex items-center justify-center shrink-0',
+                                litestream.active
+                                  ? 'bg-accent/10 border-accent/30 text-accent'
+                                  : 'bg-surface-3 border-border-2 text-dim',
+                              )}
+                            >
+                              {litestream.active ? <RefreshCw size={16} /> : <HardDrive size={16} />}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[13px] font-semibold">
+                                  {litestream.active ? t('set.litestreamActive') : t('set.litestreamInactive')}
+                                </span>
+                                <span
+                                  className={clsx(
+                                    'text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full border',
+                                    litestream.active
+                                      ? 'text-accent border-accent/30 bg-accent/10'
+                                      : 'text-dim border-border bg-surface-3',
+                                  )}
+                                >
+                                  Litestream
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-dim mt-1.5">
+                                {t('set.litestreamLastSync')}:{' '}
+                                {litestream.lastSync ? backupWhen(litestream.lastSync) : t('set.litestreamNeverSynced')}
+                              </div>
+                              {litestream.error && (
+                                <div className="text-[11px] text-red-400/90 mt-1.5 leading-relaxed">{litestream.error}</div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="rounded-2xl border border-border bg-surface-2/40 px-4 py-3.5">
+                            <div className="text-[11px] text-dim uppercase tracking-wide">{t('set.litestreamDestination')}</div>
+                            <div className="text-[12px] text-muted mono break-all mt-1 leading-relaxed">
+                              {litestream.isCustomDestination
+                                ? litestream.replicaPath
+                                : `${litestream.replicaPath} · ${t('set.litestreamDefaultDest')}`}
+                            </div>
+                            <div className="flex flex-wrap gap-2 mt-3">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  void (async () => {
+                                    const result = await chooseLitestreamDestination()
+                                    if (result.ok) {
+                                      toast(t('set.litestreamDestOk'), 'success')
+                                      setLitestream(await getLitestreamStatus())
+                                      return
+                                    }
+                                    if (result.error !== 'cancelled') toast(result.error, 'error')
+                                  })()
+                                }}
+                              >
+                                <FolderOpen size={14} /> {t('set.litestreamChooseFolder')}
+                              </Button>
+                              {litestream.isCustomDestination && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    void (async () => {
+                                      const result = await resetLitestreamDestination()
+                                      if (!result.ok) {
+                                        toast(result.error, 'error')
+                                        return
+                                      }
+                                      toast(t('set.litestreamDestReset'), 'success')
+                                      setLitestream(await getLitestreamStatus())
+                                    })()
+                                  }}
+                                >
+                                  {t('set.litestreamResetDest')}
+                                </Button>
+                              )}
+                              <Button variant="ghost" size="sm" onClick={() => void openLitestreamReplicaFolder()}>
+                                {t('set.litestreamOpenFolder')}
+                              </Button>
+                            </div>
+                          </div>
+
+                          <ActionCard
+                            icon={<History size={16} />}
+                            title={t('set.litestreamRestore')}
+                            body={t('set.litestreamRestoreMsg')}
+                            action={
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={!litestream.lastSync}
+                                onClick={() => setConfirmLitestreamRestore(true)}
+                              >
+                                {t('set.litestreamRestore')}
+                              </Button>
+                            }
+                          />
+                        </div>
+                      )}
+                    </Panel>
+                  )}
 
                   {isDesktop() && (
                     <Panel title={t('set.autoBackups')} subtitle={t('set.autoBackupsSub')}>
@@ -987,6 +1209,30 @@ export function SettingsPage() {
         title={t('err.restoreTitle')}
         message={t('set.restoreMsg')}
         confirmLabel={t('set.restore')}
+      />
+      <Confirm
+        open={confirmLitestreamRestore}
+        onClose={() => setConfirmLitestreamRestore(false)}
+        onConfirm={() => {
+          void (async () => {
+            try {
+              flushPersist()
+            } catch {
+              /* ignore */
+            }
+            const result = await restoreLitestreamReplica()
+            if (!result.ok) {
+              toast(result.error, 'error')
+              return
+            }
+            await retryLoad()
+            setLitestream(await getLitestreamStatus())
+            toast(t('set.litestreamRestoreOk'), 'success')
+          })()
+        }}
+        title={t('set.litestreamRestoreTitle')}
+        message={t('set.litestreamRestoreMsg')}
+        confirmLabel={t('set.litestreamRestore')}
       />
     </>
   )

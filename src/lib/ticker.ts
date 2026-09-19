@@ -10,7 +10,7 @@ export function cleanTicker(rawTicker: string): string {
 
   // Exchange / country suffixes used by XTB and similar brokers
   t = t.replace(
-    /\.(US|UK|FR|DE|ES|IT|NL|BE|PT|PL|CH|AU|CA|JP|HK|CN|SE|NO|DK|FI|AT|IE|MX|BR|IN|KR|TW|SG|NZ|ZA|EU|LSE|NYSE|NASDAQ)$/i,
+    /\.(US|UK|FR|DE|ES|IT|NL|BE|PT|PL|CH|AU|CA|JP|HK|CN|SE|NO|DK|FI|AT|IE|MX|BR|IN|KR|TW|SG|NZ|ZA|EU|CZ|HU|RO|GR|TR|LSE|NYSE|NASDAQ)$/i,
     '',
   )
 

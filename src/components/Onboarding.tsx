@@ -13,8 +13,12 @@ import {
   Globe,
   Layers,
   Lock,
+  KeyRound,
+  Shield,
 } from 'lucide-react'
 import { useStore } from '@/store'
+import { isDesktop } from '@/lib/db/client'
+import { getCryptoStatus, setupMasterPassword, setupSecureStorageKey } from '@/lib/crypto/keyManager'
 import { BrandMark } from '@/components/BrandMark'
 import { LanguageSwitch } from '@/components/LanguageSwitch'
 import { useT, useLocale } from '@/lib/useI18n'
@@ -34,11 +38,17 @@ import {
   type WeekStart,
 } from '@/types'
 
-type Step = 'welcome' | 'profile' | 'markets' | 'desk' | 'start' | 'assemble'
+type Step = 'welcome' | 'profile' | 'markets' | 'desk' | 'security' | 'start' | 'assemble'
 
 type StartPath = 'keep' | 'blank' | 'demo'
-const FLOW = ['profile', 'markets', 'desk', 'start'] as const
-type FlowStep = (typeof FLOW)[number]
+type CryptoChoice = 'password' | 'secure-storage'
+const FLOW_BASE = ['profile', 'markets', 'desk', 'start'] as const
+const FLOW_DESKTOP = ['profile', 'markets', 'desk', 'security', 'start'] as const
+type FlowStep = (typeof FLOW_DESKTOP)[number]
+
+function flowSteps(): readonly FlowStep[] {
+  return isDesktop() ? FLOW_DESKTOP : FLOW_BASE
+}
 
 const MARKET_ICONS: Record<Market, typeof Globe> = {
   Forex: Globe,
@@ -53,7 +63,15 @@ const MARKET_ICONS: Record<Market, typeof Globe> = {
 
 const BALANCE_PRESETS = [5000, 10000, 25000, 50000, 100000]
 const RISK_PRESETS = [0.25, 0.5, 1, 1.5, 2]
-const ASSEMBLE_KEYS = ['on.assemble.profile', 'on.assemble.markets', 'on.assemble.account', 'on.assemble.rules'] as const
+const ASSEMBLE_KEYS_BASE = ['on.assemble.profile', 'on.assemble.markets', 'on.assemble.account', 'on.assemble.rules'] as const
+const ASSEMBLE_KEYS_DESKTOP = [
+  'on.assemble.profile',
+  'on.assemble.markets',
+  'on.assemble.account',
+  'on.assemble.crypto',
+  'on.assemble.rules',
+] as const
+type AssembleKey = (typeof ASSEMBLE_KEYS_DESKTOP)[number] | (typeof ASSEMBLE_KEYS_BASE)[number]
 const ACCT_NAME_KEYS = {
   live: 'on.acct.live',
   demo: 'on.acct.demo',
@@ -68,6 +86,7 @@ function parseAmt(raw: string) {
 export function Onboarding() {
   const completeOnboarding = useStore((s) => s.completeOnboarding)
   const updateSettings = useStore((s) => s.updateSettings)
+  const toast = useStore((s) => s.toast)
   const settings = useStore((s) => s.settings)
   const t = useT()
   const locale = useLocale()
@@ -109,7 +128,13 @@ export function Onboarding() {
   const [fees, setFees] = useState(String(settings.defaultFees || defaultFeesForMarket((settings.preferredMarkets?.[0] || settings.defaultMarket) || 'Futuros')))
   const [weekStartsOn] = useState<WeekStart>(settings.weekStartsOn)
   const [path, setPath] = useState<StartPath>(() => (hasHistory && !demoDesk ? 'keep' : 'blank'))
+  const [cryptoChoice, setCryptoChoice] = useState<CryptoChoice>('secure-storage')
+  const [masterPassword, setMasterPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [secureStorageAvailable, setSecureStorageAvailable] = useState(!isDesktop())
+  const [cryptoBusy, setCryptoBusy] = useState(false)
   const [assembleTick, setAssembleTick] = useState(0)
+  const FLOW = flowSteps()
   const nameRef = useRef<HTMLInputElement>(null)
   const committed = useRef(false)
   const feesTouched = useRef(settings.defaultFees > 0)
@@ -127,8 +152,22 @@ export function Onboarding() {
     if (step === 'profile') return traderName.trim().length >= 2
     if (step === 'markets') return markets.length >= 1
     if (step === 'desk') return startingBalance > 0 && riskPerTrade > 0 && (!dailyLimitOn || parseAmt(dailyPct) > 0)
+    if (step === 'security') {
+      if (cryptoChoice === 'password') {
+        return masterPassword.length >= 8 && masterPassword === confirmPassword
+      }
+      return secureStorageAvailable
+    }
     return true
-  }, [step, traderName, markets, startingBalance, riskPerTrade, dailyLimitOn, dailyPct])
+  }, [step, traderName, markets, startingBalance, riskPerTrade, dailyLimitOn, dailyPct, cryptoChoice, masterPassword, confirmPassword, secureStorageAvailable])
+
+  useEffect(() => {
+    if (!isDesktop()) return
+    void getCryptoStatus().then((status) => {
+      setSecureStorageAvailable(status.secureStorageAvailable)
+      if (!status.secureStorageAvailable) setCryptoChoice('password')
+    })
+  }, [])
 
   useEffect(() => {
     if (step === 'profile') {
@@ -139,38 +178,72 @@ export function Onboarding() {
 
   useEffect(() => {
     if (step !== 'assemble' || committed.current) return
+    const assembleKeys = isDesktop() ? ASSEMBLE_KEYS_DESKTOP : ASSEMBLE_KEYS_BASE
     setAssembleTick(0)
-    const timers = ASSEMBLE_KEYS.map((_, i) => window.setTimeout(() => setAssembleTick(i + 1), 160 + i * 220))
+    const timers = assembleKeys.map((_, i) => window.setTimeout(() => setAssembleTick(i + 1), 160 + i * 220))
     const done = window.setTimeout(() => {
-      if (committed.current) return
-      committed.current = true
-      completeOnboarding({
-        traderName: traderName.trim() || 'Trader',
-        accountName: accountName.trim() || nameByType(type),
-        broker,
-        type,
-        color: COLOR_BY_ACCOUNT_TYPE[type],
-        currency,
-        startingBalance: startingBalance || 10000,
-        riskPerTrade: riskPerTrade || 1,
-        dailyLossLimit,
-        defaultMarket: primary,
-        preferredMarkets: markets,
-        defaultFees,
-        weekStartsOn,
-        tradeFormMode: settings.tradeFormMode || 'simple',
-        loadDemo: path === 'demo',
-        clearHistory: path === 'blank',
-      })
-    }, 160 + ASSEMBLE_KEYS.length * 220 + 420)
+      void (async () => {
+        if (committed.current) return
+        if (isDesktop()) {
+          const status = await getCryptoStatus()
+          if (!status.configured) {
+            const ok = await setupCrypto()
+            if (!ok) return
+          }
+        }
+        committed.current = true
+        completeOnboarding({
+          traderName: traderName.trim() || 'Trader',
+          accountName: accountName.trim() || nameByType(type),
+          broker,
+          type,
+          color: COLOR_BY_ACCOUNT_TYPE[type],
+          currency,
+          startingBalance: startingBalance || 10000,
+          riskPerTrade: riskPerTrade || 1,
+          dailyLossLimit,
+          defaultMarket: primary,
+          preferredMarkets: markets,
+          defaultFees,
+          weekStartsOn,
+          tradeFormMode: settings.tradeFormMode || 'simple',
+          loadDemo: path === 'demo',
+          clearHistory: path === 'blank',
+        })
+      })()
+    }, 160 + assembleKeys.length * 220 + 420)
     return () => {
       timers.forEach(clearTimeout)
       window.clearTimeout(done)
     }
   }, [step]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const goNext = () => {
+  const setupCrypto = async (): Promise<boolean> => {
+    if (!isDesktop()) return true
+    const status = await getCryptoStatus()
+    if (status.configured) return true
+    setCryptoBusy(true)
+    try {
+      const result =
+        cryptoChoice === 'password'
+          ? await setupMasterPassword(masterPassword)
+          : await setupSecureStorageKey()
+      if (!result.ok) {
+        toast(result.error, 'error')
+        return false
+      }
+      return true
+    } finally {
+      setCryptoBusy(false)
+    }
+  }
+
+  const goNext = async () => {
     if (step === 'welcome') return setStep('profile')
+    if (step === 'security') {
+      const ok = await setupCrypto()
+      if (!ok) return
+    }
     if (step === 'start') return setStep('assemble')
     const i = FLOW.indexOf(step as FlowStep)
     if (i >= 0 && i < FLOW.length - 1) setStep(FLOW[i + 1])
@@ -182,12 +255,34 @@ export function Onboarding() {
     if (i > 0) setStep(FLOW[i - 1])
   }
 
-  const skipWithDemo = () => {
+  const skipWithDemo = async () => {
     setTraderName((n) => n.trim() || 'Trader')
     setPath('demo')
     setType('demo')
     setAccountName('Cuenta de ejemplo')
     setBalance('25000')
+    if (isDesktop()) {
+      const status = await getCryptoStatus()
+      if (!status.configured) {
+        if (status.secureStorageAvailable) {
+          setCryptoBusy(true)
+          try {
+            const result = await setupSecureStorageKey()
+            if (!result.ok) {
+              toast(result.error, 'error')
+              return
+            }
+          } finally {
+            setCryptoBusy(false)
+          }
+        } else {
+          toast(t('crypto.demoNeedsPassword'), 'info')
+          setCryptoChoice('password')
+          setStep('security')
+          return
+        }
+      }
+    }
     setStep('assemble')
   }
 
@@ -195,7 +290,7 @@ export function Onboarding() {
     if (step === 'assemble' || step === 'welcome') return
     if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
       e.preventDefault()
-      if (canNext) goNext()
+      if (canNext) void goNext()
     }
   }
 
@@ -237,7 +332,12 @@ export function Onboarding() {
           onLocale={(locale) => updateSettings({ locale })}
         />
       ) : step === 'assemble' ? (
-        <Assemble name={firstName} done={assembleTick} demo={path === 'demo'} />
+        <Assemble
+          name={firstName}
+          done={assembleTick}
+          demo={path === 'demo'}
+          keys={isDesktop() ? ASSEMBLE_KEYS_DESKTOP : ASSEMBLE_KEYS_BASE}
+        />
       ) : (
         <div className="relative z-10 h-full flex flex-col">
           <header className="h-12 shrink-0 px-7 flex items-center justify-between">
@@ -472,6 +572,67 @@ export function Onboarding() {
                   </StepFrame>
                 )}
 
+                {step === 'security' && (
+                  <StepFrame title={t('crypto.onTitle')} copy={t('crypto.onCopy')}>
+                    <div className="flex flex-col gap-2">
+                      <CryptoOption
+                        active={cryptoChoice === 'secure-storage'}
+                        onClick={() => secureStorageAvailable && setCryptoChoice('secure-storage')}
+                        disabled={!secureStorageAvailable}
+                        icon={Shield}
+                        title={t('crypto.systemKeyTitle')}
+                        body={t('crypto.systemKeyBody')}
+                        mark={secureStorageAvailable ? t('on.recommended') : undefined}
+                      />
+                      <CryptoOption
+                        active={cryptoChoice === 'password'}
+                        onClick={() => setCryptoChoice('password')}
+                        icon={KeyRound}
+                        title={t('crypto.passwordTitle')}
+                        body={t('crypto.passwordBody')}
+                      />
+                    </div>
+
+                    {cryptoChoice === 'password' && (
+                      <div className="mt-8 flex flex-col gap-5">
+                        <div>
+                          <Label>{t('crypto.choosePassword')}</Label>
+                          <LineInput
+                            value={masterPassword}
+                            onChange={setMasterPassword}
+                            placeholder="••••••••"
+                            password
+                          />
+                        </div>
+                        <div>
+                          <Label>{t('crypto.confirmPassword')}</Label>
+                          <LineInput
+                            value={confirmPassword}
+                            onChange={setConfirmPassword}
+                            placeholder="••••••••"
+                            password
+                          />
+                        </div>
+                        {masterPassword && masterPassword.length < 8 && (
+                          <p className="text-[12px] text-dim">{t('crypto.passwordMin')}</p>
+                        )}
+                        {confirmPassword && masterPassword !== confirmPassword && (
+                          <p className="text-[12px] text-loss">{t('crypto.passwordMismatch')}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {!secureStorageAvailable && (
+                      <p className="mt-6 text-[12px] text-amber-400/90 leading-relaxed">{t('crypto.secureStorageUnavailable')}</p>
+                    )}
+
+                    <div className="mt-8 rounded-xl border border-loss/20 bg-loss/5 p-4 flex gap-3">
+                      <Lock size={16} className="text-loss shrink-0 mt-0.5" />
+                      <p className="text-[12px] text-muted leading-relaxed">{t('crypto.noRecovery')}</p>
+                    </div>
+                  </StepFrame>
+                )}
+
                 {step === 'start' && (
                   <StepFrame
                     title={locale === 'en' ? `Ready, ${firstName}.` : `Listo, ${firstName}.`}
@@ -537,11 +698,11 @@ export function Onboarding() {
                 </button>
                 <button
                   type="button"
-                  disabled={!canNext}
-                  onClick={goNext}
+                  disabled={!canNext || cryptoBusy}
+                  onClick={() => void goNext()}
                   className="inline-flex items-center gap-2 h-11 px-5 rounded-full bg-accent text-black text-[13px] font-semibold hover:bg-[#5ce392] disabled:opacity-35 active:scale-[0.98] transition-all no-drag"
                 >
-                  {step === 'start' ? t('on.enter') : t('on.continue')}
+                  {step === 'start' ? t('on.enter') : cryptoBusy ? t('crypto.settingUp') : t('on.continue')}
                   <ArrowRight size={15} strokeWidth={2.4} />
                 </button>
               </footer>
@@ -665,7 +826,17 @@ function Welcome({
   )
 }
 
-function Assemble({ name, done, demo }: { name: string; done: number; demo: boolean }) {
+function Assemble({
+  name,
+  done,
+  demo,
+  keys,
+}: {
+  name: string
+  done: number
+  demo: boolean
+  keys: readonly AssembleKey[]
+}) {
   const t = useT()
   return (
     <div className="relative z-10 h-full flex flex-col items-center justify-center px-8">
@@ -674,7 +845,7 @@ function Assemble({ name, done, demo }: { name: string; done: number; demo: bool
       <h2 className="text-[24px] font-semibold tracking-tight mt-10">{t('on.preparing', { name })}</h2>
       <p className="text-[13px] text-muted mt-2">{demo ? t('on.loadingDemo') : t('on.applying')}</p>
       <ul className="mt-10 w-full max-w-[220px] flex flex-col gap-3">
-        {ASSEMBLE_KEYS.map((key, i) => {
+        {keys.map((key, i) => {
           const on = done > i
           return (
             <li key={key} className={clsx('flex items-center gap-3 text-[14px] transition-colors duration-300', on ? 'text-text' : 'text-dim')}>
@@ -709,23 +880,72 @@ function LineInput({
   onChange,
   placeholder,
   mono,
+  password,
 }: {
   value: string
   onChange: (v: string) => void
   placeholder?: string
   mono?: boolean
+  password?: boolean
 }) {
   return (
     <input
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
+      type={password ? 'password' : undefined}
+      autoComplete={password ? 'new-password' : undefined}
       inputMode={mono ? 'decimal' : undefined}
       className={clsx(
         'w-full bg-transparent border-0 border-b border-border-2 text-[18px] py-2 outline-none focus:border-accent placeholder:text-dim/40 transition-colors',
         mono && 'mono',
       )}
     />
+  )
+}
+
+function CryptoOption({
+  active,
+  onClick,
+  disabled,
+  icon: Icon,
+  title,
+  body,
+  mark,
+}: {
+  active: boolean
+  onClick: () => void
+  disabled?: boolean
+  icon: typeof Shield
+  title: string
+  body: string
+  mark?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={clsx(
+        'text-left rounded-xl px-4 py-3.5 transition-colors border',
+        disabled && 'opacity-45 cursor-not-allowed',
+        active ? 'bg-surface-2 border-accent/40' : 'bg-transparent border-border hover:border-border-3',
+      )}
+    >
+      <div className="flex items-center gap-3">
+        <span className={clsx('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', active ? 'bg-accent text-black' : 'bg-surface-3 text-muted')}>
+          <Icon size={16} />
+        </span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-[14px] font-semibold">{title}</span>
+            {mark && <span className="text-[10px] font-semibold uppercase tracking-wider text-accent">{mark}</span>}
+          </div>
+          <p className="text-[12px] text-muted mt-1 leading-relaxed">{body}</p>
+        </div>
+        {active && <Check size={14} className="text-accent shrink-0" />}
+      </div>
+    </button>
   )
 }
 

@@ -4,17 +4,11 @@
  */
 export const config = { runtime: 'edge' }
 
-const CORS: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-}
-
-function fmpKey(): string | undefined {
-  return (process.env.FMP_API_KEY || process.env.VITE_FMP_API_KEY)?.trim() || undefined
-}
+import { cleanSymbol, corsHeaders, fmpKey } from '../lib/fmpSecurity'
 
 export default async function handler(req: Request): Promise<Response> {
+  const CORS = corsHeaders(req)
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS })
   }
@@ -23,10 +17,11 @@ export default async function handler(req: Request): Promise<Response> {
     return Response.json({ error: 'Method not allowed' }, { status: 405, headers: CORS })
   }
 
-  const symbol = new URL(req.url).searchParams.get('symbol')?.trim()
+  const raw = new URL(req.url).searchParams.get('symbol')?.trim()
+  const symbol = raw ? cleanSymbol(raw) : ''
   if (!symbol) {
     return Response.json(
-      { error: 'Missing symbol query parameter' },
+      { error: 'Missing or invalid symbol query parameter' },
       { status: 400, headers: CORS },
     )
   }

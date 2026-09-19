@@ -1,13 +1,25 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import {
+  BrowserRouter,
+  HashRouter,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom'
 import { AlertTriangle, FolderOpen, History } from 'lucide-react'
 import { useAuth } from '@/auth/AuthProvider'
-import { useStore, flushPersist } from '@/store'
-import { BrandLockup } from '@/components/BrandMark'
+import { readCloudSyncPref } from '@/lib/cloudSyncPref'
+import { AuthGuard, AuthLoadingScreen, GuestOnly } from '@/auth/AuthGuard'
+import { useStore, flushPersist, type Page } from '@/store'
+import { pathForPage, pageFromPath } from '@/lib/routes'
 import { Sidebar } from '@/components/Sidebar'
 import { TradeModal } from '@/components/TradeModal'
 import { ShareCardModal } from '@/components/ShareCard'
 import { Toasts } from '@/components/Toasts'
 import { Onboarding } from '@/components/Onboarding'
+import { MasterPasswordUnlock } from '@/components/MasterPasswordUnlock'
 import { Tour } from '@/components/Tour'
 import { Dashboard } from '@/pages/Dashboard'
 import { Trades } from '@/pages/Trades'
@@ -17,27 +29,90 @@ import { Journal } from '@/pages/Journal'
 import { SettingsPage } from '@/pages/Settings'
 import { Login } from '@/pages/Login'
 import { Button, Confirm } from '@/components/ui'
-import { isDesktop, listBackups, openDataFolder, restoreBackup, type JournalBackup } from '@/lib/storage'
+import { isDesktop, listBackups, openDataFolder, restoreBackup, type JournalBackup } from '@/lib/db/client'
 import { useT } from '@/lib/useI18n'
 import { TradesProvider } from '@/hooks/useTrades'
 
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route
+        path="/login"
+        element={
+          <GuestOnly>
+            <Login />
+            <Toasts />
+          </GuestOnly>
+        }
+      />
+
+      <Route element={<AuthGuard />}>
+        {/* Una sola instancia del shell: evita remount al cambiar de página */}
+        <Route path="/*" element={<ProtectedApp />} />
+      </Route>
+    </Routes>
+  )
+}
+
 export default function App() {
-  const { session, isLoading: authLoading, cloudEnabled } = useAuth()
+  // Electron usa file:// → HashRouter; web usa BrowserRouter (mejor con OAuth).
+  const Router = isDesktop() ? HashRouter : BrowserRouter
+  return (
+    <Router>
+      <AppRoutes />
+    </Router>
+  )
+}
+
+/** Journal autenticado: hidrata store, onboarding y shell con Sidebar. */
+function ProtectedApp() {
+  const { session, cloudEnabled } = useAuth()
+  const syncRequired = cloudEnabled && readCloudSyncPref()
   const loaded = useStore((s) => s.loaded)
   const init = useStore((s) => s.init)
   const page = useStore((s) => s.page)
   const loadError = useStore((s) => s.loadError)
+  const dbLocked = useStore((s) => s.dbLocked)
   const onboardingCompleted = useStore((s) => s.settings.onboardingCompleted)
   const tutorialActive = useStore((s) => s.tutorialActive)
   const openTradeModal = useStore((s) => s.openTradeModal)
   const setPage = useStore((s) => s.setPage)
   const toggleSidebar = useStore((s) => s.toggleSidebar)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const syncingFromUrl = useRef(false)
+
+  // URL ↔ store.page (la URL manda en deep-links; setPage actualiza la URL)
+  useEffect(() => {
+    const fromUrl = pageFromPath(location.pathname)
+    if (location.pathname === '/' || location.pathname === '') {
+      navigate('/dashboard', { replace: true })
+      return
+    }
+    if (!fromUrl) {
+      navigate('/dashboard', { replace: true })
+      return
+    }
+    if (fromUrl === page) return
+    syncingFromUrl.current = true
+    setPage(fromUrl)
+    queueMicrotask(() => {
+      syncingFromUrl.current = false
+    })
+  }, [location.pathname, page, setPage, navigate])
 
   useEffect(() => {
-    // Solo hidratar el journal local cuando hay sesión (o modo local sin Supabase)
-    if (cloudEnabled && !session) return
+    if (syncingFromUrl.current) return
+    const expected = pathForPage(page)
+    if (location.pathname !== expected) {
+      navigate(expected, { replace: true })
+    }
+  }, [page, location.pathname, navigate])
+
+  useEffect(() => {
+    if (syncRequired && !session) return
     void init()
-  }, [init, cloudEnabled, session])
+  }, [init, syncRequired, session])
 
   useEffect(() => {
     const flush = () => {
@@ -62,6 +137,10 @@ export default function App() {
 
   useEffect(() => {
     if (!onboardingCompleted || tutorialActive || loadError) return
+    const go = (p: Page) => {
+      setPage(p)
+      navigate(pathForPage(p))
+    }
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
       const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable
@@ -76,37 +155,37 @@ export default function App() {
         return
       }
       if (typing || e.ctrlKey || e.metaKey || e.altKey) return
-      const map: Record<string, Parameters<typeof setPage>[0]> = { '1': 'dashboard', '2': 'trades', '3': 'calendar', '4': 'analytics', '5': 'journal', '6': 'settings' }
-      if (map[e.key]) setPage(map[e.key])
+      const map: Record<string, Page> = {
+        '1': 'dashboard',
+        '2': 'trades',
+        '3': 'calendar',
+        '4': 'analytics',
+        '5': 'journal',
+        '6': 'settings',
+      }
+      if (map[e.key]) go(map[e.key])
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onboardingCompleted, tutorialActive, loadError, openTradeModal, setPage, toggleSidebar])
+  }, [onboardingCompleted, tutorialActive, loadError, openTradeModal, setPage, toggleSidebar, navigate])
 
-  if (authLoading || (cloudEnabled && session && !loaded) || (!cloudEnabled && !loaded)) {
-    return (
-      <div className="h-full relative flex items-center justify-center bg-bg overflow-hidden">
-        <div className="relative flex items-center gap-3 animate-fade-in">
-          <BrandLockup mark={36} />
-        </div>
-      </div>
-    )
-  }
-
-  // Rutas del Dashboard protegidas: sin sesión → Login (solo si Supabase está configurado)
-  if (cloudEnabled && !session) {
-    return (
-      <>
-        <Login />
-        <Toasts />
-      </>
-    )
+  if ((syncRequired && session && !loaded) || (!syncRequired && !loaded)) {
+    return <AuthLoadingScreen />
   }
 
   if (loadError) {
     return (
       <>
         <LoadErrorScreen message={loadError} />
+        <Toasts />
+      </>
+    )
+  }
+
+  if (dbLocked) {
+    return (
+      <>
+        <MasterPasswordUnlock />
         <Toasts />
       </>
     )
@@ -172,9 +251,11 @@ function LoadErrorScreen({ message }: { message: string }) {
         <div className="w-12 h-12 rounded-2xl bg-loss/10 border border-loss/20 flex items-center justify-center mb-5">
           <AlertTriangle className="text-loss" size={22} />
         </div>
-        <h1 className="text-xl font-semibold tracking-tight">{t('err.title')}</h1>
+        <h1 className="text-xl font-semibold tracking-tight">
+          {message.includes('no son recuperables') || message.includes('cannot be recovered') ? t('crypto.lostTitle') : t('err.title')}
+        </h1>
         <p className="text-sm text-muted mt-2 leading-relaxed">
-          {t('err.body')}
+          {message.includes('no son recuperables') || message.includes('cannot be recovered') ? t('crypto.lostBody') : t('err.body')}
         </p>
         <p className="text-[12px] text-dim mt-3 num break-all">{message}</p>
         <div className="flex flex-wrap items-center gap-2 mt-6">
