@@ -25,6 +25,7 @@
 - [Getting started](en/GETTING_STARTED.md) — install & run  
 - [Import](en/IMPORT.md) — broker CSV / XLSX  
 - [Architecture](en/ARCHITECTURE.md) — stack & data flow  
+- [Backup architecture](BACKUP_ARCHITECTURE.md) — encrypted SQLite + Litestream  
 - [Screenshots](en/SCREENSHOTS.md) — product gallery  
 
 </td>
@@ -34,6 +35,7 @@
 - [Primeros pasos](es/PRIMEROS_PASOS.md) — instalar y ejecutar  
 - [Importación](es/IMPORTACION.md) — CSV / XLSX de bróker  
 - [Arquitectura](es/ARQUITECTURA.md) — stack y datos  
+- [Arquitectura de copias](BACKUP_ARCHITECTURE.md) — SQLite cifrado + Litestream  
 - [Capturas](es/CAPTURAS.md) — galería del producto  
 
 </td>

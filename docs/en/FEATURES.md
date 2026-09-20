@@ -86,9 +86,10 @@ Named setups with checklist items — linked from the trade form.
 
 ### Data
 - Broker **CSV / XLSX import** (see [IMPORT.md](./IMPORT.md))  
-- Export / import journal JSON  
-- Desktop **automatic backups** (keep last 10, every ~10 min)  
-- Restore from `.bak` or dated backup  
+- Export / import journal JSON (portable backup)  
+- Desktop store: **encrypted SQLite** (`journal.db`, SQLCipher)  
+- Rotating **automatic backups** (keep last 10, every ~10 min) plus optional **Litestream** replica  
+- Restore from `.bak`, dated backup, or Litestream folder  
 
 ### Advanced
 Language (EN/ES), avatar, onboarding reset, demo load, clear data.
@@ -107,13 +108,14 @@ Exportable 1600×900 cards for social / Discord / mentoring.
 
 ## 8. Auth & cloud (optional)
 
-If `VITE_SUPABASE_*` is set:
+Atrium works **100% locally** with no account and no `.env`. Data lives in encrypted SQLite on desktop, or `localStorage` in the browser preview.
 
-- Magic-link email OTP  
-- Google OAuth  
-- Trade sync to Postgres (`executions` + `trades`) with RLS  
+If `VITE_SUPABASE_*` is set **and** you enable Settings › Multi-device sync:
 
-Without env vars → **local-only mode** (no login gate). Data lives in Electron `journal-data.json` or browser `localStorage`.
+- Magic-link email OTP / Google OAuth (only to identify the device session)  
+- E2E-encrypted journal snapshots (AES-GCM). Supabase stores **blobs only** — not readable by Atrium  
+
+Without env vars, or with env vars but sync left off → **local-only mode** (no login gate).
 
 ---
 
@@ -125,4 +127,4 @@ Ticker icons from a local map + optional **Financial Modeling Prep** API (`VITE_
 
 ## 10. Onboarding & tour
 
-First-run wizard (profile → markets → desk → assemble) plus an in-app product tour for new users.
+First-run wizard (profile → markets → desk → **encryption** on desktop → assemble) plus an in-app product tour for new users.

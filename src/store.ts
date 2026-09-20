@@ -33,7 +33,7 @@ import {
 import { tradeFingerprint } from '@/lib/csv'
 import { uid } from '@/lib/format'
 import { generateDemoTrades, generateDemoNotes } from '@/lib/demo'
-import { getAppLocale, setAppLocale, t } from '@/lib/i18n'
+import { ensureLocale, getAppLocale, setAppLocale, t } from '@/lib/i18n'
 import { RANGE_OPTIONS, type Range } from '@/lib/range'
 import type { ShareTarget } from '@/lib/shareCard'
 
@@ -348,7 +348,9 @@ async function applyCloudSyncAfterLoad(get: () => State): Promise<void> {
     }
     if (result.applied === 'cloud') {
       const hydrated = hydrate(result.data)
-      setAppLocale(hydrated.settings.locale ?? 'es')
+      const loc = hydrated.settings.locale ?? 'es'
+      await ensureLocale(loc)
+      setAppLocale(loc)
       useStore.setState({
         ...hydrated,
         settings: {
@@ -413,7 +415,9 @@ export const useStore = create<State>((set, get) => ({
       return
     }
     const hydrated = result.status === 'empty' ? hydrate(null) : hydrate(result.data)
-    setAppLocale(hydrated.settings.locale ?? 'es')
+    const loc = hydrated.settings.locale ?? 'es'
+    await ensureLocale(loc)
+    setAppLocale(loc)
     set({ ...hydrated, loaded: true, dbLocked: false, loadError: null })
     writeCloudSyncPref(!!hydrated.settings.cloudSyncEnabled)
     if (result.status === 'ok' && (result.skippedTrades || result.skippedNotes)) {
@@ -443,7 +447,9 @@ export const useStore = create<State>((set, get) => ({
     }
     if (result.status !== 'ok' && result.status !== 'empty') return
     const hydrated = result.status === 'empty' ? hydrate(null) : hydrate(result.data)
-    setAppLocale(hydrated.settings.locale ?? 'es')
+    const loc = hydrated.settings.locale ?? 'es'
+    await ensureLocale(loc)
+    setAppLocale(loc)
     set({ ...hydrated, loaded: true, dbLocked: false, loadError: null })
     writeCloudSyncPref(!!hydrated.settings.cloudSyncEnabled)
     await applyCloudSyncAfterLoad(get)
@@ -537,28 +543,35 @@ export const useStore = create<State>((set, get) => ({
   },
 
   updateSettings: (patch) => {
-    if (patch.locale) setAppLocale(patch.locale)
-    if (patch.cloudSyncEnabled !== undefined) writeCloudSyncPref(!!patch.cloudSyncEnabled)
-    set((s) => {
-      const settings = { ...s.settings, ...patch }
-      const touchesAccount = ACCOUNT_FIELDS.some((k) => patch[k] !== undefined)
-      const accounts = touchesAccount
-        ? s.accounts.map((a) =>
-            a.id === s.settings.activeAccountId
-              ? {
-                  ...a,
-                  name: settings.accountName,
-                  currency: settings.currency,
-                  startingBalance: settings.startingBalance,
-                  riskPerTrade: settings.riskPerTrade,
-                  dailyLossLimit: settings.dailyLossLimit,
-                }
-              : a,
-          )
-        : s.accounts
-      return { settings, accounts }
-    })
-    schedulePersist(get)
+    const apply = () => {
+      if (patch.locale) setAppLocale(patch.locale)
+      if (patch.cloudSyncEnabled !== undefined) writeCloudSyncPref(!!patch.cloudSyncEnabled)
+      set((s) => {
+        const settings = { ...s.settings, ...patch }
+        const touchesAccount = ACCOUNT_FIELDS.some((k) => patch[k] !== undefined)
+        const accounts = touchesAccount
+          ? s.accounts.map((a) =>
+              a.id === s.settings.activeAccountId
+                ? {
+                    ...a,
+                    name: settings.accountName,
+                    currency: settings.currency,
+                    startingBalance: settings.startingBalance,
+                    riskPerTrade: settings.riskPerTrade,
+                    dailyLossLimit: settings.dailyLossLimit,
+                  }
+                : a,
+            )
+          : s.accounts
+        return { settings, accounts }
+      })
+      schedulePersist(get)
+    }
+    if (patch.locale) {
+      void ensureLocale(patch.locale).then(apply)
+      return
+    }
+    apply()
   },
 
   switchAccount: (id) => {

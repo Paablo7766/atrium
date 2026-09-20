@@ -9,8 +9,10 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
-const EXE = path.join(ROOT, 'release', 'win-unpacked', 'Atrium.exe')
-const UNPACKED = path.join(ROOT, 'release', 'win-unpacked')
+const UNPACKED = process.env.ATRIUM_UNPACKED
+  ? path.resolve(process.env.ATRIUM_UNPACKED)
+  : path.join(ROOT, 'release', 'win-unpacked')
+const EXE = path.join(UNPACKED, 'Atrium.exe')
 const SQLITE_HEADER = Buffer.from('SQLite format 3', 'utf8')
 const TEST_PASSWORD = 'PackagedE2E-2026'
 const TRADE_SYMBOL = 'E2EPACK'

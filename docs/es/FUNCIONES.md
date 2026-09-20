@@ -86,9 +86,10 @@ Setups con checklist — enlazados desde el formulario de operación.
 
 ### Datos
 - **Importación CSV / XLSX** (ver [IMPORTACION.md](./IMPORTACION.md))  
-- Exportar / importar JSON del diario  
-- **Copias de seguridad** automáticas en escritorio (últimas 10, ~cada 10 min)  
-- Restaurar desde `.bak` o backup fechado  
+- Exportar / importar JSON del diario (copia portable)  
+- Almacén de escritorio: **SQLite cifrado** (`journal.db`, SQLCipher)  
+- **Copias automáticas** rotativas (últimas 10, ~cada 10 min) y réplica **Litestream** opcional  
+- Restaurar desde `.bak`, backup fechado o carpeta Litestream  
 
 ### Avanzado
 Idioma (ES/EN), avatar, reiniciar onboarding, cargar demo, borrar datos.
@@ -107,13 +108,14 @@ Tarjetas 1600×900 para redes / Discord / mentoría.
 
 ## 8. Auth y nube (opcional)
 
-Si configuras `VITE_SUPABASE_*`:
+Atrium funciona **al 100 % en local** sin cuenta y sin `.env`. Los datos viven en SQLite cifrado en escritorio, o en `localStorage` en el preview del navegador.
 
-- Magic link por email  
-- Google OAuth  
-- Sync de operaciones a Postgres con RLS  
+Si configuras `VITE_SUPABASE_*` **y** activas Ajustes › Sync multi-dispositivo:
 
-Sin variables → **modo solo local** (sin pantalla de login). Datos en `journal-data.json` (Electron) o `localStorage`.
+- Magic link por email / Google OAuth (solo para identificar la sesión del dispositivo)  
+- Snapshots del diario cifrados E2E (AES-GCM). Supabase guarda **solo blobs** — Atrium no puede leerlos  
+
+Sin variables, o con variables pero sync desactivado → **modo solo local** (sin pantalla de login).
 
 ---
 
@@ -125,4 +127,4 @@ Iconos de ticker locales + API opcional de **Financial Modeling Prep**.
 
 ## 10. Onboarding y tour
 
-Asistente de primer uso + tour guiado del producto.
+Asistente de primer uso (perfil → mercados → mesa → **cifrado** en escritorio → ensamblar) + tour guiado del producto.

@@ -152,6 +152,30 @@ export default defineConfig(({ mode }) => {
       outDir: 'dist',
       sourcemap: false,
       chunkSizeWarningLimit: 1500,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (
+              id.includes('node_modules/react-dom') ||
+              id.includes('node_modules/react-router') ||
+              id.includes('node_modules/scheduler') ||
+              /node_modules[/\\]react[/\\]/.test(id)
+            ) {
+              return 'react'
+            }
+            if (
+              id.includes('node_modules/recharts') ||
+              id.includes('node_modules/victory-vendor') ||
+              id.includes('node_modules/d3-')
+            ) {
+              return 'recharts'
+            }
+            if (id.includes('node_modules/xlsx')) return 'xlsx'
+            if (id.includes('node_modules/@supabase')) return 'supabase'
+            return undefined
+          },
+        },
+      },
     },
   }
 })

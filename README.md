@@ -50,14 +50,14 @@
 
 **English**
 
-Atrium is a desktop trading journal for serious process work: multi-account books, broker import, deep analytics, psychology notes and shareable recap cards — offline-first, with optional cloud sync.
+Atrium is a desktop trading journal for serious process work: multi-account books, broker import, deep analytics, psychology notes and shareable recap cards — encrypted SQLite on disk, with optional Litestream backup and optional E2E cloud sync.
 
 </td>
 <td width="50%" valign="top">
 
 **Español**
 
-Atrium es un diario de trading de escritorio para el proceso en serio: varias cuentas, importación de bróker, analítica profunda, notas psicológicas y tarjetas de recap — primero local, con sync opcional en la nube.
+Atrium es un diario de trading de escritorio para el proceso en serio: varias cuentas, importación de bróker, analítica profunda, notas psicológicas y tarjetas de recap — SQLite cifrado en disco, con copia Litestream opcional y sync E2E opcional en la nube.
 
 </td>
 </tr>
@@ -70,7 +70,7 @@ Atrium es un diario de trading de escritorio para el proceso en serio: varias cu
 | **03** | Analytics — win rate, PF, expectancy, R, drawdown, emotions |
 | **04** | Calendar heatmap + psychology journal |
 | **05** | Share cards 1600×900 — Orbit, Editorial, Signal, Folio |
-| **06** | Optional E2E-encrypted multi-device sync (Supabase blobs) · EN / ES |
+| **06** | Encrypted local SQLite · optional Litestream backup · optional E2E sync (Supabase blobs) · EN / ES |
 
 ---
 
@@ -203,14 +203,14 @@ Week, month or single-trade recaps ready to download as PNG 1600×900.
 
 ## English
 
-**Guides:** [Features](docs/en/FEATURES.md) · [Getting started](docs/en/GETTING_STARTED.md) · [Import](docs/en/IMPORT.md) · [Architecture](docs/en/ARCHITECTURE.md) · [Screenshots](docs/en/SCREENSHOTS.md)
+**Guides:** [Features](docs/en/FEATURES.md) · [Getting started](docs/en/GETTING_STARTED.md) · [Import](docs/en/IMPORT.md) · [Architecture](docs/en/ARCHITECTURE.md) · [Backup](docs/BACKUP_ARCHITECTURE.md) · [Screenshots](docs/en/SCREENSHOTS.md)
 
 ### Quick start
 
 ```bash
 npm install
-cp .env.example .env   # optional — FMP logos; Supabase only if you want encrypted cloud sync
-npm run dev            # Vite + Electron
+npm run dev            # Vite + Electron — no .env needed (local encrypted SQLite)
+# optional: cp .env.example .env   # FMP logos; Supabase only for opt-in E2E cloud sync
 ```
 
 Windows shortcut: double-click **`Abrir Atrium.bat`**.
@@ -251,14 +251,14 @@ Windows shortcut: double-click **`Abrir Atrium.bat`**.
 
 ## Español
 
-**Guías:** [Funciones](docs/es/FUNCIONES.md) · [Primeros pasos](docs/es/PRIMEROS_PASOS.md) · [Importación](docs/es/IMPORTACION.md) · [Arquitectura](docs/es/ARQUITECTURA.md) · [Capturas](docs/es/CAPTURAS.md)
+**Guías:** [Funciones](docs/es/FUNCIONES.md) · [Primeros pasos](docs/es/PRIMEROS_PASOS.md) · [Importación](docs/es/IMPORTACION.md) · [Arquitectura](docs/es/ARQUITECTURA.md) · [Copias](docs/BACKUP_ARCHITECTURE.md) · [Capturas](docs/es/CAPTURAS.md)
 
 ### Inicio rápido
 
 ```bash
 npm install
-cp .env.example .env   # opcional — logos FMP; Supabase solo si quieres sync cifrado en la nube
-npm run dev            # Vite + Electron
+npm run dev            # Vite + Electron — sin .env (SQLite cifrado local)
+# opcional: cp .env.example .env   # logos FMP; Supabase solo para sync E2E opt-in
 ```
 
 Atajo Windows: doble clic en **`Abrir Atrium.bat`**.
@@ -299,15 +299,16 @@ Atajo Windows: doble clic en **`Abrir Atrium.bat`**.
 
 ```text
 atrium/
-├── electron/           Desktop shell · persistence · backups
+├── electron/           Desktop shell · encrypted SQLite IPC · Litestream
 ├── src/
 │   ├── pages/          Dashboard · Trades · Calendar · Analytics · Journal · Settings
 │   ├── components/     Design system · charts · ShareCard · Tour
+│   ├── lib/db/         SQLite schema · repositories · JSON migration
 │   ├── lib/import/     Broker adapters · CSV / XLSX pipeline
-│   ├── auth/           Optional login when cloud sync is enabled
+│   ├── auth/           Optional login only if cloud sync is enabled
 │   └── assets/         Brand mark
-├── prisma/             Cloud schema
-├── supabase/           Migrations + RLS (004 = encrypted_sync_snapshots)
+├── prisma/             Legacy / optional cloud schema reference
+├── supabase/           Optional migrations + RLS (004 = encrypted_sync_snapshots)
 ├── docs/               Bilingual docs + screenshot gallery
 ├── scripts/            Launcher · verification · capture-screenshots
 └── public/             App icons

@@ -1,8 +1,8 @@
 # Broker import
 
-Atrium imports **CSV, TXT, XLSX, and XLS** broker statements, normalizes executions, groups them into trades, deduplicates, and optionally syncs to Supabase.
+Atrium imports **CSV, TXT, XLSX, and XLS** broker statements, normalizes executions, groups them into trades, and deduplicates. Everything is saved to the **local encrypted SQLite** journal. Cloud sync is optional and only runs if you enable E2E multi-device sync in Settings.
 
-Pipeline: `src/lib/import/` → parse → adapters → group → map → dedupe → UI / cloud.
+Pipeline: `src/lib/import/` → parse → adapters → group → map → dedupe → local DB (optional encrypted cloud snapshot).
 
 ---
 

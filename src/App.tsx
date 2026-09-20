@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import {
   BrowserRouter,
   HashRouter,
@@ -8,15 +8,13 @@ import {
   useLocation,
   useNavigate,
 } from 'react-router-dom'
-import { AlertTriangle, FolderOpen, History } from 'lucide-react'
+import { AlertTriangle, FolderOpen, History, Loader2 } from 'lucide-react'
 import { useAuth } from '@/auth/AuthProvider'
 import { readCloudSyncPref } from '@/lib/cloudSyncPref'
 import { AuthGuard, AuthLoadingScreen, GuestOnly } from '@/auth/AuthGuard'
 import { useStore, flushPersist, type Page } from '@/store'
 import { pathForPage, pageFromPath } from '@/lib/routes'
 import { Sidebar } from '@/components/Sidebar'
-import { TradeModal } from '@/components/TradeModal'
-import { ShareCardModal } from '@/components/ShareCard'
 import { Toasts } from '@/components/Toasts'
 import { Onboarding } from '@/components/Onboarding'
 import { MasterPasswordUnlock } from '@/components/MasterPasswordUnlock'
@@ -26,12 +24,23 @@ import { Trades } from '@/pages/Trades'
 import { Calendar } from '@/pages/Calendar'
 import { Analytics } from '@/pages/Analytics'
 import { Journal } from '@/pages/Journal'
-import { SettingsPage } from '@/pages/Settings'
 import { Login } from '@/pages/Login'
 import { Button, Confirm } from '@/components/ui'
 import { isDesktop, listBackups, openDataFolder, restoreBackup, type JournalBackup } from '@/lib/db/client'
 import { useT } from '@/lib/useI18n'
 import { TradesProvider } from '@/hooks/useTrades'
+
+const SettingsPage = lazy(() => import('@/pages/Settings').then((m) => ({ default: m.SettingsPage })))
+const TradeModal = lazy(() => import('@/components/TradeModal').then((m) => ({ default: m.TradeModal })))
+const ShareCardModal = lazy(() => import('@/components/ShareCard').then((m) => ({ default: m.ShareCardModal })))
+
+function ChunkFallback() {
+  return (
+    <div className="flex-1 flex items-center justify-center min-h-[240px]">
+      <Loader2 size={22} className="animate-spin text-accent" />
+    </div>
+  )
+}
 
 function AppRoutes() {
   return (
@@ -76,6 +85,8 @@ function ProtectedApp() {
   const onboardingCompleted = useStore((s) => s.settings.onboardingCompleted)
   const tutorialActive = useStore((s) => s.tutorialActive)
   const openTradeModal = useStore((s) => s.openTradeModal)
+  const tradeModalOpen = useStore((s) => s.tradeModal.open)
+  const shareTarget = useStore((s) => s.shareTarget)
   const setPage = useStore((s) => s.setPage)
   const toggleSidebar = useStore((s) => s.toggleSidebar)
   const location = useLocation()
@@ -210,10 +221,22 @@ function ProtectedApp() {
           {page === 'calendar' && <Calendar />}
           {page === 'analytics' && <Analytics />}
           {page === 'journal' && <Journal />}
-          {page === 'settings' && <SettingsPage />}
+          {page === 'settings' && (
+            <Suspense fallback={<ChunkFallback />}>
+              <SettingsPage />
+            </Suspense>
+          )}
         </main>
-        <TradeModal />
-        <ShareCardModal />
+        {tradeModalOpen && (
+          <Suspense fallback={null}>
+            <TradeModal />
+          </Suspense>
+        )}
+        {shareTarget && (
+          <Suspense fallback={null}>
+            <ShareCardModal />
+          </Suspense>
+        )}
         <Toasts />
         <Tour />
       </div>

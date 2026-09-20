@@ -1,8 +1,8 @@
 # Importación desde brokers
 
-Atrium importa extractos **CSV, TXT, XLSX y XLS**, normaliza ejecuciones, las agrupa en operaciones, evita duplicados y opcionalmente sincroniza con Supabase.
+Atrium importa extractos **CSV, TXT, XLSX y XLS**, normaliza ejecuciones, las agrupa en operaciones y evita duplicados. Todo se guarda en el diario **SQLite cifrado local**. El sync en la nube es opcional y solo corre si activas el sync E2E multi-dispositivo en Ajustes.
 
-Pipeline: `src/lib/import/` → parsear → adapters → agrupar → mapear → dedupe → UI / nube.
+Pipeline: `src/lib/import/` → parsear → adapters → agrupar → mapear → dedupe → BD local (snapshot cifrado en la nube opcional).
 
 ---
 
