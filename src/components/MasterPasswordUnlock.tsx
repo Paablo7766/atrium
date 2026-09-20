@@ -3,6 +3,7 @@ import { AlertTriangle, Lock, ShieldAlert } from 'lucide-react'
 import { BrandMark } from '@/components/BrandMark'
 import { Button } from '@/components/ui'
 import { unlockWithPassword } from '@/lib/crypto/keyManager'
+import { isDesktop } from '@/lib/db/client'
 import { useStore } from '@/store'
 import { useT } from '@/lib/useI18n'
 
@@ -87,7 +88,9 @@ export function MasterPasswordUnlock() {
           <ShieldAlert size={18} className="text-loss shrink-0 mt-0.5" />
           <div>
             <p className="text-[13px] font-semibold text-loss">{t('crypto.lostTitle')}</p>
-            <p className="text-[12px] text-muted mt-1.5 leading-relaxed">{t('crypto.lostBody')}</p>
+            <p className="text-[12px] text-muted mt-1.5 leading-relaxed">
+              {t(isDesktop() ? 'crypto.lostBody' : 'crypto.noRecovery')}
+            </p>
           </div>
         </div>
 

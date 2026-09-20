@@ -2,7 +2,7 @@
  * Cliente Supabase — OPCIONAL y SECUNDARIO a la base de datos local.
  *
  * Atrium funciona al 100 % sin Supabase: el diario vive en SQLite cifrado (escritorio)
- * o localStorage (web). Este módulo solo se usa cuando:
+ * o IndexedDB cifrado (web). Este módulo solo se usa cuando:
  *   1. VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY están definidos, Y
  *   2. El usuario activa explícitamente «Sync multi-dispositivo» en Ajustes.
  *

@@ -152,7 +152,7 @@ function persistNow(get: () => State, sync = false) {
     persistFailNotified = true
     get().toast(e instanceof Error ? e.message : t(getAppLocale(), 'err.saveFail'), 'error')
   }
-  if (sync) {
+  if (sync && isDesktop()) {
     try {
       saveDataSync(payload)
       persistFailNotified = false
@@ -458,7 +458,7 @@ export const useStore = create<State>((set, get) => ({
   discardCorruptFile: () => {
     void (async () => {
       persistFailNotified = false
-      if (isDesktop()) await wipeLocalStorage()
+      await wipeLocalStorage()
       set({ ...hydrate(null), loaded: true, loadError: null, dbLocked: false })
       await get().init()
     })()

@@ -267,6 +267,26 @@ export function unlockWithPassword(userDataDir: string, password: string): KeyRe
   return { ok: true, key }
 }
 
+export function getExportKeyMaterial(
+  userDataDir: string,
+): { ok: true; keyHex: string; salt: string; iterations: number } | { ok: false; error: string } {
+  const keyHex = getEncryptionKeyHex()
+  if (!keyHex) {
+    return { ok: false, error: 'Desbloquea el diario con tu contraseña maestra para exportar una copia cifrada.' }
+  }
+  const meta = readCryptoMeta(userDataDir)
+  if (!meta) {
+    return { ok: false, error: 'El cifrado local no está configurado.' }
+  }
+  const salt = meta.salt ?? generateSaltHex()
+  return {
+    ok: true,
+    keyHex,
+    salt,
+    iterations: meta.iterations || PBKDF2_ITERATIONS,
+  }
+}
+
 export function tryAutoUnlock(userDataDir: string): KeyResult {
   const meta = readCryptoMeta(userDataDir)
   if (!meta || meta.mode !== 'secure-storage') {

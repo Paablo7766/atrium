@@ -1,12 +1,27 @@
 import type { PersistedData } from '@/types'
 import { parseJournalFile } from './import'
 import type { DiskLoad, DiskLoadRaw, Filter, JournalBackup, LitestreamStatus } from './types'
+import {
+  getCryptoStatus as getWebCryptoStatus,
+  getWebKeyHex,
+  wipeWebCryptoMeta,
+} from '@/lib/crypto/keyManagerWeb'
+import {
+  buildEncryptedBackupFile,
+  deleteJournalDb,
+  exportEncryptedBackup as exportWebBackup,
+  hasEncryptedJournal,
+  importEncryptedBackup as importWebBackup,
+  loadJournal as loadWebJournal,
+  saveJournal as saveWebJournal,
+} from './web'
 
 export type { DiskLoad, DiskLoadRaw, Filter, JournalBackup, LitestreamStatus, DesktopApi } from './types'
 export { parseJournalFile, parseJournalText } from './import'
 export type { JournalParseOk, JournalParseFail, JournalParseResult } from './import'
 
-const LS_KEY = 'trading-journal:data'
+export const LEGACY_BROWSER_LS_KEY = 'trading-journal:data'
+const LS_KEY = LEGACY_BROWSER_LS_KEY
 /** ~8 MB — evita saturar localStorage con payloads maliciosos. */
 const MAX_BROWSER_BYTES = 8 * 1024 * 1024
 const MAX_IMPORT_BYTES = 25 * 1024 * 1024
@@ -39,17 +54,10 @@ function wrapLoaded(result: unknown): DiskLoad {
   return fromRaw(result)
 }
 
-export async function loadData(): Promise<DiskLoad> {
-  if (isDesktop()) {
-    try {
-      return wrapLoaded(await window.api!.load())
-    } catch (e) {
-      return { status: 'corrupt', message: e instanceof Error ? e.message : 'No se pudo leer la base de datos.' }
-    }
-  }
+function readLegacyBrowser(): DiskLoad | null {
   try {
     const raw = localStorage.getItem(LS_KEY)
-    if (!raw) return { status: 'empty' }
+    if (!raw) return null
     try {
       return fromRaw(JSON.parse(raw) as unknown)
     } catch {
@@ -73,13 +81,115 @@ function writeBrowser(data: PersistedData) {
   }
 }
 
+export function clearLegacyBrowser() {
+  try {
+    localStorage.removeItem(LS_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Datos antiguos en claro (localStorage) antes del cifrado IndexedDB. */
+export function hasLegacyBrowserJournal(): boolean {
+  if (typeof localStorage === 'undefined') return false
+  try {
+    return !!localStorage.getItem(LS_KEY)
+  } catch {
+    return false
+  }
+}
+
+/** Comprueba si el JSON legacy contiene datos sensibles de trades/journal. */
+export function legacyBrowserJournalHasSensitiveData(): boolean {
+  const legacy = readLegacyBrowser()
+  if (!legacy || legacy.status !== 'ok') return false
+  const data = legacy.data
+  if (data.accounts?.length) {
+    return data.accounts.some(
+      (a) => (a.trades?.length ?? 0) > 0 || (a.notes?.length ?? 0) > 0 || (a.cashflows?.length ?? 0) > 0,
+    )
+  }
+  return (data.trades?.length ?? 0) > 0 || (data.notes?.length ?? 0) > 0
+}
+
+/**
+ * Migra datos legacy de localStorage a IndexedDB cifrado y borra la copia en claro.
+ * Requiere contraseña maestra configurada y clave en memoria.
+ */
+export async function migrateLegacyBrowserToEncrypted(
+  data: PersistedData,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (isDesktop()) return { ok: true }
+  if (!getWebKeyHex()) {
+    return { ok: false, error: 'Configura tu contraseña maestra antes de migrar los datos.' }
+  }
+  try {
+    await saveWebJournal(data)
+    clearLegacyBrowser()
+    if (hasLegacyBrowserJournal()) {
+      return { ok: false, error: 'No se pudo borrar la copia antigua en localStorage.' }
+    }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'No se pudo migrar al almacenamiento cifrado.' }
+  }
+}
+
+export async function loadData(): Promise<DiskLoad> {
+  if (isDesktop()) {
+    try {
+      return wrapLoaded(await window.api!.load())
+    } catch (e) {
+      return { status: 'corrupt', message: e instanceof Error ? e.message : 'No se pudo leer la base de datos.' }
+    }
+  }
+
+  try {
+    const status = await getWebCryptoStatus()
+    if (status.needsUnlock) return { status: 'locked' }
+    if (status.configured && !getWebKeyHex()) {
+      if (await hasEncryptedJournal()) return { status: 'locked' }
+    }
+
+    if (getWebKeyHex()) {
+      try {
+        const data = await loadWebJournal()
+        if (!data) return { status: 'empty' }
+        return fromRaw(data)
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'No se pudo leer IndexedDB.'
+        if (message.includes('bloqueado')) return { status: 'locked' }
+        return { status: 'corrupt', message }
+      }
+    }
+
+    const legacy = readLegacyBrowser()
+    return legacy ?? { status: 'empty' }
+  } catch (e) {
+    return { status: 'corrupt', message: e instanceof Error ? e.message : 'No se pudo leer el almacenamiento local.' }
+  }
+}
+
+async function writeWeb(data: PersistedData): Promise<void> {
+  if (getWebKeyHex()) {
+    await saveWebJournal(data)
+    clearLegacyBrowser()
+    return
+  }
+  const status = await getWebCryptoStatus()
+  if (status.configured) {
+    throw new Error('El diario está bloqueado. Introduce tu contraseña maestra.')
+  }
+  writeBrowser(data)
+}
+
 export async function saveData(data: PersistedData): Promise<void> {
   if (isDesktop()) {
     const ok = await window.api!.save(data)
     if (!ok) throw new Error('No se pudo guardar en la base de datos.')
     return
   }
-  writeBrowser(data)
+  await writeWeb(data)
 }
 
 export function saveDataSync(data: PersistedData): void {
@@ -87,6 +197,10 @@ export function saveDataSync(data: PersistedData): void {
     const fn = window.api!.saveSync
     const ok = fn ? fn(data) : false
     if (!ok) throw new Error('No se pudo guardar en la base de datos.')
+    return
+  }
+  if (getWebKeyHex()) {
+    void saveWebJournal(data).then(() => clearLegacyBrowser())
     return
   }
   writeBrowser(data)
@@ -128,7 +242,13 @@ export async function openDataFolder() {
 }
 
 export async function wipeLocalStorage() {
-  if (isDesktop() && window.api?.wipeLocal) await window.api.wipeLocal()
+  if (isDesktop() && window.api?.wipeLocal) {
+    await window.api.wipeLocal()
+    return
+  }
+  await deleteJournalDb()
+  wipeWebCryptoMeta()
+  clearLegacyBrowser()
 }
 
 export async function listBackups(): Promise<JournalBackup[]> {
@@ -149,6 +269,34 @@ export async function restoreBackup(id: string): Promise<{ ok: true } | { ok: fa
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'No se pudo restaurar.' }
   }
+}
+
+export async function exportEncryptedBackup(data?: PersistedData): Promise<string> {
+  if (isDesktop()) {
+    const crypto = window.api?.crypto
+    if (!crypto?.getExportMaterial) {
+      throw new Error('La exportación cifrada no está disponible en esta versión de escritorio.')
+    }
+    const material = await crypto.getExportMaterial()
+    if (!material.ok) throw new Error(material.error)
+    let journal = data
+    if (!journal) {
+      const loaded = await loadData()
+      if (loaded.status !== 'ok') throw new Error('No hay un diario que exportar.')
+      journal = loaded.data
+    }
+    return buildEncryptedBackupFile(journal, material.keyHex, material.salt, material.iterations)
+  }
+  return exportWebBackup(data)
+}
+
+export async function importEncryptedBackup(
+  raw: string,
+  password?: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await importWebBackup(raw, password)
+  if (!result.ok) return result
+  return { ok: true }
 }
 
 const EMPTY_LITESTREAM_STATUS: LitestreamStatus = {

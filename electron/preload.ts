@@ -56,6 +56,8 @@ contextBridge.exposeInMainWorld('api', {
 
     deriveSyncKeyFromPassword: (password: string) => ipcRenderer.invoke('crypto:deriveSyncKeyFromPassword', password),
 
+    getExportMaterial: () => ipcRenderer.invoke('crypto:getExportMaterial'),
+
   },
 
 })

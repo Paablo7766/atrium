@@ -16,9 +16,10 @@ import {
   KeyRound,
   Shield,
 } from 'lucide-react'
-import { useStore } from '@/store'
-import { isDesktop, wipeLocalStorage } from '@/lib/db/client'
+import { useStore, getBackup } from '@/store'
+import { hasLegacyBrowserJournal, isDesktop, migrateLegacyBrowserToEncrypted, wipeLocalStorage } from '@/lib/db/client'
 import { getCryptoStatus, setupMasterPassword, setupSecureStorageKey } from '@/lib/crypto/keyManager'
+import { getWebKeyHex } from '@/lib/crypto/keyManagerWeb'
 import { BrandMark } from '@/components/BrandMark'
 import { LanguageSwitch } from '@/components/LanguageSwitch'
 import { useT, useLocale } from '@/lib/useI18n'
@@ -42,12 +43,11 @@ type Step = 'welcome' | 'profile' | 'markets' | 'desk' | 'security' | 'start' | 
 
 type StartPath = 'keep' | 'blank' | 'demo'
 type CryptoChoice = 'password' | 'secure-storage'
-const FLOW_BASE = ['profile', 'markets', 'desk', 'start'] as const
 const FLOW_DESKTOP = ['profile', 'markets', 'desk', 'security', 'start'] as const
 type FlowStep = (typeof FLOW_DESKTOP)[number]
 
 function flowSteps(): readonly FlowStep[] {
-  return isDesktop() ? FLOW_DESKTOP : FLOW_BASE
+  return FLOW_DESKTOP
 }
 
 const MARKET_ICONS: Record<Market, typeof Globe> = {
@@ -63,7 +63,6 @@ const MARKET_ICONS: Record<Market, typeof Globe> = {
 
 const BALANCE_PRESETS = [5000, 10000, 25000, 50000, 100000]
 const RISK_PRESETS = [0.25, 0.5, 1, 1.5, 2]
-const ASSEMBLE_KEYS_BASE = ['on.assemble.profile', 'on.assemble.markets', 'on.assemble.account', 'on.assemble.rules'] as const
 const ASSEMBLE_KEYS_DESKTOP = [
   'on.assemble.profile',
   'on.assemble.markets',
@@ -71,7 +70,7 @@ const ASSEMBLE_KEYS_DESKTOP = [
   'on.assemble.crypto',
   'on.assemble.rules',
 ] as const
-type AssembleKey = (typeof ASSEMBLE_KEYS_DESKTOP)[number] | (typeof ASSEMBLE_KEYS_BASE)[number]
+type AssembleKey = (typeof ASSEMBLE_KEYS_DESKTOP)[number]
 const ACCT_NAME_KEYS = {
   live: 'on.acct.live',
   demo: 'on.acct.demo',
@@ -83,7 +82,13 @@ function parseAmt(raw: string) {
   return Number(String(raw).replace(/\s/g, '').replace(',', '.')) || 0
 }
 
-export function Onboarding() {
+export function Onboarding({
+  legacyMigrationOnly = false,
+  onLegacyMigrated,
+}: {
+  legacyMigrationOnly?: boolean
+  onLegacyMigrated?: () => void
+} = {}) {
   const completeOnboarding = useStore((s) => s.completeOnboarding)
   const updateSettings = useStore((s) => s.updateSettings)
   const toast = useStore((s) => s.toast)
@@ -100,7 +105,8 @@ export function Onboarding() {
   const hasHistory = historyCount > 0
   const demoDesk = !!settings.demoData || looksLikeDemoDesk(existingNotes)
 
-  const [step, setStep] = useState<Step>('welcome')
+  const [step, setStep] = useState<Step>(() => (legacyMigrationOnly ? 'security' : 'welcome'))
+  const [legacyMigrating, setLegacyMigrating] = useState(false)
   const [traderName, setTraderName] = useState(() => (settings.traderName && settings.traderName !== 'Trader' ? settings.traderName : ''))
   const [markets, setMarkets] = useState<Market[]>(() =>
     normalizePreferredMarkets(settings.preferredMarkets, settings.defaultMarket || 'Futuros'),
@@ -128,10 +134,10 @@ export function Onboarding() {
   const [fees, setFees] = useState(String(settings.defaultFees || defaultFeesForMarket((settings.preferredMarkets?.[0] || settings.defaultMarket) || 'Futuros')))
   const [weekStartsOn] = useState<WeekStart>(settings.weekStartsOn)
   const [path, setPath] = useState<StartPath>(() => (hasHistory && !demoDesk ? 'keep' : 'blank'))
-  const [cryptoChoice, setCryptoChoice] = useState<CryptoChoice>('secure-storage')
+  const [cryptoChoice, setCryptoChoice] = useState<CryptoChoice>(isDesktop() ? 'secure-storage' : 'password')
   const [masterPassword, setMasterPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [secureStorageAvailable, setSecureStorageAvailable] = useState(!isDesktop())
+  const [secureStorageAvailable, setSecureStorageAvailable] = useState(false)
   const [cryptoBusy, setCryptoBusy] = useState(false)
   const [assembleTick, setAssembleTick] = useState(0)
   const FLOW = flowSteps()
@@ -162,12 +168,37 @@ export function Onboarding() {
   }, [step, traderName, markets, startingBalance, riskPerTrade, dailyLimitOn, dailyPct, cryptoChoice, masterPassword, confirmPassword, secureStorageAvailable])
 
   useEffect(() => {
-    if (!isDesktop()) return
     void getCryptoStatus().then((status) => {
-      setSecureStorageAvailable(status.secureStorageAvailable)
-      if (!status.secureStorageAvailable) setCryptoChoice('password')
+      setSecureStorageAvailable(isDesktop() && status.secureStorageAvailable)
+      if (!status.secureStorageAvailable || !isDesktop()) setCryptoChoice('password')
     })
   }, [])
+
+  const finishLegacyMigration = async (): Promise<boolean> => {
+    setLegacyMigrating(true)
+    try {
+      const migrated = await migrateLegacyBrowserToEncrypted(getBackup())
+      if (!migrated.ok) {
+        toast(migrated.error, 'error')
+        return false
+      }
+      toast(t('crypto.legacyDone'), 'success')
+      onLegacyMigrated?.()
+      return true
+    } finally {
+      setLegacyMigrating(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!legacyMigrationOnly) return
+    void (async () => {
+      const status = await getCryptoStatus()
+      if (status.configured && getWebKeyHex()) {
+        await finishLegacyMigration()
+      }
+    })()
+  }, [legacyMigrationOnly]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (step === 'profile') {
@@ -178,18 +209,16 @@ export function Onboarding() {
 
   useEffect(() => {
     if (step !== 'assemble' || committed.current) return
-    const assembleKeys = isDesktop() ? ASSEMBLE_KEYS_DESKTOP : ASSEMBLE_KEYS_BASE
+    const assembleKeys = ASSEMBLE_KEYS_DESKTOP
     setAssembleTick(0)
     const timers = assembleKeys.map((_, i) => window.setTimeout(() => setAssembleTick(i + 1), 160 + i * 220))
     const done = window.setTimeout(() => {
       void (async () => {
         if (committed.current) return
-        if (isDesktop()) {
-          const status = await getCryptoStatus()
-          if (!status.configured) {
-            const ok = await setupCrypto()
-            if (!ok) return
-          }
+        const status = await getCryptoStatus()
+        if (!status.configured) {
+          const ok = await setupCrypto()
+          if (!ok) return
         }
         committed.current = true
         completeOnboarding({
@@ -219,7 +248,6 @@ export function Onboarding() {
   }, [step]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const setupCrypto = async (): Promise<boolean> => {
-    if (!isDesktop()) return true
     const status = await getCryptoStatus()
     setCryptoBusy(true)
     try {
@@ -256,6 +284,13 @@ export function Onboarding() {
     if (step === 'security') {
       const ok = await setupCrypto()
       if (!ok) return
+      if (legacyMigrationOnly) {
+        await finishLegacyMigration()
+        return
+      }
+      if (!isDesktop() && hasLegacyBrowserJournal()) {
+        await finishLegacyMigration()
+      }
     }
     if (step === 'start') return setStep('assemble')
     const i = FLOW.indexOf(step as FlowStep)
@@ -269,31 +304,30 @@ export function Onboarding() {
   }
 
   const skipWithDemo = async () => {
+    if (legacyMigrationOnly) return
     setTraderName((n) => n.trim() || 'Trader')
     setPath('demo')
     setType('demo')
     setAccountName('Cuenta de ejemplo')
     setBalance('25000')
-    if (isDesktop()) {
-      const status = await getCryptoStatus()
-      if (!status.configured) {
-        if (status.secureStorageAvailable) {
-          setCryptoBusy(true)
-          try {
-            const result = await setupSecureStorageKey()
-            if (!result.ok) {
-              toast(result.error, 'error')
-              return
-            }
-          } finally {
-            setCryptoBusy(false)
+    const status = await getCryptoStatus()
+    if (!status.configured) {
+      if (isDesktop() && status.secureStorageAvailable) {
+        setCryptoBusy(true)
+        try {
+          const result = await setupSecureStorageKey()
+          if (!result.ok) {
+            toast(result.error, 'error')
+            return
           }
-        } else {
-          toast(t('crypto.demoNeedsPassword'), 'info')
-          setCryptoChoice('password')
-          setStep('security')
-          return
+        } finally {
+          setCryptoBusy(false)
         }
+      } else {
+        toast(t('crypto.demoNeedsPassword'), 'info')
+        setCryptoChoice('password')
+        setStep('security')
+        return
       }
     }
     setStep('assemble')
@@ -337,7 +371,53 @@ export function Onboarding() {
         style={{ background: 'radial-gradient(900px 480px at 50% -8%, rgba(74,222,128,0.07), transparent 58%)' }}
       />
 
-      {step === 'welcome' ? (
+      {legacyMigrationOnly && step === 'security' ? (
+        <div className="relative z-10 h-full flex flex-col">
+          <header className="h-12 shrink-0 px-7 flex items-center gap-2.5">
+            <BrandMark size={22} />
+            <span className="text-[13px] font-semibold tracking-tight">Atrium</span>
+          </header>
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="min-h-full flex flex-col px-6 py-8 sm:px-10 animate-onboard-rise">
+              <div className="w-full max-w-[540px] mx-auto flex-1">
+                <StepFrame title={t('crypto.legacyTitle')} copy={t('crypto.legacyCopy')}>
+                  <div className="mt-8 flex flex-col gap-5">
+                    <div>
+                      <Label>{t('crypto.choosePassword')}</Label>
+                      <LineInput value={masterPassword} onChange={setMasterPassword} placeholder="••••••••" password />
+                    </div>
+                    <div>
+                      <Label>{t('crypto.confirmPassword')}</Label>
+                      <LineInput value={confirmPassword} onChange={setConfirmPassword} placeholder="••••••••" password />
+                    </div>
+                    {masterPassword && masterPassword.length < 8 && (
+                      <p className="text-[12px] text-dim">{t('crypto.passwordMin')}</p>
+                    )}
+                    {confirmPassword && masterPassword !== confirmPassword && (
+                      <p className="text-[12px] text-loss">{t('crypto.passwordMismatch')}</p>
+                    )}
+                  </div>
+                  <div className="mt-8 rounded-xl border border-loss/20 bg-loss/5 p-4 flex gap-3">
+                    <Lock size={16} className="text-loss shrink-0 mt-0.5" />
+                    <p className="text-[12px] text-muted leading-relaxed">{t('crypto.noRecovery')}</p>
+                  </div>
+                </StepFrame>
+              </div>
+              <footer className="w-full max-w-[540px] mx-auto pt-8 pb-2 flex items-center justify-end gap-3 shrink-0">
+                <button
+                  type="button"
+                  disabled={!canNext || cryptoBusy || legacyMigrating}
+                  onClick={() => void goNext()}
+                  className="inline-flex items-center gap-2 h-11 px-5 rounded-full bg-accent text-black text-[13px] font-semibold hover:bg-[#5ce392] disabled:opacity-35 active:scale-[0.98] transition-all no-drag"
+                >
+                  {legacyMigrating ? t('crypto.legacyMigrating') : cryptoBusy ? t('crypto.settingUp') : t('on.continue')}
+                  <ArrowRight size={15} strokeWidth={2.4} />
+                </button>
+              </footer>
+            </div>
+          </div>
+        </div>
+      ) : step === 'welcome' ? (
         <Welcome
           onStart={() => setStep('profile')}
           onDemo={skipWithDemo}
@@ -349,7 +429,7 @@ export function Onboarding() {
           name={firstName}
           done={assembleTick}
           demo={path === 'demo'}
-          keys={isDesktop() ? ASSEMBLE_KEYS_DESKTOP : ASSEMBLE_KEYS_BASE}
+          keys={ASSEMBLE_KEYS_DESKTOP}
         />
       ) : (
         <div className="relative z-10 h-full flex flex-col">
@@ -588,15 +668,17 @@ export function Onboarding() {
                 {step === 'security' && (
                   <StepFrame title={t('crypto.onTitle')} copy={t('crypto.onCopy')}>
                     <div className="flex flex-col gap-2">
-                      <CryptoOption
-                        active={cryptoChoice === 'secure-storage'}
-                        onClick={() => secureStorageAvailable && setCryptoChoice('secure-storage')}
-                        disabled={!secureStorageAvailable}
-                        icon={Shield}
-                        title={t('crypto.systemKeyTitle')}
-                        body={t('crypto.systemKeyBody')}
-                        mark={secureStorageAvailable ? t('on.recommended') : undefined}
-                      />
+                      {isDesktop() && (
+                        <CryptoOption
+                          active={cryptoChoice === 'secure-storage'}
+                          onClick={() => secureStorageAvailable && setCryptoChoice('secure-storage')}
+                          disabled={!secureStorageAvailable}
+                          icon={Shield}
+                          title={t('crypto.systemKeyTitle')}
+                          body={t('crypto.systemKeyBody')}
+                          mark={secureStorageAvailable ? t('on.recommended') : undefined}
+                        />
+                      )}
                       <CryptoOption
                         active={cryptoChoice === 'password'}
                         onClick={() => setCryptoChoice('password')}
@@ -635,7 +717,7 @@ export function Onboarding() {
                       </div>
                     )}
 
-                    {!secureStorageAvailable && (
+                    {isDesktop() && !secureStorageAvailable && (
                       <p className="mt-6 text-[12px] text-amber-400/90 leading-relaxed">{t('crypto.secureStorageUnavailable')}</p>
                     )}
 
@@ -706,9 +788,12 @@ export function Onboarding() {
               </div>
 
               <footer className="w-full max-w-[540px] mx-auto pt-8 pb-2 flex items-center justify-between gap-3 shrink-0">
-                <button type="button" onClick={goBack} className="inline-flex items-center gap-2 h-10 px-1 text-[13px] text-muted hover:text-text transition-colors no-drag">
-                  <ArrowLeft size={15} /> Atrás
-                </button>
+                {!legacyMigrationOnly && (
+                  <button type="button" onClick={goBack} className="inline-flex items-center gap-2 h-10 px-1 text-[13px] text-muted hover:text-text transition-colors no-drag">
+                    <ArrowLeft size={15} /> Atrás
+                  </button>
+                )}
+                {legacyMigrationOnly && <span />}
                 <button
                   type="button"
                   disabled={!canNext || cryptoBusy}

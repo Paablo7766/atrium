@@ -26,7 +26,7 @@ import { Analytics } from '@/pages/Analytics'
 import { Journal } from '@/pages/Journal'
 import { Login } from '@/pages/Login'
 import { Button, Confirm } from '@/components/ui'
-import { isDesktop, listBackups, openDataFolder, restoreBackup, type JournalBackup } from '@/lib/db/client'
+import { hasLegacyBrowserJournal, isDesktop, listBackups, openDataFolder, restoreBackup, type JournalBackup } from '@/lib/db/client'
 import { useT } from '@/lib/useI18n'
 import { TradesProvider } from '@/hooks/useTrades'
 
@@ -92,6 +92,9 @@ function ProtectedApp() {
   const location = useLocation()
   const navigate = useNavigate()
   const syncingFromUrl = useRef(false)
+  const [legacyMigrationPending, setLegacyMigrationPending] = useState(
+    () => !isDesktop() && hasLegacyBrowserJournal(),
+  )
 
   // URL ↔ store.page (la URL manda en deep-links; setPage actualiza la URL)
   useEffect(() => {
@@ -197,6 +200,18 @@ function ProtectedApp() {
     return (
       <>
         <MasterPasswordUnlock />
+        <Toasts />
+      </>
+    )
+  }
+
+  if (legacyMigrationPending) {
+    return (
+      <>
+        <Onboarding
+          legacyMigrationOnly
+          onLegacyMigrated={() => setLegacyMigrationPending(hasLegacyBrowserJournal())}
+        />
         <Toasts />
       </>
     )

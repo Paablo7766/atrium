@@ -51,7 +51,7 @@ import {
 
 import { resolveNativeBindingPath, setNativeBindingPath } from '@/lib/db/connection'
 
-import { deriveSyncKeyHexFromPassword, getSyncKeyHex } from '@/lib/crypto/keyManagerMain'
+import { deriveSyncKeyHexFromPassword, getExportKeyMaterial, getSyncKeyHex } from '@/lib/crypto/keyManagerMain'
 
 
 
@@ -510,6 +510,16 @@ ipcMain.handle('crypto:deriveSyncKeyFromPassword', (e, password: unknown) => {
   if (!pwd) return { ok: false as const, error: 'Contraseña inválida' }
 
   return deriveSyncKeyHexFromPassword(userDataDir(), pwd)
+
+})
+
+
+
+ipcMain.handle('crypto:getExportMaterial', (e) => {
+
+  if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
+
+  return getExportKeyMaterial(userDataDir())
 
 })
 

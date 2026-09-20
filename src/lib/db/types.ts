@@ -62,6 +62,9 @@ export interface DesktopApi {
     tryAutoUnlock: () => Promise<CryptoResult>
     deriveSyncKey?: () => Promise<{ ok: true; keyHex: string } | { ok: false; error: string }>
     deriveSyncKeyFromPassword?: (password: string) => Promise<{ ok: true; keyHex: string } | { ok: false; error: string }>
+    getExportMaterial?: () => Promise<
+      { ok: true; keyHex: string; salt: string; iterations: number } | { ok: false; error: string }
+    >
   }
 }
 

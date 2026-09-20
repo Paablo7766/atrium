@@ -38,8 +38,10 @@ import { useTrades } from '@/hooks/useTrades'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import {
   chooseLitestreamDestination,
+  exportEncryptedBackup,
   exportFile,
   getLitestreamStatus,
+  importEncryptedBackup,
   importFile,
   isDesktop,
   listBackups,
@@ -147,6 +149,9 @@ export function SettingsPage() {
   const [confirmDeleteAcc, setConfirmDeleteAcc] = useState(false)
   const [restoreId, setRestoreId] = useState<string | null>(null)
   const [confirmLitestreamRestore, setConfirmLitestreamRestore] = useState(false)
+  const [confirmWebRestore, setConfirmWebRestore] = useState(false)
+  const [webBackupRaw, setWebBackupRaw] = useState<string | null>(null)
+  const [webBackupPassword, setWebBackupPassword] = useState('')
   const [backups, setBackups] = useState<JournalBackup[]>([])
   const [litestream, setLitestream] = useState<LitestreamStatus | null>(null)
   const [dataPath, setDataPath] = useState('')
@@ -223,12 +228,31 @@ export function SettingsPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [creating])
 
-  const exportJson = async () => {
+  const exportPlainJson = async () => {
     const data = getBackup()
-    const ok = await exportFile(JSON.stringify(data, null, 2), `atrium-backup-${new Date().toISOString().slice(0, 10)}.json`, [
+    const ok = await exportFile(JSON.stringify(data, null, 2), `atrium-plain-${new Date().toISOString().slice(0, 10)}.json`, [
       { name: 'JSON', extensions: ['json'] },
     ])
-    if (ok) toast(t('set.backupOk'), 'success')
+    if (ok) toast(t('set.plainExportOk'), 'info')
+  }
+
+  const exportAtriumBackup = async () => {
+    try {
+      const raw = await exportEncryptedBackup(getBackup())
+      const ok = await exportFile(raw, `atrium-${new Date().toISOString().slice(0, 10)}.atrium-backup`, [
+        { name: 'Atrium backup', extensions: ['atrium-backup'] },
+      ])
+      if (ok) toast(t('set.encryptedExportOk'), 'success')
+    } catch (e) {
+      toast(e instanceof Error ? e.message : t('set.encryptedExportFail'), 'error')
+    }
+  }
+
+  const pickAtriumBackup = async () => {
+    const file = await importFile([{ name: 'Atrium backup', extensions: ['atrium-backup', 'json'] }])
+    if (!file) return
+    setWebBackupRaw(file.content)
+    setConfirmWebRestore(true)
   }
 
   const exportCsv = async () => {
@@ -762,13 +786,13 @@ export function SettingsPage() {
                         <Database size={16} className="text-muted" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-[13px] font-semibold">Archivo de datos</div>
+                        <div className="text-[13px] font-semibold">{t('set.dataFile')}</div>
                         <div className="text-[11px] text-dim mono break-all mt-1 leading-relaxed">{dataPath || '…'}</div>
                         <div className="text-[12px] text-muted mt-2">
                           {accounts.length} {accounts.length === 1 ? 'cuenta' : 'cuentas'} · esta: {trades.length} ops · {notes.length} notas
                         </div>
                         <div className="text-[11px] text-dim mt-1.5 leading-relaxed">
-                          SQLite cifrado (journal.db). Copia inmediata en .bak y hasta 10 copias fechadas en backups/.
+                          {isDesktop() ? t('set.sqliteHint') : t('set.webStorageHint')}
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
@@ -849,6 +873,44 @@ export function SettingsPage() {
                             )}
                           </div>
                         )}
+                      </div>
+                    </Panel>
+                  )}
+
+                  {!isDesktop() && (
+                    <Panel title={t('set.continuousBackups')} subtitle={t('set.webBackupBody')}>
+                      <div className="flex flex-col gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <ActionCard
+                            icon={<Download size={16} />}
+                            title={t('set.webBackupExport')}
+                            body={t('set.webBackupBody')}
+                            action={
+                              <Button variant="secondary" size="sm" onClick={() => void exportAtriumBackup()}>
+                                {t('set.webBackupExport')}
+                              </Button>
+                            }
+                          />
+                          <ActionCard
+                            icon={<Upload size={16} />}
+                            title={t('set.webBackupImport')}
+                            body={t('set.webBackupPassword')}
+                            action={
+                              <Button variant="outline" size="sm" onClick={() => void pickAtriumBackup()}>
+                                {t('set.webBackupImport')}
+                              </Button>
+                            }
+                          />
+                        </div>
+                        <Field label={t('set.webBackupPassword')}>
+                          <Input
+                            type="password"
+                            autoComplete="current-password"
+                            value={webBackupPassword}
+                            onChange={(e) => setWebBackupPassword(e.target.value)}
+                            placeholder="••••••••"
+                          />
+                        </Field>
                       </div>
                     </Panel>
                   )}
@@ -999,17 +1061,31 @@ export function SettingsPage() {
                   )}
 
                   <Panel title={t('set.export')} subtitle={t('set.exportSub')}>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-3">
                       <ActionCard
-                        icon={<Download size={16} />}
-                        title={t('set.backupTitle')}
-                        body={t('set.backupBody')}
+                        icon={<ShieldAlert size={16} className="text-accent" />}
+                        title={t('set.encryptedExportTitle')}
+                        body={t('set.encryptedExportBody')}
                         action={
-                          <Button variant="secondary" size="sm" onClick={() => void exportJson()}>
-                            {t('set.export')} JSON
+                          <Button variant="primary" size="sm" onClick={() => void exportAtriumBackup()}>
+                            {t('set.encryptedExportBtn')}
                           </Button>
                         }
                       />
+                      <ActionCard
+                        icon={<Download size={16} />}
+                        title={t('set.plainExportTitle')}
+                        body={t('set.plainExportBody')}
+                        action={
+                          <Button variant="outline" size="sm" onClick={() => void exportPlainJson()}>
+                            {t('set.plainExportBtn')}
+                          </Button>
+                        }
+                      />
+                      <div className="rounded-xl border border-loss/25 bg-loss/5 px-4 py-3 flex gap-3">
+                        <ShieldAlert size={16} className="text-loss shrink-0 mt-0.5" />
+                        <p className="text-[12px] text-muted leading-relaxed">{t('set.plainExportWarning')}</p>
+                      </div>
                       <ActionCard
                         icon={<FileSpreadsheet size={16} />}
                         title={t('set.csvTitle')}
@@ -1233,6 +1309,31 @@ export function SettingsPage() {
         title={t('set.litestreamRestoreTitle')}
         message={t('set.litestreamRestoreMsg')}
         confirmLabel={t('set.litestreamRestore')}
+      />
+      <Confirm
+        open={confirmWebRestore}
+        onClose={() => {
+          setConfirmWebRestore(false)
+          setWebBackupRaw(null)
+        }}
+        onConfirm={() => {
+          const raw = webBackupRaw
+          if (!raw) return
+          void (async () => {
+            const result = await importEncryptedBackup(raw, webBackupPassword || undefined)
+            setConfirmWebRestore(false)
+            setWebBackupRaw(null)
+            if (!result.ok) {
+              toast(result.error, 'error')
+              return
+            }
+            await retryLoad()
+            toast(t('set.webBackupRestored'), 'success')
+          })()
+        }}
+        title={t('set.webBackupConfirmTitle')}
+        message={t('set.webBackupConfirmMsg')}
+        confirmLabel={t('set.restore')}
       />
     </>
   )
