@@ -109,4 +109,12 @@ describe('keyManagerWeb', () => {
     const status = await getCryptoStatus()
     expect(status.secureStorageAvailable).toBe(false)
   })
+
+  it('no reconfigura el cifrado si ya hay canario y clave en memoria', async () => {
+    const first = await setupMasterPassword('ClaveLarga1')
+    expect(first.ok).toBe(true)
+    const second = await setupMasterPassword('OtraClave22')
+    expect(second).toEqual({ ok: false, error: 'El cifrado ya está configurado.' })
+    expect(getWebKeyHex()).toMatch(/^[0-9a-f]{64}$/i)
+  })
 })

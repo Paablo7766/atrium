@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { Fragment, useMemo, useRef, useState } from 'react'
 import { clsx } from 'clsx'
 import {
   addMonths,
@@ -9,7 +9,6 @@ import {
   getWeek,
   isSameMonth,
   isToday,
-  isWeekend,
   startOfMonth,
   startOfWeek,
   subMonths,
@@ -21,10 +20,10 @@ import { useStore } from '@/store'
 import { useGoToPage } from '@/lib/useGoToPage'
 import { Topbar } from '@/components/Topbar'
 import { AssetLogo } from '@/components/AssetLogo'
-import { Button, DirectionGlyph, Empty, Pnl, Segmented, Stat } from '@/components/ui'
-import { dailyPnl, tradePnl, tradeR, type DayAgg } from '@/lib/stats'
-import { capitalize, fmtDate, fmtMoney, fmtR } from '@/lib/format'
-
+import { AnalyticsCard, Detail, Kicker, SCROLL_X } from '@/components/analytics'
+import { Button, Card, DirectionGlyph, Empty, Pnl, Segmented } from '@/components/ui'
+import { dailyPnl, tradePnl, type DayAgg } from '@/lib/stats'
+import { capitalize, fmtDate, fmtMoney } from '@/lib/format'
 
 export function Calendar() {
   const t = useT()
@@ -130,15 +129,6 @@ export function Calendar() {
     }
   }, [inMonthDays, daily])
 
-  const maxAbs = useMemo(() => {
-    let m = 0
-    for (const d of inMonthDays) {
-      const a = daily.get(format(d, 'yyyy-MM-dd'))
-      if (a) m = Math.max(m, Math.abs(a.pnl))
-    }
-    return m || 1
-  }, [inMonthDays, daily])
-
   const weekTotals = useMemo(
     () =>
       weeks.map((week) => {
@@ -168,26 +158,33 @@ export function Calendar() {
 
   return (
     <>
-      <Topbar title={t('cal.title')} subtitle={tab === 'pnl' ? 'P&L' : t('nav.journal')} />
+      <Topbar title={t('cal.title')} subtitle={tab === 'pnl' ? t('cal.pnlTab') : t('nav.journal')} />
 
-      <div className="page-stage">
-        <div className="flex flex-col xl:flex-row gap-4 flex-1 min-h-0">
-          <section className="relative card flex flex-col min-h-0 overflow-hidden flex-1 min-w-0 shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset,0_16px_40px_-28px_rgba(0,0,0,0.55)]">
-            <header className="shrink-0 px-5 pt-5 pb-4">
-              <div className="flex items-center justify-between gap-4 flex-wrap">
+      <div className="page-stage max-lg:overflow-y-auto">
+        <div className="flex flex-col lg:flex-row gap-4 flex-1 min-h-0">
+          <Card padded={false} className="flex flex-col min-h-0 overflow-hidden flex-1 min-w-0">
+            <div className="relative flex flex-col h-full min-h-0">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
+            <div
+              className="pointer-events-none absolute left-1/2 -top-40 -ml-[340px] h-[320px] w-[680px] rounded-full"
+              style={{ background: 'radial-gradient(closest-side, rgba(228,228,235,0.06), transparent 75%)' }}
+            />
+
+            <header className="relative shrink-0 px-4 pt-4 pb-3 sm:px-5 sm:pt-5">
+              <div className="flex items-end justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-dim">{format(month, 'yyyy')}</div>
-                  <h2 className="text-[28px] font-semibold tracking-tight leading-none mt-1">
+                  <Kicker>{format(month, 'yyyy')}</Kicker>
+                  <h2 className="text-[26px] sm:text-[28px] font-semibold tracking-tight leading-none mt-1.5">
                     {capitalize(format(month, 'MMMM', { locale: dateFnsLocale(locale) }))}
                   </h2>
                 </div>
-                <div className="flex items-center gap-2.5 shrink-0">
+                <div className={clsx('flex items-center gap-2 shrink-0 no-drag max-w-full', SCROLL_X)}>
                   <Segmented
                     size="sm"
                     value={tab}
                     onChange={setTab}
                     options={[
-                      { value: 'pnl', label: 'P&L' },
+                      { value: 'pnl', label: t('cal.pnlTab') },
                       { value: 'events', label: t('cal.journalTab') },
                     ]}
                   />
@@ -196,10 +193,13 @@ export function Calendar() {
                       <ChevronLeft size={16} />
                     </Button>
                     <Button
-                      variant={viewingCurrentMonth ? 'secondary' : 'outline'}
+                      variant={viewingCurrentMonth ? 'primary' : 'outline'}
                       size="sm"
                       onClick={goToday}
-                      className="min-w-[52px]"
+                      className={clsx(
+                        'min-w-[52px] text-[11px] font-semibold uppercase tracking-[0.14em]',
+                        viewingCurrentMonth && 'bg-text text-black hover:bg-text hover:text-black',
+                      )}
                     >
                       {t('common.today')}
                     </Button>
@@ -207,9 +207,11 @@ export function Calendar() {
                       <ChevronRight size={16} />
                     </Button>
                     <Button
-                      variant="outline"
-                      size="sm"
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
                       title={t('cal.shareMonth')}
+                      aria-label={t('cal.shareMonth')}
                       onClick={() => {
                         if (!monthAgg.count) {
                           toast(t('cal.noMonth'), 'info')
@@ -218,7 +220,7 @@ export function Calendar() {
                         openShareCard({ kind: 'month', month: format(month, 'yyyy-MM') })
                       }}
                     >
-                      <Share2 size={14} /> {t('common.month')}
+                      <Share2 size={15} />
                     </Button>
                     <Button
                       variant={panelOpen ? 'ghost' : 'secondary'}
@@ -235,280 +237,185 @@ export function Calendar() {
                 </div>
               </div>
 
-              <div className="mt-5 grid grid-cols-2 sm:grid-cols-5 gap-x-4 gap-y-4 items-start">
-                <div className="min-w-0 col-span-2 sm:col-span-1">
-                  <div className="text-[12px] font-medium text-muted">{t('cal.monthPnl')}</div>
-                  <Pnl value={monthAgg.pnl} className="text-[26px] font-semibold tracking-tight leading-none mt-2 block">
+              <div className="mt-4 flex items-end gap-8 flex-wrap">
+                <div className="min-w-0">
+                  <Kicker>{t('cal.monthPnl')}</Kicker>
+                  <Pnl value={monthAgg.pnl} className="mt-2 block text-[26px] font-semibold tracking-tight leading-none">
                     {fmtMoney(monthAgg.pnl, settings.currency, { sign: true })}
                   </Pnl>
                 </div>
-                <Stat label={t('cal.trades')} value={monthAgg.count} />
-                <Stat label="Win rate" value={`${monthAgg.winRate.toFixed(0)}%`} />
-                <Stat
+                <Detail
                   label={t('cal.days')}
                   value={
-                    <span>
+                    <>
                       <span className="text-accent">{monthAgg.greenDays}</span>
                       <span className="text-dim"> / </span>
                       <span className="text-loss">{monthAgg.redDays}</span>
-                    </span>
+                    </>
                   }
                 />
-                <Stat
-                  label={t('cal.best')}
-                  value={
-                    monthAgg.best ? (
-                      <Pnl value={monthAgg.best.pnl} className="text-[17px] font-semibold">
-                        {fmtMoney(monthAgg.best.pnl, settings.currency, { sign: true, decimals: 0 })}
-                      </Pnl>
-                    ) : (
-                      '—'
-                    )
-                  }
-                />
+                <Detail label={t('cal.winRate')} value={`${monthAgg.winRate.toFixed(0)}%`} />
               </div>
-              <MonthStrip days={inMonthDays} daily={daily} maxAbs={maxAbs} selected={selected} onSelect={setSelected} currency={settings.currency} />
             </header>
 
-            <div className="flex-1 min-h-0 px-5 pb-2 overflow-hidden">
+            <div className="@container relative flex-1 min-h-0 min-w-0 px-4 pb-4 sm:px-5 overflow-hidden">
               <div
-                className="grid gap-[5px] h-full"
+                className="grid gap-1.5 h-full min-w-0"
                 style={{
-                  gridTemplateColumns: 'repeat(7, minmax(0, 1fr)) 2.75rem',
+                  gridTemplateColumns: 'repeat(7, minmax(0, 1fr)) minmax(1.85rem, 0.68fr)',
                   gridTemplateRows: `auto repeat(${weeks.length}, minmax(0, 1fr))`,
                 }}
               >
-              {weekdays.map((d, i) => {
-                const weekend = weekStartsOn === 0 ? i === 0 || i === 6 : i >= 5
-                return (
+                {weekdays.map((d) => (
                   <div
                     key={d}
-                    className={clsx(
-                      'text-center text-[10px] font-semibold uppercase tracking-[0.16em] py-1',
-                      weekend ? 'text-dim/70' : 'text-dim',
-                    )}
+                    className="text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-muted py-1 truncate"
                   >
                     {d}
                   </div>
-                )
-              })}
-              <div className="text-center text-[10px] font-semibold uppercase tracking-[0.16em] text-dim/60 py-1">{t('cal.weekCol')}</div>
-              {weeks.map((week, wi) => (
-                <Fragment key={week[0].toISOString()}>
-                  {week.map((d) => {
-                    const key = format(d, 'yyyy-MM-dd')
-                    const a = daily.get(key)
-                    const events = notesByDay.get(key)
-                    const inMonth = isSameMonth(d, month)
-                    return (
-                      <DayCell
-                        key={key}
-                        date={d}
-                        agg={a}
-                        events={events?.length ?? 0}
-                        tab={tab}
-                        inMonth={inMonth}
-                        intensity={a ? Math.abs(a.pnl) / maxAbs : 0}
-                        highlight={monthAgg.best?.key === key && (monthAgg.best?.pnl ?? 0) > 0}
-                        selected={selected === key}
-                        onClick={() => setSelected(selected === key ? null : key)}
-                        currency={settings.currency}
-                      />
-                    )
-                  })}
-                  <WeekTotal
-                    key={`sem-${wi}`}
-                    total={weekTotals[wi]}
-                    currency={settings.currency}
-                    onShare={() => {
-                      if (!weekTotals[wi].count) {
-                        toast(t('cal.noWeek'), 'info')
-                        return
-                      }
-                      openShareCard({ kind: 'week', start: format(week[0], 'yyyy-MM-dd') })
-                    }}
-                  />
-                </Fragment>
-              ))}
+                ))}
+                <div className="text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-muted py-1 truncate">
+                  {t('cal.weekCol')}
+                </div>
+                {weeks.map((week, wi) => (
+                  <Fragment key={week[0].toISOString()}>
+                    {week.map((d) => {
+                      const key = format(d, 'yyyy-MM-dd')
+                      const a = daily.get(key)
+                      const events = notesByDay.get(key)
+                      const inMonth = isSameMonth(d, month)
+                      return (
+                        <DayCell
+                          key={key}
+                          date={d}
+                          agg={a}
+                          events={events?.length ?? 0}
+                          tab={tab}
+                          inMonth={inMonth}
+                          highlight={monthAgg.best?.key === key && (monthAgg.best?.pnl ?? 0) > 0}
+                          selected={selected === key}
+                          onClick={() => setSelected(selected === key ? null : key)}
+                          currency={settings.currency}
+                        />
+                      )
+                    })}
+                    <WeekTotal
+                      key={`sem-${wi}`}
+                      total={weekTotals[wi]}
+                      currency={settings.currency}
+                      onShare={() => {
+                        if (!weekTotals[wi].count) {
+                          toast(t('cal.noWeek'), 'info')
+                          return
+                        }
+                        openShareCard({ kind: 'week', start: format(week[0], 'yyyy-MM-dd') })
+                      }}
+                    />
+                  </Fragment>
+                ))}
               </div>
             </div>
-
-            <footer className="shrink-0 px-5 py-2.5 flex items-center justify-between gap-4 border-t border-border/70">
-              <div className="flex items-center gap-2 text-[11px] text-dim">
-                <span>{t('cal.loss')}</span>
-                <div className="flex items-center gap-[3px]">
-                  {[0.14, 0.22, 0.34, 0.48].map((a) => (
-                    <span key={a} className="h-2 w-3 rounded-[3px]" style={{ background: `rgba(90,28,38,${a / 0.48})`, boxShadow: `inset 0 0 0 1px rgba(248,113,113,${a * 0.55})` }} />
-                  ))}
-                </div>
-                <div className="flex items-center gap-[3px]">
-                  {[0.14, 0.22, 0.34, 0.48].map((a) => (
-                    <span key={a} className="h-2 w-3 rounded-[3px]" style={{ background: `rgba(18,72,48,${a / 0.48})`, boxShadow: `inset 0 0 0 1px rgba(74,222,128,${a * 0.55})` }} />
-                  ))}
-                </div>
-                <span>{t('cal.gain')}</span>
-              </div>
-              <div className="flex items-center gap-4 text-[11px] text-dim">
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="w-[16px] h-[16px] rounded-full border border-text/55 text-text text-[9px] font-semibold flex items-center justify-center">
-                    {format(new Date(), 'd')}
-                  </span>
-                  {t('common.today')}
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-violet" />
-                  {t('cal.notes')}
-                </span>
-              </div>
-            </footer>
-          </section>
+            </div>
+          </Card>
 
           <aside
             className={clsx(
-              'flex flex-col min-h-0 overflow-hidden rounded-[18px] border bg-surface/40 shrink-0',
-              'transition-[width,opacity,max-height,border-color,margin] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
+              'flex flex-col min-h-0 overflow-hidden shrink-0',
+              'transition-[width,opacity,max-height,margin] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
               panelOpen
-                ? 'w-full xl:w-[280px] opacity-100 max-h-[70vh] xl:max-h-none border-border/70'
-                : 'w-full xl:w-0 opacity-0 max-h-0 xl:max-h-none border-transparent pointer-events-none xl:-ml-4',
+                ? 'w-full lg:w-[300px] opacity-100 max-h-[70vh] lg:max-h-none'
+                : 'w-full lg:w-0 opacity-0 max-h-0 lg:max-h-none pointer-events-none lg:-ml-4',
             )}
             aria-hidden={!panelOpen}
           >
-            <header className="flex items-start justify-between gap-2 px-4 pt-4 pb-3 shrink-0 border-b border-border/50">
-              <div className="min-w-0">
-                {selected ? (
-                  <>
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-dim">
+            <AnalyticsCard
+              className="h-full min-h-0"
+              bodyClassName="overflow-y-auto min-h-0"
+              title={
+                selected ? (
+                  <span className="block">
+                    <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-dim">
                       {capitalize(fmtDate(selected, 'EEEE'))}
-                    </div>
-                    <h3 className="text-[16px] font-semibold tracking-tight leading-none mt-1 truncate text-text-2">
-                      {capitalize(fmtDate(selected, locale === 'en' ? 'MMM d' : "d MMM"))}
-                    </h3>
-                  </>
+                    </span>
+                    <span className="mt-1 block text-[15px] font-semibold tracking-tight text-text">
+                      {capitalize(fmtDate(selected, locale === 'en' ? 'MMM d' : 'd MMM'))}
+                    </span>
+                  </span>
                 ) : (
-                  <h3 className="text-[13px] font-medium tracking-tight text-muted">{t('cal.pickDay')}</h3>
-                )}
-                <p className="text-[11px] text-dim mt-1.5 leading-snug">
-                  {selectedAgg
-                    ? selectedAgg.count === 1 ? t('cal.trade1') : t('cal.tradesN', { n: selectedAgg.count })
-                    : selectedNotes?.length
-                      ? selectedNotes.length === 1 ? t('cal.entry1') : t('cal.entriesN', { n: selectedNotes.length })
-                      : selected
-                        ? t('cal.noActivity')
-                        : t('cal.pickHint')}
-                </p>
-              </div>
-              <div className="flex items-center gap-0.5 shrink-0">
-                {selected && (
-                  <Button variant="ghost" size="icon" className="h-7 w-7" title={t('cal.add')} onClick={() => openTradeModal(undefined, selected)}>
-                    <Plus size={14} />
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  title={t('cal.hideDay')}
-                  aria-label={t('cal.hideDay')}
-                  onClick={() => setPanelOpenPersist(false)}
-                >
-                  <PanelRightClose size={14} />
-                </Button>
-              </div>
-            </header>
-
-            <div ref={panelRef} className="flex-1 min-h-0 overflow-y-auto px-3.5 py-3.5">
-              {selectedAgg || selectedNotes?.length ? (
-                <div className="flex flex-col gap-4">
-                  {selectedAgg && (
-                    <DayDetail
-                      agg={selectedAgg}
-                      currency={settings.currency}
-                      onOpenTrade={(t) => openTradeModal(t)}
-                    />
+                  t('cal.pickDay')
+                )
+              }
+              action={
+                <div className="flex items-center gap-0.5">
+                  {selected && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title={t('cal.add')} onClick={() => openTradeModal(undefined, selected)}>
+                      <Plus size={14} />
+                    </Button>
                   )}
-                  {selectedNotes?.length ? (
-                    <div className="flex flex-col gap-1.5">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim px-0.5">
-                        {t('cal.journalTab')}
-                      </div>
-                      {selectedNotes.map((n) => (
-                        <button
-                          key={n.id}
-                          onClick={() => goToPage('journal')}
-                          className="text-left rounded-xl border border-border/70 bg-transparent px-3 py-2.5 hover:border-violet/35 hover:bg-violet/[0.05] transition-colors"
-                        >
-                          <div className="text-[12px] font-medium truncate">{n.title || t('cal.untitled')}</div>
-                          <div className="text-[11px] text-dim line-clamp-2 mt-0.5 leading-relaxed">{n.content}</div>
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    title={t('cal.hideDay')}
+                    aria-label={t('cal.hideDay')}
+                    onClick={() => setPanelOpenPersist(false)}
+                  >
+                    <PanelRightClose size={14} />
+                  </Button>
                 </div>
-              ) : (
-                <Empty
-                  icon={<CalendarDays size={16} />}
-                  title={selected ? t('cal.emptyDay') : t('cal.noDaySel')}
-                  description={selected ? t('cal.emptyDayHint') : t('cal.emptySelHint')}
-                  action={
-                    selected ? (
-                      <Button variant="outline" size="sm" onClick={() => openTradeModal(undefined, selected)}>
-                        <Plus size={14} /> {t('cal.add')}
-                      </Button>
-                    ) : undefined
-                  }
-                />
-              )}
-            </div>
+              }
+            >
+              <div ref={panelRef}>
+                {selectedAgg || selectedNotes?.length ? (
+                  <div className="flex flex-col gap-5">
+                    {selectedAgg && (
+                      <DayDetail
+                        agg={selectedAgg}
+                        currency={settings.currency}
+                        onOpenTrade={(tr) => openTradeModal(tr)}
+                      />
+                    )}
+                    {selectedNotes?.length ? (
+                      <div>
+                        <div className="flex items-baseline justify-between gap-3 mb-3">
+                          <Kicker>{t('cal.journalTab')}</Kicker>
+                          <span className="num text-[11px] text-muted">{selectedNotes.length}</span>
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          {selectedNotes.map((n) => (
+                            <button
+                              key={n.id}
+                              onClick={() => goToPage('journal')}
+                              className="text-left rounded-xl border border-white/[0.06] bg-transparent px-3 py-2.5 hover:border-white/20 hover:bg-white/[0.03] transition-colors"
+                            >
+                              <div className="text-[12px] font-medium truncate">{n.title || t('cal.untitled')}</div>
+                              <div className="text-[11px] text-dim line-clamp-2 mt-0.5 leading-relaxed">{n.content}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <Empty
+                    icon={<CalendarDays size={16} />}
+                    title={selected ? t('cal.emptyDay') : t('cal.noDaySel')}
+                    description={selected ? t('cal.emptyDayHint') : t('cal.emptySelHint')}
+                    action={
+                      selected ? (
+                        <Button variant="outline" size="sm" onClick={() => openTradeModal(undefined, selected)}>
+                          <Plus size={14} /> {t('cal.add')}
+                        </Button>
+                      ) : undefined
+                    }
+                  />
+                )}
+              </div>
+            </AnalyticsCard>
           </aside>
         </div>
       </div>
     </>
-  )
-}
-
-function MonthStrip({
-  days,
-  daily,
-  maxAbs,
-  selected,
-  onSelect,
-  currency,
-}: {
-  days: Date[]
-  daily: Map<string, DayAgg>
-  maxAbs: number
-  selected: string | null
-  onSelect: (key: string) => void
-  currency: 'USD' | 'EUR' | 'GBP'
-}) {
-  return (
-    <div className="flex items-end gap-[3px] h-4 mt-4">
-      {days.map((d) => {
-        const key = format(d, 'yyyy-MM-dd')
-        const a = daily.get(key)
-        const intensity = a ? Math.abs(a.pnl) / maxAbs : 0
-        const h = a ? 5 + intensity * 11 : 3
-        const pos = (a?.pnl ?? 0) > 0
-        const neg = (a?.pnl ?? 0) < 0
-        return (
-          <button
-            key={key}
-            title={a ? `${fmtDate(key, 'd MMM')} · ${fmtMoney(a.pnl, currency, { sign: true, decimals: 0 })}` : fmtDate(key, 'd MMM')}
-            onClick={() => onSelect(key)}
-            className={clsx(
-              'flex-1 min-w-0 rounded-[2px] transition-all',
-              !a && 'bg-surface-4/80 hover:bg-surface-4',
-              a && pos && 'bg-accent/70 hover:bg-accent',
-              a && neg && 'bg-loss/70 hover:bg-loss',
-              a && !pos && !neg && 'bg-border-3',
-              selected === key && 'ring-1 ring-text/80',
-              isToday(d) && !a && 'bg-sky/50',
-            )}
-            style={{ height: h }}
-          />
-        )
-      })}
-    </div>
   )
 }
 
@@ -521,16 +428,29 @@ function WeekTotal({
   currency: 'USD' | 'EUR' | 'GBP'
   onShare: () => void
 }) {
+  const t = useT()
+  const has = total.count > 0
+  const pos = has && total.pnl > 0
+  const neg = has && total.pnl < 0
   return (
     <button
       type="button"
       onClick={onShare}
-      title={`Compartir semana ${total.week}`}
-      className="h-full min-h-0 self-stretch rounded-xl flex flex-col items-center justify-center px-0.5 text-center hover:bg-surface-3/80 transition-colors"
+      title={t('cal.shareWeek', { n: total.week })}
+      className={clsx(
+        'h-full min-h-0 min-w-0 self-stretch rounded-xl flex flex-col items-center justify-center px-0.5 text-center transition-colors border',
+        !has && 'border-transparent bg-transparent hover:bg-white/[0.03]',
+        has && 'border-white/[0.06]',
+        pos && 'bg-accent/[0.06] hover:bg-accent/[0.1]',
+        neg && 'bg-loss/[0.06] hover:bg-loss/[0.1]',
+        has && !pos && !neg && 'bg-white/[0.02] hover:bg-white/[0.04]',
+      )}
     >
-      <div className="text-[9px] font-semibold uppercase tracking-[0.12em] text-dim/80">S{total.week}</div>
-      {total.count ? (
-        <Pnl value={total.pnl} className="mt-1 text-[11px] font-semibold leading-tight">
+      <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted truncate max-w-full">
+        {t('cal.weekN', { n: total.week })}
+      </div>
+      {has ? (
+        <Pnl value={total.pnl} className="mt-1 text-[11px] @[400px]:text-[12px] font-semibold leading-tight truncate max-w-full">
           {fmtMoney(total.pnl, currency, { sign: true, decimals: Math.abs(total.pnl) >= 100 ? 0 : 2 })}
         </Pnl>
       ) : (
@@ -551,59 +471,36 @@ function DayDetail({
 }) {
   const tx = useT()
   return (
-    <div className="flex flex-col gap-3.5">
-      <div className="px-0.5">
-        <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-dim">{tx('cal.dayPnl')}</div>
-        <Pnl value={agg.pnl} className="text-[22px] font-semibold tracking-tight leading-none mt-1.5 block">
-          {fmtMoney(agg.pnl, currency, { sign: true })}
-        </Pnl>
-        <div className="mt-3 flex items-center gap-3 text-[11px] text-dim">
-          <span>
-            <span className="text-muted">{tx('cal.ops')}</span>{' '}
-            <span className="num text-text-2 font-semibold">{agg.count}</span>
-          </span>
-          <span className="text-border-3">·</span>
-          <span>
-            <span className="text-accent num font-semibold">{agg.wins}</span>
-            <span className="text-dim"> / </span>
-            <span className="text-loss num font-semibold">{agg.losses}</span>
-          </span>
-          <span className="text-border-3">·</span>
-          <span className="num text-text-2 font-semibold">
-            {fmtMoney(agg.pnl / agg.count, currency, { sign: true, decimals: 0 })}
-          </span>
-        </div>
+    <div className="flex flex-col gap-5">
+      <div className="grid grid-cols-2 gap-x-5">
+        <Detail
+          label={tx('cal.dayPnl')}
+          value={fmtMoney(agg.pnl, currency, { sign: true })}
+          tone={agg.pnl > 0 ? 'green' : agg.pnl < 0 ? 'red' : undefined}
+          size="lg"
+        />
+        <Detail label={tx('cal.ops')} value={String(agg.count)} hint={`${agg.wins}W / ${agg.losses}L`} />
       </div>
 
-      <div className="flex flex-col gap-0.5">
-        <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-dim px-0.5 mb-1">{tx('cal.trades')}</div>
+      <div className="flex flex-col divide-y divide-white/[0.05]">
         {[...agg.trades]
           .sort((a, b) => new Date(a.exitDate ?? a.entryDate).getTime() - new Date(b.exitDate ?? b.entryDate).getTime())
-          .map((t) => {
-            const p = tradePnl(t)
-            const r = tradeR(t)
+          .map((tr) => {
+            const p = tradePnl(tr)
             return (
               <button
-                key={t.id}
-                onClick={() => onOpenTrade(t)}
-                className="flex items-center justify-between rounded-lg border border-transparent px-2 py-2 text-left hover:bg-surface-2/80 hover:border-border/60 transition-colors"
+                key={tr.id}
+                onClick={() => onOpenTrade(tr)}
+                className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0 text-left hover:bg-white/[0.02] transition-colors"
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <DirectionGlyph direction={t.direction} />
-                  <AssetLogo ticker={t.symbol} size="xs" />
-                  <div className="min-w-0">
-                    <div className="text-[12px] font-semibold mono leading-tight">{t.symbol}</div>
-                    <div className="text-[10px] text-dim truncate leading-tight mt-0.5">
-                      {fmtDate(t.entryDate, 'HH:mm')} · {t.strategy || tx('common.noStrategy')}
-                    </div>
-                  </div>
+                  <DirectionGlyph direction={tr.direction} />
+                  <AssetLogo ticker={tr.symbol} size="xs" />
+                  <span className="text-[13px] font-medium mono truncate">{tr.symbol}</span>
                 </div>
-                <div className="text-right shrink-0 pl-2">
-                  <Pnl value={p} className="text-[12px] font-semibold block leading-tight">
-                    {fmtMoney(p, currency, { sign: true })}
-                  </Pnl>
-                  <div className={clsx('text-[10px] num leading-tight mt-0.5', r === null ? 'text-dim' : r >= 0 ? 'text-accent' : 'text-loss')}>{fmtR(r)}</div>
-                </div>
+                <Pnl value={p} className="text-[13px] font-semibold shrink-0">
+                  {fmtMoney(p, currency, { sign: true })}
+                </Pnl>
               </button>
             )
           })}
@@ -624,7 +521,6 @@ function DayCell({
   events,
   tab,
   inMonth,
-  intensity,
   highlight,
   selected,
   onClick,
@@ -635,97 +531,62 @@ function DayCell({
   events: number
   tab: 'pnl' | 'events'
   inMonth: boolean
-  intensity: number
   highlight: boolean
   selected: boolean
   onClick: () => void
   currency: 'USD' | 'EUR' | 'GBP'
 }) {
+  const t = useT()
   const has = !!agg && inMonth
   const pos = has && agg!.pnl > 0
   const neg = has && agg!.pnl < 0
   const eventDay = tab === 'events' && events > 0 && inMonth
   const today = isToday(date)
-  const weekend = isWeekend(date)
-  const depth = 0.22 + Math.pow(intensity, 0.65) * 0.38
-  const edge = 0.14 + intensity * 0.22
-
-  const style: CSSProperties | undefined =
-    tab === 'pnl' && has
-      ? highlight
-        ? {
-            background: `linear-gradient(165deg, rgba(120, 86, 28, ${0.28 + intensity * 0.28}) 0%, rgba(58, 42, 14, ${0.45 + intensity * 0.2}) 100%)`,
-            borderColor: `rgba(251, 191, 36, ${0.28 + intensity * 0.25})`,
-            boxShadow: `inset 0 1px 0 rgba(251, 191, 36, 0.08)`,
-          }
-        : pos
-          ? {
-              background: `linear-gradient(165deg, rgba(28, 92, 58, ${depth * 0.85}) 0%, rgba(12, 48, 32, ${depth}) 100%)`,
-              borderColor: `rgba(74, 222, 128, ${edge})`,
-              boxShadow: `inset 0 1px 0 rgba(74, 222, 128, 0.06)`,
-            }
-          : neg
-            ? {
-                background: `linear-gradient(165deg, rgba(98, 32, 42, ${depth * 0.85}) 0%, rgba(48, 16, 22, ${depth}) 100%)`,
-                borderColor: `rgba(248, 113, 113, ${edge})`,
-                boxShadow: `inset 0 1px 0 rgba(248, 113, 113, 0.06)`,
-              }
-            : undefined
-      : undefined
 
   return (
     <button
       onClick={onClick}
       disabled={!inMonth}
-      style={style}
       title={has ? `${format(date, getAppLocale() === 'en' ? 'MMMM d' : "d 'de' MMMM", { locale: dateFnsLocale() })} · ${fmtMoney(agg!.pnl, currency, { sign: true })}` : undefined}
       className={clsx(
-        'group relative h-full min-h-0 w-full min-w-0 overflow-hidden rounded-[10px] border p-2 text-left transition-all duration-150 flex flex-col',
-        !inMonth && 'opacity-[0.22] bg-transparent border-transparent cursor-default',
-        inMonth && !has && !eventDay && (weekend ? 'bg-[#0c0c0e] border-border/50' : 'bg-[#101012] border-border/80'),
-        inMonth && !has && !eventDay && 'hover:border-border-2 hover:bg-surface-3/60',
-        tab === 'pnl' && has && !pos && !neg && 'border-border bg-surface-2',
-        tab === 'pnl' && has && 'hover:brightness-[1.08]',
-        eventDay && 'bg-violet/[0.1] border-violet/20 hover:border-violet/45',
-        selected && inMonth && 'ring-1 ring-text/70 border-transparent z-[1] brightness-110',
+        'group relative h-full min-h-0 w-full min-w-0 overflow-hidden rounded-xl p-1.5 @[400px]:p-2 text-left transition-colors duration-150 flex flex-col border',
+        !inMonth && 'opacity-40 bg-transparent border-transparent cursor-default',
+        inMonth && !has && !eventDay && 'border-transparent bg-transparent hover:bg-white/[0.03]',
+        inMonth && (has || eventDay) && 'border-white/[0.06]',
+        tab === 'pnl' && has && pos && 'bg-accent/[0.06]',
+        tab === 'pnl' && has && neg && 'bg-loss/[0.06]',
+        tab === 'pnl' && has && !pos && !neg && 'bg-white/[0.02]',
+        eventDay && 'bg-white/[0.03]',
+        today && inMonth && 'ring-1 ring-text/50',
+        selected && inMonth && '!border-white/25',
+        highlight && inMonth && has && 'shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]',
       )}
     >
-      <div className="relative z-[1] flex items-start justify-between gap-1">
-        <span
-          className={clsx(
-            'num flex items-center justify-center font-medium leading-none tabular-nums',
-            today
-              ? 'w-[18px] h-[18px] rounded-full border border-text/60 text-text text-[10px] font-semibold'
-              : clsx(
-                  'text-[11px]',
-                  highlight ? 'text-amber/70' : pos ? 'text-accent/55' : neg ? 'text-loss/55' : has || eventDay ? 'text-muted' : 'text-dim',
-                ),
-          )}
-        >
-          {format(date, 'd')}
-        </span>
-        {inMonth && events > 0 && tab === 'pnl' && <span className="mt-1 mr-0.5 w-1.5 h-1.5 rounded-full bg-violet/80 shrink-0" />}
-      </div>
+      <span className="num text-[11px] font-medium leading-none tabular-nums text-muted">
+        {format(date, 'd')}
+      </span>
 
       {tab === 'pnl' && has && (
-        <div className="relative z-[1] flex-1 min-h-0 flex items-center justify-center px-0.5 -mt-0.5">
+        <div className="flex-1 min-h-0 flex items-center justify-center px-0.5">
           <Pnl
             value={agg!.pnl}
-            className={clsx(
-              'block text-center font-semibold leading-none tracking-tight truncate max-w-full',
-              Math.abs(agg!.pnl) >= 1000 ? 'text-[12px] sm:text-[13px]' : 'text-[11px] sm:text-[12px]',
-              highlight && '!text-amber',
-            )}
+            className="block text-center font-semibold leading-none tracking-tight truncate max-w-full text-[12px] @[400px]:text-[13px]"
           >
-            {fmtCellPnl(agg!.pnl, currency)}
+            <span className="@[400px]:hidden">
+              {fmtMoney(agg!.pnl, currency, { sign: true, compact: true, decimals: Math.abs(agg!.pnl) >= 1000 ? 1 : 0 })}
+            </span>
+            <span className="hidden @[400px]:inline">{fmtCellPnl(agg!.pnl, currency)}</span>
           </Pnl>
         </div>
       )}
 
       {tab === 'events' && eventDay && (
-        <div className="relative z-[1] flex-1 min-h-0 flex items-center justify-center gap-1 text-[11px] text-violet font-medium">
+        <div className="flex-1 min-h-0 flex items-center justify-center text-[11px] text-muted font-medium">
           <NotebookPen size={11} />
-          {events} {events === 1 ? 'nota' : 'notas'}
+          <span className="ml-1 hidden @[400px]:inline truncate">
+            {events === 1 ? t('cal.note1') : t('cal.notesN', { n: events })}
+          </span>
+          <span className="ml-1 @[400px]:hidden num">{events}</span>
         </div>
       )}
     </button>

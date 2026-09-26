@@ -32,6 +32,13 @@ contextBridge.exposeInMainWorld('api', {
     openReplicaFolder: () => ipcRenderer.invoke('litestream:openReplicaFolder'),
   },
 
+  folderBackup: {
+    getStatus: () => ipcRenderer.invoke('folderBackup:getStatus'),
+    setEnabled: (enabled: boolean) => ipcRenderer.invoke('folderBackup:setEnabled', enabled),
+    chooseFolder: () => ipcRenderer.invoke('folderBackup:chooseFolder'),
+    confirmFolder: () => ipcRenderer.invoke('folderBackup:confirmFolder'),
+  },
+
   exportFile: (content: string, defaultName: string, filters: Filter[]) =>
 
     ipcRenderer.invoke('file:export', { content, defaultName, filters }),
@@ -45,6 +52,7 @@ contextBridge.exposeInMainWorld('api', {
     getStatus: () => ipcRenderer.invoke('crypto:getStatus'),
 
     setupPassword: (password: string) => ipcRenderer.invoke('crypto:setupPassword', password),
+    migrateToMasterPassword: (password: string) => ipcRenderer.invoke('crypto:migrateToMasterPassword', password),
 
     setupSecureStorage: () => ipcRenderer.invoke('crypto:setupSecureStorage'),
 
@@ -56,7 +64,7 @@ contextBridge.exposeInMainWorld('api', {
 
     deriveSyncKeyFromPassword: (password: string) => ipcRenderer.invoke('crypto:deriveSyncKeyFromPassword', password),
 
-    getExportMaterial: () => ipcRenderer.invoke('crypto:getExportMaterial'),
+    getExportMaterial: (password?: string) => ipcRenderer.invoke('crypto:getExportMaterial', password),
 
   },
 

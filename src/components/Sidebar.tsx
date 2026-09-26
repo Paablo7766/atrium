@@ -1,6 +1,6 @@
 ﻿import { useMemo, useRef, useState, type FormEvent } from 'react'
 import { clsx } from 'clsx'
-import { LayoutDashboard, ListOrdered, CalendarDays, BarChart3, NotebookPen, Settings, Plus, Search, PanelLeftClose, PanelLeft, ChevronDown, X } from 'lucide-react'
+import { LayoutDashboard, ListOrdered, CalendarDays, BarChart3, NotebookPen, Settings, Plus, Search, PanelLeftClose, PanelLeft, ChevronDown, X, MessageSquare } from 'lucide-react'
 import { useStore, type Page } from '@/store'
 import { useActivePage } from '@/lib/useActivePage'
 import { useGoToPage } from '@/lib/useGoToPage'
@@ -12,6 +12,9 @@ import { accountEquity } from '@/lib/capital'
 import { fmtMoney } from '@/lib/format'
 import { ACCOUNT_COLORS } from '@/types'
 import { useT } from '@/lib/useI18n'
+
+const NEW_TRADE_CLS =
+  'bg-[linear-gradient(180deg,#ffffff_0%,#d4d4d8_100%)] text-black shadow-[inset_0_1px_0_#fff,inset_0_-1px_0_rgba(0,0,0,0.14),0_0_0_1px_rgba(255,255,255,0.12),0_10px_28px_-12px_rgba(255,255,255,0.4)] hover:brightness-[1.04] active:scale-[0.98] transition-all'
 
 export function Sidebar() {
   const page = useActivePage()
@@ -25,6 +28,7 @@ export function Sidebar() {
   const accounts = useStore((s) => s.accounts)
   const cashflows = useStore((s) => s.cashflows)
   const switchAccount = useStore((s) => s.switchAccount)
+  const openFeedback = useStore((s) => s.openFeedback)
   const toast = useStore((s) => s.toast)
   const t = useT()
   const [q, setQ] = useState('')
@@ -66,8 +70,8 @@ export function Sidebar() {
           active ? 'bg-surface-3 text-text shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]' : 'text-muted hover:text-text hover:bg-surface-2',
         )}
       >
-        {active && !collapsed && <span className="absolute left-1 top-2 bottom-2 w-0.5 rounded-full bg-accent" />}
-        <Icon size={16} strokeWidth={active ? 2.2 : 1.8} className={clsx(active ? 'text-accent' : 'text-dim group-hover:text-muted')} />
+        {active && !collapsed && <span className="absolute left-1 top-2 bottom-2 w-0.5 rounded-full bg-text shadow-[0_0_8px_rgba(255,255,255,0.5)]" />}
+        <Icon size={16} strokeWidth={active ? 2.2 : 1.8} className={clsx(active ? 'text-text' : 'text-dim group-hover:text-muted')} />
         {!collapsed && label}
       </button>
     )
@@ -83,7 +87,7 @@ export function Sidebar() {
     >
       <div className={clsx('drag-region h-12 flex items-center pt-1', collapsed ? 'justify-center px-1' : 'justify-between gap-2 px-3')}>
         <div className="no-drag flex items-center gap-2.5 min-w-0">
-          <BrandMark size={28} className="shadow-[0_0_20px_-6px_rgba(74,222,128,0.45)]" />
+          <BrandMark size={28} className="shadow-[0_0_20px_-6px_rgba(255,255,255,0.4)]" />
           {!collapsed && (
             <div className="text-[13px] font-semibold tracking-tight leading-none">Atrium</div>
           )}
@@ -131,7 +135,7 @@ export function Sidebar() {
             type="button"
             title={t('nav.newTrade')}
             onClick={() => openTradeModal()}
-            className="w-10 h-10 rounded-xl bg-accent text-black flex items-center justify-center hover:bg-[#5ce392] active:scale-[0.98] transition-colors"
+            className={clsx('w-10 h-10 rounded-xl flex items-center justify-center', NEW_TRADE_CLS)}
           >
             <Plus size={16} strokeWidth={2.5} />
           </button>
@@ -147,7 +151,7 @@ export function Sidebar() {
                 onChange={(e) => setQ(e.target.value)}
                 placeholder={t('nav.searchPlaceholder')}
                 className={clsx(
-                  'w-full h-9 pl-8 rounded-xl bg-surface-2 border border-border text-[12.5px] text-text placeholder:text-dim focus:outline-none focus:border-accent/40',
+                  'w-full h-9 pl-8 rounded-xl bg-surface-2 border border-border text-[12.5px] text-text placeholder:text-dim focus:outline-none focus:border-white/20',
                   q.trim() ? 'pr-8' : 'pr-3',
                 )}
               />
@@ -171,7 +175,7 @@ export function Sidebar() {
             <button
               data-tour="new-trade"
               onClick={() => openTradeModal()}
-              className="w-full h-9 rounded-xl bg-accent text-black text-[13px] font-semibold flex items-center justify-center gap-2 hover:bg-[#5ce392] active:scale-[0.98] transition-all shadow-[0_0_0_1px_rgba(74,222,128,0.25),0_8px_20px_-10px_rgba(74,222,128,0.55)]"
+              className={clsx('w-full h-9 rounded-xl text-[13px] font-semibold flex items-center justify-center gap-2', NEW_TRADE_CLS)}
             >
               <Plus size={16} strokeWidth={2.5} />
               {t('nav.newTrade')}
@@ -275,9 +279,21 @@ export function Sidebar() {
                 <span className="block truncate leading-tight">{settings.traderName}</span>
                 <span className="block text-[10px] text-dim truncate leading-tight">{t('nav.accountSettings')}</span>
               </span>
-              <Settings size={14} className={page === 'settings' ? 'text-accent' : 'text-dim'} />
+              <Settings size={14} className={page === 'settings' ? 'text-text' : 'text-dim'} />
             </>
           )}
+        </button>
+        <button
+          type="button"
+          title={t('nav.feedback')}
+          onClick={() => openFeedback('sidebar')}
+          className={clsx(
+            'flex items-center rounded-xl text-[13px] font-medium transition-all text-muted hover:text-text hover:bg-surface-2',
+            collapsed ? 'w-10 h-10 mx-auto justify-center' : 'mt-2 gap-2.5 w-full h-9 px-2.5',
+          )}
+        >
+          <MessageSquare size={16} className="shrink-0 text-dim" />
+          {!collapsed && <span className="flex-1 text-left">{t('nav.feedback')}</span>}
         </button>
       </div>
     </aside>

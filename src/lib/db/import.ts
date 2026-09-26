@@ -281,6 +281,9 @@ function sanitizeSettings(raw: unknown): Settings {
       return s ? [s] : []
     }) : [],
     locale: LOCALES.includes(src.locale as AppLocale) ? (src.locale as AppLocale) : DEFAULT_SETTINGS.locale,
+    lastSeenAppVersion: typeof src.lastSeenAppVersion === 'string' && src.lastSeenAppVersion.trim()
+      ? src.lastSeenAppVersion.trim()
+      : undefined,
   }
 }
 

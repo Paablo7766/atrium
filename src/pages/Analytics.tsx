@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { clsx } from 'clsx'
-import { BarChart3 } from 'lucide-react'
+import { BarChart3, PenLine, Star } from 'lucide-react'
 import { useStore } from '@/store'
 import { Topbar } from '@/components/Topbar'
-import { Card, Empty, Pnl, Ring, Segmented, Stars, Trend } from '@/components/ui'
+import { Empty, Pnl, Ring, Segmented, Trend } from '@/components/ui'
 import { CategoryBars, DrawdownChart } from '@/components/charts'
 import {
+  AnalyticsCard,
   AnalyticsLayout,
+  Detail,
+  Kicker,
+  MagnitudeBar,
+  MetricTile,
   PerformanceByCategory,
   PnLOriginHeader,
+  SCROLL_X,
   RDistribution,
   type CategoryGroupBy,
   type CategorySortKey,
@@ -194,160 +200,196 @@ export function Analytics() {
     ...(hasSetup ? [{ value: 'setup' as const, label: t('an.by.setup') }] : []),
   ]
 
+  const lineTone = stats.netPnl > 0 ? 'rgba(74,222,128,0.5)' : stats.netPnl < 0 ? 'rgba(248,113,113,0.5)' : 'rgba(255,255,255,0.22)'
+  const cur = settings.currency
+  const processCards = [
+    hasEmotion && (
+      <AnalyticsCard key="emotion" className="h-full" title={t('an.emotion')} subtitle={t('an.emotionSub')}>
+        <HBars groups={byEmotion} currency={cur} maxItems={8} />
+      </AnalyticsCard>
+    ),
+    byRating.length > 0 && (
+      <AnalyticsCard key="rating" className="h-full" title={t('an.perceived')} subtitle={t('an.ratingSub')}>
+        <RatingStrip groups={byRating} currency={cur} />
+      </AnalyticsCard>
+    ),
+    byMistake.length > 0 && (
+      <AnalyticsCard key="mistakes" className="h-full" title={t('an.mistakesTitle')} subtitle={t('an.mistakesSub')}>
+        <HBars groups={byMistake} currency={cur} />
+      </AnalyticsCard>
+    ),
+  ].filter(Boolean) as ReactNode[]
+
   return (
     <>
       <Topbar title={t('an.title')} subtitle={settings.accountName} />
 
       <AnalyticsLayout
+        summaryLabel={{ title: t('an.sec.summary'), subtitle: t('an.sec.summarySub') }}
         hero={
-        <section className="relative overflow-hidden card px-7 py-6 lg:px-8 lg:py-7 animate-rise">
-          <div
-            className={clsx(
-              'pointer-events-none absolute -top-24 -left-16 w-[28rem] h-[28rem] rounded-full blur-3xl animate-glow-breathe',
-              stats.netPnl >= 0 ? 'bg-accent/15' : 'bg-loss/15',
-            )}
-          />
-          <div className="relative">
-            <div className="flex items-center justify-end mb-7">
-              <div className="inline-flex items-center gap-3">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted leading-none">
-                  {t('an.period')}
-                </span>
-                <Segmented size="sm" value={range} onChange={setRange} options={rangeOptions(locale)} />
-              </div>
-            </div>
+          <section className="card relative overflow-hidden animate-rise">
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 h-px transition-[background,box-shadow] duration-500"
+              style={{ background: `linear-gradient(90deg, transparent, ${lineTone} 50%, transparent)`, boxShadow: `0 0 14px ${lineTone}` }}
+            />
+            <div
+              className="pointer-events-none absolute left-1/2 -top-40 -ml-[340px] h-[320px] w-[680px] rounded-full"
+              style={{ background: 'radial-gradient(closest-side, rgba(228,228,235,0.06), transparent 75%)' }}
+            />
 
-            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-8 lg:gap-14 items-end">
-              <div className="min-w-0">
+            <div className="relative p-5 sm:p-6 lg:px-7 lg:py-7">
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
                   {t('an.netPnl', { hint: rangeHint(locale, range) })}
                 </div>
-                <div className="flex items-end gap-3 mt-3">
-                  <Pnl value={stats.netPnl} className="text-[42px] font-semibold tracking-tight leading-none">
-                    {fmtMoney(heroPnl, settings.currency, { sign: true })}
-                  </Pnl>
-                  {pnlTrend !== undefined && (
-                    <span className="mb-1">
-                      <Trend value={pnlTrend} />
-                    </span>
-                  )}
+                <div className={clsx('no-drag max-w-full', SCROLL_X)}>
+                  <Segmented size="sm" value={range} onChange={setRange} options={rangeOptions(locale)} />
                 </div>
-                <p className="text-[13px] text-muted mt-3 leading-relaxed">
-                  {returnPct !== null ? (
-                    <span className={clsx(returnPct >= 0 ? 'text-accent' : 'text-loss')}>{fmtPct(returnPct, 1, { sign: true })}</span>
-                  ) : (
-                    <span className="text-dim">—</span>
-                  )}
-                  <span className="text-dim">{t('an.onEquity')}</span>
-                  {t('an.opsN', { n: stats.total })}
-                  {stats.tradingDays ? ` · ${t('an.daysN', { n: stats.tradingDays })}` : ''}
-                  {stats.fees ? ` · ${t('an.feesN', { n: fmtMoney(stats.fees, settings.currency) })}` : ''}
-                </p>
               </div>
 
-              <div className="min-w-0">
-                <div className="flex items-center justify-between text-[11px] text-muted mb-2">
-                  <span>{t('an.wlMix')}</span>
-                  <span className="num">
-                    <span className="text-accent">{stats.wins}W</span>
-                    <span className="text-dim"> / </span>
-                    <span className="text-loss">{stats.losses}L</span>
-                    {stats.breakeven ? <span className="text-dim"> · {stats.breakeven} BE</span> : null}
-                  </span>
-                </div>
-                <WinLossBar wins={stats.wins} losses={stats.losses} />
-                {stats.tradingDays ? (
-                  <p className="text-[12px] text-dim mt-2.5">
-                    {t('an.perDayGreen', { pnl: fmtMoney(stats.avgDailyPnl, settings.currency, { sign: true }), pct: fmtNum(consistency, 0) })}
+              <div className="mt-5 grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] md:gap-10 lg:gap-12">
+                <div className="min-w-0">
+                  <div
+                    className={clsx(
+                      'num truncate text-[34px] font-semibold leading-[1.05] tracking-[-0.045em] sm:text-[40px]',
+                      stats.netPnl < 0 ? 'text-loss' : 'text-gradient',
+                    )}
+                  >
+                    {fmtMoney(heroPnl, cur, { sign: true })}
+                  </div>
+                  <div className="mt-3.5 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[12px]">
+                    <DeltaPill value={returnPct} />
+                    <span className="text-dim">{t('an.onEquityShort')}</span>
+                    {pnlTrend !== undefined && (
+                      <>
+                        <span className="text-border-3" aria-hidden>
+                          ·
+                        </span>
+                        <Trend value={pnlTrend} />
+                        <span className="text-dim">{t('an.vsPrev')}</span>
+                      </>
+                    )}
+                  </div>
+                  <p className="num mt-2 text-[12px] text-dim">
+                    {t('an.opsN', { n: stats.total })}
+                    {stats.tradingDays ? ` · ${t('an.daysN', { n: stats.tradingDays })}` : ''}
+                    {stats.fees ? ` · ${t('an.feesN', { n: fmtMoney(stats.fees, cur) })}` : ''}
                   </p>
-                ) : null}
-              </div>
-            </div>
+                </div>
 
-            <div className="mt-8 pt-7 border-t border-border grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-              <EdgeMetric
-                label="Win rate"
-                value={`${fmtNum(stats.winRate, 0)}%`}
-                trend={wrTrend}
-                hint={`${stats.wins}W / ${stats.losses}L`}
-                ring={stats.winRate}
-              />
-              <EdgeMetric
-                label="Profit factor"
-                value={stats.profitFactor === Infinity ? '∞' : fmtNum(stats.profitFactor, 2)}
-                trend={pfTrend}
-                hint={stats.grossLoss ? t('an.gross', { n: fmtMoney(stats.grossProfit, settings.currency) }) : t('an.noLosses')}
-              />
-              <EdgeMetric
-                label={t('dash.expectancy')}
-                value={fmtMoney(stats.expectancy, settings.currency, { sign: true })}
-                trend={expTrend}
-                hint={t('an.perClosed')}
-              />
-              <EdgeMetric
-                label={t('an.avgR')}
-                value={stats.rCount ? fmtR(stats.avgR) : '—'}
-                hint={stats.rCount ? t('an.withStop', { n: stats.rCount }) : t('an.addStops')}
-              />
-              <EdgeMetric
-                label={t('stats.payoff')}
-                value={fmtPayoff(stats.payoffRatio)}
-                hint={
-                  stats.avgWin || stats.avgLoss
-                    ? `${fmtMoney(stats.avgWin, settings.currency, { sign: true })} / ${fmtMoney(-stats.avgLoss || 0, settings.currency)}`
-                    : t('an.avgWL')
-                }
-              />
-            </div>
-
-            {insights.length > 0 && (
-              <div className="mt-7 grid grid-cols-1 md:grid-cols-3 gap-3">
-                {insights.map((ins, i) => (
-                  <InsightCard key={ins.id} insight={ins} delay={i} />
-                ))}
+                <div className="min-w-0 border-t border-white/[0.06] pt-5 md:border-l md:border-t-0 md:pl-10 md:pt-0 lg:pl-12">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <Kicker>{t('an.wlMix')}</Kicker>
+                    <span className="num text-[12px] font-semibold">
+                      <span className="text-accent">{stats.wins}W</span>
+                      <span className="text-dim"> / </span>
+                      <span className="text-loss">{stats.losses}L</span>
+                      {stats.breakeven ? <span className="font-normal text-dim"> · {stats.breakeven} BE</span> : null}
+                    </span>
+                  </div>
+                  <WinLossBar wins={stats.wins} losses={stats.losses} />
+                  <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4">
+                    <Detail
+                      label={t('an.avgDay')}
+                      value={stats.tradingDays ? fmtMoney(stats.avgDailyPnl, cur, { sign: true }) : '—'}
+                      tone={!stats.tradingDays || stats.avgDailyPnl === 0 ? undefined : stats.avgDailyPnl > 0 ? 'green' : 'red'}
+                    />
+                    <Detail
+                      label={t('an.greenDays')}
+                      value={stats.tradingDays ? `${fmtNum(consistency, 0)}%` : '—'}
+                      hint={stats.tradingDays ? `${stats.greenDays} / ${stats.tradingDays}` : undefined}
+                    />
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
-        </section>
+
+              <div className="mt-6 grid grid-cols-2 gap-3 border-t border-white/[0.06] pt-6 sm:grid-cols-3 xl:grid-cols-5">
+                <MetricTile
+                  label={t('an.winRate')}
+                  value={`${fmtNum(stats.winRate, 0)}%`}
+                  trend={wrTrend}
+                  hint={`${stats.wins}W / ${stats.losses}L`}
+                  aside={<Ring value={stats.winRate} size={36} stroke={3} track="rgba(255,255,255,0.06)" />}
+                />
+                <MetricTile
+                  label={t('an.profitFactor')}
+                  value={stats.profitFactor === Infinity ? '∞' : fmtNum(stats.profitFactor, 2)}
+                  trend={pfTrend}
+                  hint={stats.grossLoss ? t('an.gross', { n: fmtMoney(stats.grossProfit, cur) }) : t('an.noLosses')}
+                />
+                <MetricTile
+                  label={t('dash.expectancy')}
+                  value={fmtMoney(stats.expectancy, cur, { sign: true })}
+                  tone={stats.expectancy > 0 ? 'green' : stats.expectancy < 0 ? 'red' : undefined}
+                  trend={expTrend}
+                  hint={t('an.perClosed')}
+                />
+                <MetricTile
+                  label={t('an.avgR')}
+                  value={stats.rCount ? fmtR(stats.avgR) : '—'}
+                  tone={stats.rCount ? (stats.avgR > 0 ? 'green' : stats.avgR < 0 ? 'red' : undefined) : undefined}
+                  hint={stats.rCount ? t('an.withStop', { n: stats.rCount }) : t('an.addStops')}
+                />
+                <MetricTile
+                  className="col-span-2 sm:col-span-1"
+                  label={t('stats.payoff')}
+                  value={fmtPayoff(stats.payoffRatio)}
+                  hint={
+                    stats.avgWin || stats.avgLoss
+                      ? `${fmtMoney(stats.avgWin, cur, { sign: true })} / ${fmtMoney(-stats.avgLoss || 0, cur)}`
+                      : t('an.avgWL')
+                  }
+                />
+              </div>
+
+              {insights.length > 0 && (
+                <div className="mt-6">
+                  <Kicker className="mb-3">{t('an.insights')}</Kicker>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                    {insights.map((ins, i) => (
+                      <InsightCard key={ins.id} insight={ins} delay={i} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
         }
-        originLabel={t('an.origin')}
+        edgeLabel={{ title: t('an.sec.edge'), subtitle: t('an.sec.edgeSub') }}
         origin={
           showSides ? (
-            <div className="animate-rise delay-2">
-              <PnLOriginHeader
-                long={sides.long}
-                short={sides.short}
-                currency={settings.currency}
-                longLabel={t('an.longs')}
-                shortLabel={t('an.shorts')}
-              />
-            </div>
+            <PnLOriginHeader
+              long={sides.long}
+              short={sides.short}
+              currency={cur}
+              longLabel={t('an.longs')}
+              shortLabel={t('an.shorts')}
+            />
           ) : null
         }
         category={
-          <div className="animate-rise delay-2">
-            <PerformanceByCategory
-              groups={groups}
-              currency={settings.currency}
-              groupBy={groupBy}
-              onGroupByChange={setGroupBy}
-              groupOptions={groupOptions}
-              sort={sort}
-              onSort={setSort}
-              title={t('an.byCategory')}
-              subtitle={groupBy === 'tag' ? t('an.tagHint') : t('an.edgeWhere')}
-            />
-          </div>
+          <PerformanceByCategory
+            groups={groups}
+            currency={cur}
+            groupBy={groupBy}
+            onGroupByChange={setGroupBy}
+            groupOptions={groupOptions}
+            sort={sort}
+            onSort={setSort}
+            title={t('an.byCategory')}
+            subtitle={groupBy === 'tag' ? t('an.tagHint') : t('an.edgeWhere')}
+          />
         }
-        timeLabel={t('an.time')}
+        timeLabel={{ title: t('an.time'), subtitle: t('an.sec.timeSub') }}
         timeWeekday={
-          <Card className="animate-rise delay-3" title={t('an.byWeekday')} subtitle={t('an.byWeekdaySub')}>
-            <WeekStrip data={byWeekday} currency={settings.currency} />
-          </Card>
+          <AnalyticsCard className="h-full" bodyClassName={CHART_BODY} title={t('an.byWeekday')} subtitle={t('an.byWeekdaySub')}>
+            <WeekStrip data={byWeekday} currency={cur} />
+          </AnalyticsCard>
         }
         timeEntry={
-          <Card
-            className="animate-rise delay-3"
+          <AnalyticsCard
+            className="h-full"
+            bodyClassName={CHART_BODY}
             title={timeView === 'hour' ? t('an.byHour') : t('an.byMonth')}
             subtitle={timeView === 'hour' ? t('an.byHourSub') : t('an.byMonthSub')}
             action={
@@ -364,15 +406,15 @@ export function Analytics() {
           >
             {timeView === 'hour' ? (
               byHour.length ? (
-                <CategoryBars data={byHour} currency={settings.currency} height={240} labelFormatter={(k) => `${k}h`} />
+                <CategoryBars data={byHour} currency={cur} height={CHART_H} labelFormatter={(k) => `${k}h`} />
               ) : (
-                <Empty title={t('an.noDataShort')} />
+                <ChartEmpty title={t('an.noDataShort')} />
               )
             ) : byMonth.length ? (
               <CategoryBars
                 data={byMonth}
-                currency={settings.currency}
-                height={240}
+                currency={cur}
+                height={CHART_H}
                 labelFormatter={(k) =>
                   new Date(k + '-01T00:00:00').toLocaleDateString(locale === 'en' ? 'en-US' : 'es-ES', {
                     month: 'short',
@@ -381,14 +423,15 @@ export function Analytics() {
                 }
               />
             ) : (
-              <Empty title={t('an.noDataShort')} />
+              <ChartEmpty title={t('an.noDataShort')} />
             )}
-          </Card>
+          </AnalyticsCard>
         }
-        riskLabel={t('an.risk')}
+        riskLabel={{ title: t('an.risk'), subtitle: t('an.sec.riskSub') }}
         riskRDist={
           <RDistribution
             trades={filtered}
+            height={CHART_H}
             title={t('an.rDist')}
             subtitle={t('an.rDistSub')}
             emptyTitle={t('an.noStops')}
@@ -396,77 +439,91 @@ export function Analytics() {
           />
         }
         riskDrawdown={
-          <Card title={t('chart.drawdown')} subtitle={t('an.ddSub')}>
-            {curve.length ? (
-              <DrawdownChart data={curve} currency={settings.currency} height={228} />
-            ) : (
-              <Empty title={t('an.empty')} />
-            )}
-          </Card>
+          <AnalyticsCard className="h-full" bodyClassName={CHART_BODY} title={t('chart.drawdown')} subtitle={t('an.ddSub')}>
+            {curve.length ? <DrawdownChart data={curve} currency={cur} height={CHART_H} /> : <ChartEmpty title={t('an.empty')} />}
+          </AnalyticsCard>
         }
         riskEdge={
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] gap-5 lg:gap-6 animate-rise delay-4">
-            <Card title={t('an.edgeQuality')} subtitle={t('an.edgeQualitySub')}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-                <PayoffBars avgWin={stats.avgWin} avgLoss={stats.avgLoss} currency={settings.currency} />
-                <div className="flex flex-col gap-4">
-                  <QualityRow label={t('an.streakNow')} value={fmtStreak(stats.currentStreak)} />
-                  <QualityRow label={t('an.bestWorst')} value={`${fmtStreak(stats.bestStreak)} · ${fmtStreak(stats.worstStreak)}`} />
-                  <QualityRow
-                    label={t('stats.extremes')}
-                    value={
-                      stats.largestWin || stats.largestLoss
-                        ? `${fmtMoney(stats.largestWin, settings.currency, { sign: true })} / ${fmtMoney(stats.largestLoss, settings.currency)}`
-                        : '—'
-                    }
-                  />
-                  <QualityRow label={t('an.holdWL')} value={`${fmtDuration(hold.win)} / ${fmtDuration(hold.loss)}`} />
+          <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-5">
+            <AnalyticsCard className="h-full" title={t('an.edgeQuality')} subtitle={t('an.edgeQualitySub')}>
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-8">
+                <PayoffBars avgWin={stats.avgWin} avgLoss={stats.avgLoss} currency={cur} />
+                <div className="grid grid-cols-2 content-start gap-x-6 gap-y-4 border-t border-white/[0.06] pt-5 sm:border-l sm:border-t-0 sm:pl-8 sm:pt-0">
+                  <Detail label={t('an.streakNow')} value={fmtStreak(stats.currentStreak)} />
+                  <Detail label={t('an.bestWorst')} value={`${fmtStreak(stats.bestStreak)} · ${fmtStreak(stats.worstStreak)}`} />
+                  <div className="col-span-2">
+                    <Detail
+                      label={t('stats.extremes')}
+                      value={
+                        stats.largestWin || stats.largestLoss ? (
+                          <>
+                            <Pnl value={stats.largestWin}>{fmtMoney(stats.largestWin, cur, { sign: true })}</Pnl>
+                            <span className="text-dim"> / </span>
+                            <Pnl value={stats.largestLoss}>{fmtMoney(stats.largestLoss, cur)}</Pnl>
+                          </>
+                        ) : (
+                          '—'
+                        )
+                      }
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Detail label={t('an.holdWL')} value={`${fmtDuration(hold.win)} / ${fmtDuration(hold.loss)}`} />
+                  </div>
                 </div>
               </div>
-            </Card>
-            <Card title={t('an.riskMetrics')} subtitle={t('an.riskMetricsSub')}>
-              <div className="grid grid-cols-2 gap-3">
-                <MiniStat
+            </AnalyticsCard>
+            <AnalyticsCard className="h-full" title={t('an.riskMetrics')} subtitle={t('an.riskMetricsSub')}>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-5">
+                <Detail
+                  size="lg"
                   label={t('an.maxDd')}
-                  value={stats.maxDrawdown ? `−${fmtMoney(stats.maxDrawdown, settings.currency)}` : fmtMoney(0, settings.currency)}
+                  value={stats.maxDrawdown ? `−${fmtMoney(stats.maxDrawdown, cur)}` : fmtMoney(0, cur)}
+                  tone={stats.maxDrawdown ? 'red' : undefined}
                   hint={stats.maxDrawdown ? `${fmtNum(stats.maxDrawdownPct, 1)}%` : undefined}
-                  tone="red"
                 />
-                <MiniStat label="Sharpe" value={fmtNum(stats.sharpe, 2)} hint={stats.tradingDays < 10 ? t('an.smallSample') : t('an.sharpeHint')} />
-                <MiniStat label={t('an.recovery')} value={recovery === null ? '—' : fmtNum(recovery, 2)} hint={t('an.recoveryHint')} />
-                <MiniStat
+                <Detail
+                  size="lg"
+                  label={t('an.sharpe')}
+                  value={fmtNum(stats.sharpe, 2)}
+                  hint={stats.tradingDays < 10 ? t('an.smallSample') : t('an.sharpeHint')}
+                  hintTone={stats.tradingDays < 10 ? 'amber' : undefined}
+                />
+                <Detail size="lg" label={t('an.recovery')} value={recovery === null ? '—' : fmtNum(recovery, 2)} hint={t('an.recoveryHint')} />
+                <Detail
+                  size="lg"
                   label={t('an.greenDays')}
                   value={`${fmtNum(consistency, 0)}%`}
                   hint={`${stats.greenDays} / ${stats.tradingDays || 0}`}
                   tone={consistency >= 55 ? 'green' : consistency >= 40 ? 'amber' : 'red'}
                 />
               </div>
-            </Card>
+            </AnalyticsCard>
           </div>
         }
-        processLabel={hasProcess ? t('an.process') : undefined}
+        processLabel={{ title: t('an.process'), subtitle: t('an.sec.processSub') }}
         process={
           hasProcess ? (
-            <>
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 lg:gap-6 animate-rise delay-5">
-                {hasEmotion && (
-                  <Card title={t('an.emotion')} subtitle={t('an.emotionSub')}>
-                    <HBars groups={byEmotion} currency={settings.currency} maxItems={8} />
-                  </Card>
-                )}
-                {byRating.length > 0 && (
-                  <Card title={t('an.perceived')} subtitle={t('an.ratingSub')}>
-                    <RatingStrip groups={byRating} currency={settings.currency} />
-                  </Card>
-                )}
+            <div className="grid grid-cols-1 items-stretch gap-4 lg:gap-5 xl:grid-cols-2">
+              {processCards.map((card, i) => (
+                <div key={i} className={clsx('min-w-0', processCards.length % 2 === 1 && i === processCards.length - 1 && 'xl:col-span-2')}>
+                  {card}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <AnalyticsCard>
+              <div className="flex items-start gap-3.5">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-2 bg-surface-3 text-muted">
+                  <PenLine size={15} />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-[13px] font-semibold tracking-tight">{t('an.processEmpty')}</div>
+                  <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{t('an.processEmptyHint')}</p>
+                </div>
               </div>
-              {byMistake.length > 0 && (
-                <Card className="animate-rise delay-5" title={t('an.mistakesTitle')} subtitle={t('an.mistakesSub')}>
-                  <HBars groups={byMistake} currency={settings.currency} />
-                </Card>
-              )}
-            </>
-          ) : null
+            </AnalyticsCard>
+          )
         }
       />
     </>
@@ -495,44 +552,40 @@ function useCountUp(value: number, duration = 820) {
   return n
 }
 
-function EdgeMetric({
-  label,
-  value,
-  hint,
-  trend,
-  ring,
-}: {
-  label: string
-  value: ReactNode
-  hint?: ReactNode
-  trend?: number | null
-  ring?: number
-}) {
+const CHART_H = 220
+const CHART_BODY = 'flex flex-col justify-end'
+
+function ChartEmpty({ title, description }: { title: string; description?: string }) {
   return (
-    <div className="min-w-0 metric-tile transition-colors hover:border-border-2">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{label}</span>
-            {trend !== undefined && <Trend value={trend} />}
-          </div>
-          <div className="num text-[18px] font-semibold tracking-tight mt-2.5 text-text leading-none">{value}</div>
-          {hint != null && hint !== '' && <div className="text-[12px] text-dim mt-1.5 leading-snug truncate">{hint}</div>}
-        </div>
-        {ring !== undefined && <Ring value={ring} size={40} stroke={3.5} />}
-      </div>
+    <div className="flex h-full min-h-[220px] items-center justify-center">
+      <Empty title={title} description={description} />
     </div>
+  )
+}
+
+function DeltaPill({ value }: { value: number | null }) {
+  if (value === null || !Number.isFinite(value)) return <span className="text-dim">—</span>
+  const up = value >= 0
+  return (
+    <span
+      className={clsx(
+        'num inline-flex h-5 items-center rounded-md border px-1.5 text-[11px] font-semibold',
+        up ? 'border-accent/20 bg-accent/10 text-accent' : 'border-loss/20 bg-loss/10 text-loss',
+      )}
+    >
+      {fmtPct(value, 1, { sign: true })}
+    </span>
   )
 }
 
 function WinLossBar({ wins, losses }: { wins: number; losses: number }) {
   const total = wins + losses
-  if (!total) return <div className="h-2 rounded-full bg-surface-3" />
+  if (!total) return <div className="mt-2.5 h-1.5 rounded-full bg-white/[0.05]" />
   const w = (wins / total) * 100
   return (
-    <div className="h-2 rounded-full overflow-hidden flex bg-surface-3">
-      <div className="h-full bg-accent transition-all duration-700" style={{ width: `${w}%` }} />
-      <div className="h-full bg-loss/80 transition-all duration-700" style={{ width: `${100 - w}%` }} />
+    <div className="mt-2.5 flex h-1.5 gap-px overflow-hidden rounded-full bg-white/[0.05]">
+      <div className="h-full rounded-l-full bg-accent/85 transition-all duration-700" style={{ width: `${w}%` }} />
+      <div className="h-full rounded-r-full bg-loss/80 transition-all duration-700" style={{ width: `${100 - w}%` }} />
     </div>
   )
 }
@@ -543,13 +596,13 @@ function InsightCard({ insight, delay }: { insight: Insight; delay: number }) {
   const rail = { green: 'bg-accent', red: 'bg-loss', amber: 'bg-amber', sky: 'bg-sky' }[insight.tone]
   return (
     <div
-      className="relative overflow-hidden rounded-2xl border border-border bg-surface-2/40 px-4 py-3.5 animate-insight"
-      style={{ animationDelay: `${180 + delay * 90}ms` }}
+      className="relative min-w-0 overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.015] py-3 pl-4 pr-3.5 animate-section-rise"
+      style={{ animationDelay: `${160 + delay * 70}ms` }}
     >
-      <span className={clsx('absolute left-0 top-3 bottom-3 w-[2px] rounded-full', rail)} />
-      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-dim pl-2">{insight.kicker}</div>
-      <div className="text-[13px] font-semibold tracking-tight mt-1 pl-2 leading-snug">{insight.title}</div>
-      <div className="text-[12px] text-muted mt-1 pl-2 leading-relaxed">{insight.detail}</div>
+      <span className={clsx('absolute bottom-3 left-0 top-3 w-[2px] rounded-r-full', rail)} />
+      <div className="truncate text-[10px] font-semibold uppercase tracking-[0.16em] text-dim">{insight.kicker}</div>
+      <div className="mt-1 text-[13px] font-semibold leading-snug tracking-tight">{insight.title}</div>
+      <div className="num mt-0.5 text-[12px] leading-relaxed text-muted">{insight.detail}</div>
     </div>
   )
 }
@@ -558,28 +611,63 @@ function HBars({ groups, currency, maxItems = 8 }: { groups: GroupPerf[]; curren
   const rows = groups.slice(0, maxItems)
   const max = Math.max(...rows.map((g) => Math.abs(g.pnl)), 1)
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col divide-y divide-white/[0.05]">
       {rows.map((g) => (
-        <div key={g.key} className="min-w-0">
+        <div key={g.key} className="min-w-0 py-2.5 first:pt-0 last:pb-0">
           <div className="flex items-baseline gap-3">
-            <span className="flex-1 min-w-0 text-[13px] font-medium truncate">{displayGroupKey(getAppLocale(), g.key)}</span>
-            <Pnl value={g.pnl} className="font-semibold text-[13px] shrink-0">
+            <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{displayGroupKey(getAppLocale(), g.key)}</span>
+            <span className="num shrink-0 text-[11px] text-muted">
+              {g.wins}
+              <span className="text-dim">/</span>
+              {g.losses}
+            </span>
+            <Pnl value={g.pnl} className="w-24 shrink-0 truncate text-right text-[13px] font-semibold">
               {fmtMoney(g.pnl, currency, { sign: true })}
             </Pnl>
           </div>
-          <div className="flex items-center gap-3 mt-1.5">
-            <div className="flex-1 h-[5px] rounded-full bg-surface-3 overflow-hidden">
-              <div
-                className={clsx('h-full rounded-full origin-left transition-all duration-700', g.pnl >= 0 ? 'bg-accent' : 'bg-loss')}
-                style={{ width: `${Math.max(6, (Math.abs(g.pnl) / max) * 100)}%` }}
-              />
-            </div>
-            <span className="num text-[11px] text-muted shrink-0 w-[4.5rem] text-right">
-              <span className="text-accent">{g.wins}W</span>
-              <span className="text-dim"> / </span>
-              <span className="text-loss">{g.losses}L</span>
-            </span>
-          </div>
+          <MagnitudeBar className="mt-2" pct={(Math.abs(g.pnl) / max) * 100} positive={g.pnl >= 0} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function StripBar({ pnl, count, max, height, delay }: { pnl: number; count: number; max: number; height: string; delay: number }) {
+  const h = count ? Math.max(8, (Math.abs(pnl) / max) * 100) : 4
+  return (
+    <div className={clsx('flex w-full items-end rounded-xl border border-white/[0.04] bg-white/[0.02] p-1', height)}>
+      <div
+        className={clsx(
+          'w-full origin-bottom rounded-lg animate-bar-grow',
+          count === 0 ? 'bg-white/[0.06]' : pnl >= 0 ? 'bg-accent/80' : 'bg-loss/75',
+        )}
+        style={{ height: `${h}%`, animationDelay: `${delay}ms` }}
+      />
+    </div>
+  )
+}
+
+function StripRows({
+  rows,
+  currency,
+  max,
+}: {
+  rows: { key: string; label: ReactNode; pnl: number; count: number }[]
+  currency: Currency
+  max: number
+}) {
+  return (
+    <div className="flex flex-col gap-2.5 sm:hidden">
+      {rows.map((r) => (
+        <div key={r.key} className="grid grid-cols-[2.75rem_minmax(0,1fr)_auto] items-center gap-3">
+          <span className="text-[11px] font-semibold text-muted">{r.label}</span>
+          <MagnitudeBar pct={r.count ? (Math.abs(r.pnl) / max) * 100 : 0} positive={r.pnl >= 0} />
+          <span className="flex items-baseline justify-end gap-2">
+            <Pnl value={r.pnl} className="text-[12px] font-semibold">
+              {r.count ? fmtMoney(r.pnl, currency, { sign: true, compact: true }) : '—'}
+            </Pnl>
+            <span className="num w-5 text-right text-[10px] text-dim">{r.count || '·'}</span>
+          </span>
         </div>
       ))}
     </div>
@@ -587,121 +675,86 @@ function HBars({ groups, currency, maxItems = 8 }: { groups: GroupPerf[]; curren
 }
 
 function WeekStrip({ data, currency }: { data: GroupPerf[]; currency: Currency }) {
+  const t = useT()
   const max = Math.max(...data.map((d) => Math.abs(d.pnl)), 1)
   return (
-    <div className="grid grid-cols-7 gap-2 sm:gap-3">
-      {data.map((d) => {
-        const h = d.count ? Math.max(10, (Math.abs(d.pnl) / max) * 100) : 6
-        return (
-          <div key={d.key} className="flex flex-col items-center min-w-0">
-            <div className="h-32 w-full flex items-end rounded-2xl bg-surface-2 border border-border p-1.5">
-              <div
-                className={clsx(
-                  'w-full rounded-xl origin-bottom animate-bar-grow',
-                  d.count === 0 ? 'bg-surface-3' : d.pnl >= 0 ? 'bg-accent' : 'bg-loss',
-                )}
-                style={{ height: `${h}%`, opacity: d.count ? 0.9 : 0.35 }}
-              />
-            </div>
+    <>
+      <StripRows
+        currency={currency}
+        max={max}
+        rows={data.map((d) => ({ key: d.key, label: weekdayShort(getAppLocale(), Number(d.key)), pnl: d.pnl, count: d.count }))}
+      />
+      <div className="hidden grid-cols-7 gap-2.5 sm:grid">
+        {data.map((d, i) => (
+          <div key={d.key} className="flex min-w-0 flex-col items-center">
+            <StripBar pnl={d.pnl} count={d.count} max={max} height="h-40" delay={i * 40} />
             <div className="mt-2.5 text-[11px] font-semibold text-muted">{weekdayShort(getAppLocale(), Number(d.key))}</div>
-            <Pnl value={d.pnl} className="text-[12px] font-semibold mt-0.5 truncate max-w-full">
+            <Pnl value={d.pnl} className="mt-0.5 max-w-full truncate text-[12px] font-semibold">
               {d.count ? fmtMoney(d.pnl, currency, { sign: true, compact: true }) : '—'}
             </Pnl>
-            <div className="num text-[10px] text-dim mt-0.5">{d.count ? `${d.count} ops` : '·'}</div>
+            <div className="num mt-0.5 max-w-full truncate text-[10px] text-dim">{d.count ? t('an.opsN', { n: d.count }) : '·'}</div>
           </div>
-        )
-      })}
-    </div>
+        ))}
+      </div>
+    </>
   )
 }
 
 function PayoffBars({ avgWin, avgLoss, currency }: { avgWin: number; avgLoss: number; currency: Currency }) {
+  const t = useT()
   const max = Math.max(avgWin, avgLoss, 1)
   return (
-    <div className="flex flex-col gap-5 justify-center">
+    <div className="flex flex-col justify-center gap-5">
       <div>
         <div className="flex items-baseline justify-between gap-3">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Ganancia media</span>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">{t('an.avgWin')}</span>
           <Pnl value={avgWin} className="text-[13px] font-semibold">
             {fmtMoney(avgWin, currency, { sign: true })}
           </Pnl>
         </div>
-        <div className="mt-2 h-2 rounded-full bg-surface-3 overflow-hidden">
-          <div className="h-full rounded-full bg-accent transition-[width] duration-700" style={{ width: `${(avgWin / max) * 100}%` }} />
-        </div>
+        <MagnitudeBar className="mt-2" pct={avgWin ? (avgWin / max) * 100 : 0} positive />
       </div>
       <div>
         <div className="flex items-baseline justify-between gap-3">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">Pérdida media</span>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">{t('an.avgLoss')}</span>
           <Pnl value={-avgLoss} className="text-[13px] font-semibold">
             {fmtMoney(-avgLoss || 0, currency)}
           </Pnl>
         </div>
-        <div className="mt-2 h-2 rounded-full bg-surface-3 overflow-hidden">
-          <div className="h-full rounded-full bg-loss transition-[width] duration-700" style={{ width: `${(avgLoss / max) * 100}%` }} />
-        </div>
+        <MagnitudeBar className="mt-2" pct={avgLoss ? (avgLoss / max) * 100 : 0} positive={false} />
       </div>
-    </div>
-  )
-}
-
-function QualityRow({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4">
-      <span className="text-[12px] text-muted">{label}</span>
-      <span className="num text-[13px] font-semibold text-right">{value}</span>
-    </div>
-  )
-}
-
-function MiniStat({
-  label,
-  value,
-  hint,
-  tone,
-}: {
-  label: string
-  value: ReactNode
-  hint?: string
-  tone?: 'green' | 'red' | 'amber'
-}) {
-  const color = tone === 'green' ? 'text-accent' : tone === 'red' ? 'text-loss' : tone === 'amber' ? 'text-amber' : 'text-text'
-  return (
-    <div className="rounded-2xl bg-surface-2/70 border border-border px-4 py-4">
-      <div className="text-[11px] font-medium text-muted">{label}</div>
-      <div className={clsx('num text-[17px] font-semibold tracking-tight mt-2 leading-none', color)}>{value}</div>
-      {hint && <div className="text-[11px] text-dim mt-1.5">{hint}</div>}
     </div>
   )
 }
 
 function RatingStrip({ groups, currency }: { groups: GroupPerf[]; currency: Currency }) {
   const max = Math.max(...groups.map((g) => Math.abs(g.pnl)), 1)
+  const stars = [1, 2, 3, 4, 5].map((star) => {
+    const g = groups.find((x) => x.key === String(star))
+    return { star, pnl: g?.pnl ?? 0, count: g?.count ?? 0 }
+  })
+  const starLabel = (star: number) => (
+    <span className="inline-flex items-center gap-1">
+      <span className="num">{star}</span>
+      <Star size={10} strokeWidth={1.75} fill="currentColor" className="text-amber" />
+    </span>
+  )
   return (
-    <div className="grid grid-cols-5 gap-2.5">
-      {[1, 2, 3, 4, 5].map((star) => {
-        const g = groups.find((x) => x.key === String(star))
-        const pnl = g?.pnl ?? 0
-        const h = g?.count ? Math.max(12, (Math.abs(pnl) / max) * 100) : 8
-        return (
-          <div key={star} className="flex flex-col items-center min-w-0">
-            <div className="h-28 w-full flex items-end rounded-2xl bg-surface-2 border border-border p-1.5">
-              <div
-                className={clsx('w-full rounded-xl origin-bottom animate-bar-grow', !g?.count ? 'bg-surface-3' : pnl >= 0 ? 'bg-accent' : 'bg-loss')}
-                style={{ height: `${h}%`, opacity: g?.count ? 0.9 : 0.3 }}
-              />
-            </div>
-            <div className="mt-2">
-              <Stars value={star} size={10} />
-            </div>
-            <Pnl value={pnl} className="text-[11px] font-semibold mt-1 truncate max-w-full">
-              {g?.count ? fmtMoney(pnl, currency, { sign: true, compact: true }) : '—'}
+    <>
+      <StripRows currency={currency} max={max} rows={stars.map((s) => ({ key: String(s.star), label: starLabel(s.star), pnl: s.pnl, count: s.count }))} />
+      <div className="hidden grid-cols-5 gap-2.5 sm:grid">
+        {stars.map((s, i) => (
+          <div key={s.star} className="flex min-w-0 flex-col items-center">
+            <StripBar pnl={s.pnl} count={s.count} max={max} height="h-32" delay={i * 40} />
+            <div className="mt-2.5 text-[11px] font-semibold text-muted">{starLabel(s.star)}</div>
+            <Pnl value={s.pnl} className="mt-0.5 max-w-full truncate text-[12px] font-semibold">
+              {s.count ? fmtMoney(s.pnl, currency, { sign: true, compact: true }) : '—'}
             </Pnl>
-            <div className="num text-[10px] text-dim">{g?.count ? `${g.count}` : '·'}</div>
+            <div className="num mt-0.5 text-[10px] text-dim">{s.count || '·'}</div>
           </div>
-        )
-      })}
-    </div>
+        ))}
+      </div>
+    </>
   )
 }
 

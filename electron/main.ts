@@ -16,6 +16,16 @@ import {
   startLitestream,
   stopLitestream,
 } from './litestream/manager'
+import {
+  chooseFolderBackupDestination,
+  confirmPendingFolder,
+  suggestedBackupDialogPath,
+  flushFolderBackup,
+  getFolderBackupStatus,
+  initFolderBackup,
+  scheduleFolderBackup,
+  setFolderBackupEnabled,
+} from './folderBackup'
 
 import fs from 'node:fs'
 
@@ -32,6 +42,8 @@ import {
   journalCryptoStatus,
 
   journalSetupPassword,
+
+  journalMigrateToMasterPassword,
 
   journalSetupSecureStorage,
 
@@ -351,6 +363,11 @@ function applyContentSecurityPolicy() {
 
     )
 
+  } else {
+
+    // Escritorio empaquetado: feedback y otros proxies HTTPS (p. ej. Vercel /api/*).
+    connect.push('https:')
+
   }
 
   const scriptSrc = isDev
@@ -441,6 +458,24 @@ ipcMain.handle('crypto:setupPassword', async (e, password: unknown) => {
 
 
 
+ipcMain.handle('crypto:migrateToMasterPassword', async (e, password: unknown) => {
+
+  if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
+
+  const pwd = sanitizePassword(password)
+
+  if (!pwd) return { ok: false as const, error: 'Contraseña inválida' }
+
+  const result = journalMigrateToMasterPassword(pwd)
+
+  if (!result.ok) console.error('[crypto:migrateToMasterPassword] failed:', result.error)
+
+  return result
+
+})
+
+
+
 ipcMain.handle('crypto:setupSecureStorage', async (e) => {
 
   if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
@@ -469,7 +504,10 @@ ipcMain.handle('crypto:unlockPassword', async (e, password: unknown) => {
 
   const result = journalUnlockPassword(pwd)
 
-  if (result.ok) await maybeStartLitestream()
+  if (result.ok) {
+    await maybeStartLitestream()
+    scheduleFolderBackup()
+  }
 
   return result
 
@@ -515,11 +553,14 @@ ipcMain.handle('crypto:deriveSyncKeyFromPassword', (e, password: unknown) => {
 
 
 
-ipcMain.handle('crypto:getExportMaterial', (e) => {
+ipcMain.handle('crypto:getExportMaterial', (e, password: unknown) => {
 
   if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
 
-  return getExportKeyMaterial(userDataDir())
+  const pwdRaw = typeof password === 'string' ? sanitizePassword(password) : undefined
+  const pwd = pwdRaw ?? undefined
+
+  return getExportKeyMaterial(userDataDir(), pwd)
 
 })
 
@@ -551,7 +592,11 @@ ipcMain.handle('data:save', (e, data: unknown) => {
 
   if (!data || typeof data !== 'object') return false
 
-  return journalSave(data as import('@/types').PersistedData, userDataDir())
+  const ok = journalSave(data as import('@/types').PersistedData, userDataDir())
+
+  if (ok) scheduleFolderBackup()
+
+  return ok
 
 })
 
@@ -575,7 +620,11 @@ ipcMain.on('data:save-sync', (e, data: unknown) => {
 
   }
 
-  e.returnValue = journalSave(data as import('@/types').PersistedData, userDataDir())
+  const ok = journalSave(data as import('@/types').PersistedData, userDataDir())
+
+  if (ok) scheduleFolderBackup()
+
+  e.returnValue = ok
 
 })
 
@@ -715,6 +764,40 @@ ipcMain.handle('litestream:openReplicaFolder', (e) => {
 
 
 
+// ---------- Copia automática en carpeta ----------
+
+ipcMain.handle('folderBackup:getStatus', (e) => {
+  if (!isTrustedSender(e)) {
+    return { enabled: false, folderPath: null, lastBackupAt: null, failed: false, needsPassword: false }
+  }
+  return getFolderBackupStatus()
+})
+
+ipcMain.handle('folderBackup:setEnabled', (e, enabled: unknown) => {
+  if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
+  return setFolderBackupEnabled(enabled === true)
+})
+
+ipcMain.handle('folderBackup:chooseFolder', async (e) => {
+  if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
+  if (!win || win.isDestroyed()) return { ok: false as const, error: 'Ventana no disponible' }
+  const res = await dialog.showOpenDialog(win, {
+    properties: ['openDirectory', 'createDirectory'],
+    title: 'Dónde guardar la copia (Google Drive, OneDrive…)',
+    defaultPath: suggestedBackupDialogPath(),
+    message: 'Puedes elegir «Mi unidad» de Google Drive: crearemos la carpeta Atrium por ti.',
+  })
+  if (res.canceled || !res.filePaths[0]) return { ok: false as const, error: 'cancelled' }
+  return chooseFolderBackupDestination(res.filePaths[0])
+})
+
+ipcMain.handle('folderBackup:confirmFolder', (e) => {
+  if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
+  return confirmPendingFolder()
+})
+
+
+
 // ---------- Archivos ----------
 
 ipcMain.handle(
@@ -821,6 +904,8 @@ if (!gotLock) {
 
     prepareJournalDb(dataDir)
 
+    initFolderBackup(dataDir)
+
     initLitestream(dataDir, journalDataPath())
 
     await startLitestream()
@@ -837,13 +922,16 @@ if (!gotLock) {
 
 app.on('window-all-closed', () => {
 
-  void stopLitestream().finally(() => {
+  void flushFolderBackup()
+    .catch(() => undefined)
+    .then(() => stopLitestream())
+    .finally(() => {
 
-    shutdownJournalDb()
+      shutdownJournalDb()
 
-    if (process.platform !== 'darwin') app.quit()
+      if (process.platform !== 'darwin') app.quit()
 
-  })
+    })
 
 })
 

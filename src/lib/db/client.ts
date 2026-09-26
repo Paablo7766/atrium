@@ -1,11 +1,13 @@
 import type { PersistedData } from '@/types'
 import { parseJournalFile } from './import'
-import type { DiskLoad, DiskLoadRaw, Filter, JournalBackup, LitestreamStatus } from './types'
+import type { DiskLoad, DiskLoadRaw, Filter, FolderBackupStatus, JournalBackup, LitestreamStatus } from './types'
 import {
+  deriveKeyFromPassword,
   getCryptoStatus as getWebCryptoStatus,
   getWebKeyHex,
   wipeWebCryptoMeta,
 } from '@/lib/crypto/keyManagerWeb'
+import { decryptBackupFile, parseBackupFile } from './backupFormat'
 import {
   buildEncryptedBackupFile,
   deleteJournalDb,
@@ -16,7 +18,8 @@ import {
   saveJournal as saveWebJournal,
 } from './web'
 
-export type { DiskLoad, DiskLoadRaw, Filter, JournalBackup, LitestreamStatus, DesktopApi } from './types'
+export type { DiskLoad, DiskLoadRaw, Filter, FolderBackupStatus, JournalBackup, LitestreamStatus, DesktopApi } from './types'
+export { FOLDER_BACKUP_FILENAME } from './backupFormat'
 export { parseJournalFile, parseJournalText } from './import'
 export type { JournalParseOk, JournalParseFail, JournalParseResult } from './import'
 
@@ -223,7 +226,8 @@ export async function importFile(filters: Filter[]): Promise<{ name: string; con
   return new Promise((resolve) => {
     const input = document.createElement('input')
     input.type = 'file'
-    input.accept = filters.flatMap((f) => f.extensions.map((e) => `.${e}`)).join(',')
+    const accept = filters.flatMap((f) => f.extensions.map((e) => `.${e}`)).join(',')
+    if (accept) input.accept = accept
     input.onchange = async () => {
       const file = input.files?.[0]
       if (!file) return resolve(null)
@@ -271,13 +275,13 @@ export async function restoreBackup(id: string): Promise<{ ok: true } | { ok: fa
   }
 }
 
-export async function exportEncryptedBackup(data?: PersistedData): Promise<string> {
+export async function exportEncryptedBackup(data?: PersistedData, masterPassword?: string): Promise<string> {
   if (isDesktop()) {
     const crypto = window.api?.crypto
     if (!crypto?.getExportMaterial) {
       throw new Error('La exportación cifrada no está disponible en esta versión de escritorio.')
     }
-    const material = await crypto.getExportMaterial()
+    const material = await crypto.getExportMaterial(masterPassword)
     if (!material.ok) throw new Error(material.error)
     let journal = data
     if (!journal) {
@@ -290,13 +294,97 @@ export async function exportEncryptedBackup(data?: PersistedData): Promise<strin
   return exportWebBackup(data)
 }
 
-export async function importEncryptedBackup(
-  raw: string,
-  password?: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+export type BackupImportResult = { ok: true } | { ok: false; error: string; needsPassword?: boolean }
+
+export async function importEncryptedBackup(raw: string, password?: string): Promise<BackupImportResult> {
+  if (isDesktop()) return importDesktopBackup(raw, password)
   const result = await importWebBackup(raw, password)
   if (!result.ok) return result
   return { ok: true }
+}
+
+/** Descifra en el renderer y guarda en journal.db; la contraseña local del diario no cambia. */
+async function importDesktopBackup(raw: string, password?: string): Promise<BackupImportResult> {
+  const parsed = parseBackupFile(raw)
+  if (!parsed.ok) return parsed
+  const file = parsed.file
+
+  const trimmed = password?.trim() ?? ''
+  let keyHex: string | null = null
+  if (trimmed) {
+    keyHex = await deriveKeyFromPassword(trimmed, file.salt)
+  } else {
+    const material = await window.api?.crypto?.getExportMaterial?.()
+    if (material?.ok && material.salt === file.salt) keyHex = material.keyHex
+  }
+  if (!keyHex) {
+    return { ok: false, error: 'Introduce la contraseña maestra con la que se hizo la copia.', needsPassword: true }
+  }
+
+  let decrypted: PersistedData
+  try {
+    decrypted = await decryptBackupFile(file, keyHex)
+  } catch {
+    return { ok: false, error: 'No se pudo descifrar la copia. Comprueba la contraseña.', needsPassword: true }
+  }
+  const checked = parseJournalFile(decrypted)
+  if (!checked.ok) return { ok: false, error: checked.error }
+  try {
+    await saveData(checked.data)
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'No se pudo guardar la copia restaurada.' }
+  }
+  return { ok: true }
+}
+
+const EMPTY_FOLDER_BACKUP_STATUS: FolderBackupStatus = {
+  enabled: false,
+  folderPath: null,
+  lastBackupAt: null,
+  failed: false,
+  needsPassword: false,
+}
+
+export function isFolderBackupSupported(): boolean {
+  return isDesktop() && !!window.api?.folderBackup
+}
+
+export async function getFolderBackupStatus(): Promise<FolderBackupStatus> {
+  if (!isFolderBackupSupported()) return EMPTY_FOLDER_BACKUP_STATUS
+  try {
+    return await window.api!.folderBackup!.getStatus()
+  } catch {
+    return EMPTY_FOLDER_BACKUP_STATUS
+  }
+}
+
+export async function setFolderBackupEnabled(enabled: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isFolderBackupSupported()) return { ok: false, error: 'La copia automática no está disponible aquí.' }
+  try {
+    return await window.api!.folderBackup!.setEnabled(enabled)
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'No se pudo cambiar la copia automática.' }
+  }
+}
+
+export async function chooseFolderBackupFolder(): Promise<
+  { ok: true; needsConfirm: boolean } | { ok: false; error: string }
+> {
+  if (!isFolderBackupSupported()) return { ok: false, error: 'La copia automática no está disponible aquí.' }
+  try {
+    return await window.api!.folderBackup!.chooseFolder()
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'No se pudo elegir la carpeta.' }
+  }
+}
+
+export async function confirmFolderBackupFolder(): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isFolderBackupSupported()) return { ok: false, error: 'La copia automática no está disponible aquí.' }
+  try {
+    return await window.api!.folderBackup!.confirmFolder()
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'No se pudo usar la carpeta.' }
+  }
 }
 
 const EMPTY_LITESTREAM_STATUS: LitestreamStatus = {

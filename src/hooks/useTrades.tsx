@@ -9,7 +9,7 @@ import {
 } from 'react'
 import type { Trade } from '@/types'
 import { useAuth } from '@/auth/AuthProvider'
-import { readCloudSyncPref } from '@/lib/cloudSyncPref'
+import { mergeCloudSyncSettings, readCloudSyncPref, resolveCloudSyncEnabled } from '@/lib/cloudSyncPref'
 import { isSupabaseConfigured } from '@/lib/supabase'
 import { isCloudSyncActive, syncJournalWithCloud, computeJournalMutationAt, bumpLocalMutationClock } from '@/lib/tradeSync'
 import { useStore, flushPersist } from '@/store'
@@ -73,11 +73,13 @@ export function TradesProvider({ children }: { children: ReactNode }) {
           const activeId = result.data.settings.activeAccountId
           const accounts = result.data.accounts ?? s.accounts
           const active = accounts.find((a) => a.id === activeId) ?? accounts[0]
+          const syncEnabled = resolveCloudSyncEnabled(s.settings.cloudSyncEnabled)
           return {
-            settings: {
+            settings: mergeCloudSyncSettings({
               ...result.data.settings,
               lastCloudSyncAt: new Date(result.at).toISOString(),
-            },
+              cloudSyncEnabled: syncEnabled || result.data.settings.cloudSyncEnabled,
+            }),
             accounts,
             trades: active?.trades ?? [],
             notes: active?.notes ?? [],
@@ -86,7 +88,10 @@ export function TradesProvider({ children }: { children: ReactNode }) {
         })
       } else if (result.applied === 'local') {
         useStore.setState((s) => ({
-          settings: { ...s.settings, lastCloudSyncAt: new Date(result.at).toISOString() },
+          settings: mergeCloudSyncSettings({
+            ...s.settings,
+            lastCloudSyncAt: new Date(result.at).toISOString(),
+          }),
         }))
       }
     } catch (err) {

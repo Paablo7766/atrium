@@ -14,7 +14,13 @@ export type EncryptedBlob = {
 }
 
 function encodeBytes(bytes: Uint8Array): string {
-  return btoa(String.fromCharCode(...bytes))
+  // Por trozos: String.fromCharCode(...bytes) desborda la pila con diarios de más de ~150 KB.
+  const CHUNK = 0x8000
+  let bin = ''
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK))
+  }
+  return btoa(bin)
 }
 
 function decodeBytes(b64: string): Uint8Array {

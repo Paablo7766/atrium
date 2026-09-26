@@ -1,8 +1,16 @@
-import type { BrokerId, BrokerParseContext, ImportEngineResult, NormalizedExecution, BrokerAdapter } from './types'
+import type {
+  BrokerId,
+  BrokerParseContext,
+  ImportEngineResult,
+  NormalizedExecution,
+  BrokerAdapter,
+  ReadyTradeInput,
+} from './types'
 import { parseCsvText, rowsToObjects, findHeaderRowIndex } from './csvParse'
 import { detectBroker, getAdapter } from './adapters'
 import { createId } from './parse'
 import { groupAllExecutionsIntoTrades, groupExecutionsIntoTrades } from './groupTrades'
+import { assembleImportTrades } from './readyTrades'
 
 export type { BrokerId, NormalizedExecution, ImportEngineResult }
 
@@ -26,7 +34,14 @@ export class CSVImportEngine {
   parse(fileContent: ParseInput, broker: BrokerId | 'AUTO' | string): ImportEngineResult {
     const texts = this.normalizeInputs(fileContent)
     if (!texts.length) {
-      return { broker: 'OTHER', executions: [], errors: ['Archivo vacío.'], warnings: [], skippedRows: 0 }
+      return {
+        broker: 'OTHER',
+        executions: [],
+        readyTrades: [],
+        errors: ['Archivo vacío.'],
+        warnings: [],
+        skippedRows: 0,
+      }
     }
 
     if (texts.length === 1) return this.parseOne(texts[0], broker)
@@ -34,6 +49,7 @@ export class CSVImportEngine {
     const errors: string[] = []
     const warnings: string[] = []
     const executions: NormalizedExecution[] = []
+    const readyTrades: ReadyTradeInput[] = []
     let skippedRows = 0
     let resolvedBroker: BrokerId = 'OTHER'
 
@@ -41,18 +57,20 @@ export class CSVImportEngine {
       const part = this.parseOne(text, broker)
       if (part.broker !== 'OTHER') resolvedBroker = part.broker
       executions.push(...part.executions)
+      readyTrades.push(...part.readyTrades)
       errors.push(...part.errors.map((e) => (texts.length > 1 ? `[hoja ${i + 1}] ${e}` : e)))
       warnings.push(...part.warnings.map((w) => (texts.length > 1 ? `[hoja ${i + 1}] ${w}` : w)))
       skippedRows += part.skippedRows
     })
 
-    if (!executions.length && errors.length) {
-      return { broker: resolvedBroker, executions: [], errors, warnings, skippedRows }
+    if (!executions.length && !readyTrades.length && errors.length) {
+      return { broker: resolvedBroker, executions: [], readyTrades: [], errors, warnings, skippedRows }
     }
 
     return {
       broker: resolvedBroker,
       executions,
+      readyTrades,
       errors,
       warnings:
         texts.length > 1
@@ -62,10 +80,13 @@ export class CSVImportEngine {
     }
   }
 
-  /** Atajo: CSV(s) → executions → trades consolidados (FIFO). */
+  /**
+   * CSV(s) → fills FIFO + trades ya formados (READY_POSITIONS).
+   * Closed y Open del mismo ticker no se mezclan en un libro FIFO.
+   */
   importAndGroup(fileContent: ParseInput, broker: BrokerId | 'AUTO' | string) {
     const result = this.parse(fileContent, broker)
-    const trades = groupAllExecutionsIntoTrades(result.executions, { idFactory: createId })
+    const trades = assembleImportTrades(result.executions, result.readyTrades, { idFactory: createId })
     return { ...result, trades }
   }
 
@@ -99,6 +120,7 @@ export class CSVImportEngine {
       return {
         broker: 'OTHER',
         executions: [],
+        readyTrades: [],
         errors: ['El CSV no tiene cabecera + filas de datos.'],
         warnings,
         skippedRows: 0,
@@ -127,6 +149,7 @@ export class CSVImportEngine {
       return {
         broker: 'OTHER',
         executions: [],
+        readyTrades: [],
         errors: [`No hay adaptador para broker "${broker}". Usa XTB, INTERACTIVE_BROKERS, DEGIRO, FOMO o AXIOM.`],
         warnings,
         skippedRows: dataRowCount,
@@ -141,29 +164,35 @@ export class CSVImportEngine {
     }
 
     let executions: NormalizedExecution[] = []
+    let readyTrades: ReadyTradeInput[] = []
     try {
-      executions = resolved.parse(dataRows, ctx)
+      const parsed = resolved.parse(dataRows, ctx)
+      executions = parsed.executions
+      readyTrades = parsed.readyTrades
     } catch (err) {
       errors.push(err instanceof Error ? err.message : 'Error desconocido en el adaptador.')
-      return { broker: resolved.id, executions: [], errors, warnings, skippedRows: dataRowCount }
+      return { broker: resolved.id, executions: [], readyTrades: [], errors, warnings, skippedRows: dataRowCount }
     }
 
     executions = this.sanitize(executions, errors)
+    readyTrades = this.sanitizeReady(readyTrades, errors)
 
+    const accepted = executions.length + readyTrades.length
     const typedRows = dataRows.filter((r) => {
       const type = Object.entries(r).find(([k]) => /^type$|^tipo$|^side$/i.test(k.replace(/[^a-z]/gi, '')))
       return type && String(type[1]).trim() !== ''
     }).length
-    const skippedRows = Math.max(0, dataRowCount - Math.max(typedRows, executions.length))
-    if (executions.length === 0 && dataRowCount > 0) {
+    const skippedRows = Math.max(0, dataRowCount - Math.max(typedRows, accepted))
+    if (accepted === 0 && dataRowCount > 0) {
       warnings.push(`${dataRowCount} fila(s) omitidas por datos incompletos o no parseables.`)
-    } else if (typedRows > 0 && executions.length === 0) {
+    } else if (typedRows > 0 && accepted === 0) {
       warnings.push(`${typedRows} fila(s) con Type no parseables.`)
     }
 
     return {
       broker: resolved.id,
       executions,
+      readyTrades,
       errors,
       warnings,
       skippedRows,
@@ -201,7 +230,54 @@ export class CSVImportEngine {
     })
     return out
   }
+
+  private sanitizeReady(trades: ReadyTradeInput[], errors: string[]): ReadyTradeInput[] {
+    const out: ReadyTradeInput[] = []
+    trades.forEach((t, i) => {
+      if (!t.ticker?.trim()) {
+        errors.push(`Ready trade #${i + 1}: ticker vacío.`)
+        return
+      }
+      if (!Number.isFinite(t.avgEntryPrice) || t.avgEntryPrice < 0) {
+        errors.push(`Ready trade #${i + 1} (${t.ticker}): precio de entrada inválido.`)
+        return
+      }
+      if (!t.openedAt || Number.isNaN(Date.parse(t.openedAt))) {
+        errors.push(`Ready trade #${i + 1} (${t.ticker}): openedAt inválido.`)
+        return
+      }
+      if (t.status === 'CLOSED') {
+        if (!Number.isFinite(t.quantityClosed) || t.quantityClosed <= 0) {
+          errors.push(`Ready trade #${i + 1} (${t.ticker}): quantityClosed inválida.`)
+          return
+        }
+        if (t.avgExitPrice == null || !Number.isFinite(t.avgExitPrice) || t.avgExitPrice < 0) {
+          errors.push(`Ready trade #${i + 1} (${t.ticker}): precio de salida inválido.`)
+          return
+        }
+        if (!t.closedAt || Number.isNaN(Date.parse(t.closedAt))) {
+          errors.push(`Ready trade #${i + 1} (${t.ticker}): closedAt inválido.`)
+          return
+        }
+      } else if (!Number.isFinite(t.quantity) || t.quantity <= 0) {
+        errors.push(`Ready trade #${i + 1} (${t.ticker}): quantity inválida.`)
+        return
+      }
+      out.push({
+        ...t,
+        ticker: t.ticker.trim().toUpperCase(),
+        quantity: Math.abs(t.quantity),
+        quantityClosed: Math.abs(t.quantityClosed),
+        feesTotal: Number.isFinite(t.feesTotal) ? Math.abs(t.feesTotal) : 0,
+        multiplier: t.multiplier > 0 && Number.isFinite(t.multiplier) ? t.multiplier : 1,
+        baseCurrency: (t.baseCurrency || 'USD').toUpperCase().slice(0, 3),
+        quoteCurrency: (t.quoteCurrency || 'USD').toUpperCase().slice(0, 3),
+      })
+    })
+    return out
+  }
 }
 
 export { groupExecutionsIntoTrades, groupAllExecutionsIntoTrades } from './groupTrades'
+export { assembleImportTrades, finalizeReadyTrades } from './readyTrades'
 export { BROKER_ADAPTERS, getAdapter, detectBroker } from './adapters'

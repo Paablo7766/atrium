@@ -164,4 +164,26 @@ describe('web repository (IndexedDB + AES-GCM)', () => {
     expect(loaded?.accounts?.[0]?.trades[0]?.symbol).toBe('EURUSD-SECRET')
     expect(localStorage.getItem(WEB_CRYPTO_META_KEY)).toBeTruthy()
   })
+
+  it('pide la contraseña al restaurar una copia hecha en otro dispositivo', async () => {
+    await saveJournal(sampleJournal())
+    const raw = await exportEncryptedBackup()
+
+    resetWebCryptoForTests()
+    await deleteJournalDb()
+    globalThis.localStorage = new MemoryStorage()
+    expect((await setupMasterPassword('OtraClave22')).ok).toBe(true)
+
+    const withoutPassword = await importEncryptedBackup(raw)
+    expect(withoutPassword.ok).toBe(false)
+    if (!withoutPassword.ok) expect(withoutPassword.needsPassword).toBe(true)
+
+    const wrongPassword = await importEncryptedBackup(raw, 'Incorrecta99')
+    expect(wrongPassword.ok).toBe(false)
+    if (!wrongPassword.ok) expect(wrongPassword.needsPassword).toBe(true)
+
+    const restored = await importEncryptedBackup(raw, 'ClaveLarga1')
+    expect(restored.ok).toBe(true)
+    expect((await loadJournal())?.accounts?.[0]?.trades[0]?.symbol).toBe('EURUSD-SECRET')
+  })
 })

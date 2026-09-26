@@ -1,10 +1,12 @@
 import { clsx } from 'clsx'
 import { ChevronDown } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { Card, Empty, Pnl, Segmented } from '@/components/ui'
+import { Empty, Pnl, Segmented } from '@/components/ui'
 import { DualProgressBar } from '@/components/analytics/DualProgressBar'
+import { AnalyticsCard } from '@/components/analytics/primitives'
 import { fmtMoney, fmtNum, fmtR } from '@/lib/format'
 import { displayGroupKey, getAppLocale } from '@/lib/i18n'
+import { useT } from '@/lib/useI18n'
 import type { GroupPerf } from '@/lib/stats'
 import type { Currency } from '@/types'
 
@@ -32,69 +34,70 @@ export function PerformanceByCategory({
   title: string
   subtitle: string
 }) {
+  const t = useT()
   const sorted = sortGroups(groups, sort)
+  const groupLabel = groupOptions.find((o) => o.value === groupBy)?.label ?? ''
 
   return (
-    <Card
+    <AnalyticsCard
       title={title}
       subtitle={subtitle}
       action={<Segmented size="sm" value={groupBy} onChange={onGroupByChange} options={groupOptions} />}
     >
       {sorted.length ? (
-        <div className="overflow-auto max-h-[380px] -mr-2 pr-2">
-          <table className="w-full text-[13px]">
-            <thead className="sticky top-0 bg-surface z-10">
-              <tr className="text-[11px] uppercase tracking-wider text-dim">
-                <th className="text-left font-medium py-2 min-w-[9rem]">Estrategia</th>
-                <th className="text-left font-medium py-2 w-[28%] min-w-[7rem]">G / P</th>
-                <SortHead k="count" sort={sort} onSort={onSort} right>
-                  Ops
+        <div className="-mx-5 max-h-[400px] overflow-y-auto overflow-x-hidden px-5 lg:-mx-6 lg:px-6">
+          <table className="w-full table-fixed text-[13px]">
+            <thead className="sticky top-0 z-10 bg-surface">
+              <tr className="text-[10px] uppercase tracking-[0.14em] text-dim">
+                <th className="truncate py-2.5 pr-3 text-left font-semibold">{groupLabel}</th>
+                <th className="hidden w-[24%] py-2.5 pr-6 text-left font-semibold md:table-cell">{t('an.col.gp')}</th>
+                <SortHead k="count" sort={sort} onSort={onSort} className="hidden w-16 sm:table-cell">
+                  {t('an.col.ops')}
                 </SortHead>
-                <SortHead k="winRate" sort={sort} onSort={onSort} right>
-                  Win %
+                <SortHead k="winRate" sort={sort} onSort={onSort} className="w-[4.25rem] sm:w-20">
+                  {t('an.col.win')}
                 </SortHead>
-                <SortHead k="profitFactor" sort={sort} onSort={onSort} right>
-                  PF
+                <SortHead k="profitFactor" sort={sort} onSort={onSort} className="hidden w-16 sm:table-cell">
+                  {t('an.col.pf')}
                 </SortHead>
-                <SortHead k="avgR" sort={sort} onSort={onSort} right>
-                  R medio
+                <SortHead k="avgR" sort={sort} onSort={onSort} className="hidden w-20 lg:table-cell">
+                  {t('an.avgR')}
                 </SortHead>
-                <SortHead k="pnl" sort={sort} onSort={onSort} right>
+                <SortHead k="pnl" sort={sort} onSort={onSort} className="w-[6.5rem] sm:w-28">
                   P&L
                 </SortHead>
               </tr>
             </thead>
             <tbody>
               {sorted.map((g) => (
-                <tr key={g.key} className="border-t border-border hover:bg-surface-2/60 transition-colors">
-                  <td className="py-3 font-medium truncate max-w-[11rem]">
+                <tr key={g.key} className="border-t border-white/[0.05] transition-colors hover:bg-white/[0.02]">
+                  <td className="truncate py-2.5 pr-3 font-medium" title={displayGroupKey(getAppLocale(), g.key)}>
                     {displayGroupKey(getAppLocale(), g.key)}
                   </td>
-                  <td className="py-3 pr-4">
-                    <DualProgressBar grossProfit={g.grossProfit} grossLoss={g.grossLoss} />
-                    <div className="num text-[10px] text-dim mt-1 flex justify-between gap-2">
-                      <span className="text-[#4ade80]">{g.wins}W</span>
-                      <span className="text-[#f87171]">{g.losses}L</span>
+                  <td className="hidden py-2.5 pr-6 md:table-cell">
+                    <div className="flex items-center gap-3">
+                      <DualProgressBar className="flex-1" grossProfit={g.grossProfit} grossLoss={g.grossLoss} />
+                      <span className="num shrink-0 text-[11px] text-muted">
+                        {g.wins}
+                        <span className="text-dim">/</span>
+                        {g.losses}
+                      </span>
                     </div>
                   </td>
-                  <td className="py-3 text-right num text-muted">{g.count}</td>
-                  <td className="py-3 text-right num">
-                    <span className={clsx(g.winRate >= 50 ? 'text-[#4ade80]' : 'text-muted')}>
-                      {g.winRate.toFixed(0)}%
-                    </span>
-                  </td>
-                  <td className="py-3 text-right num text-muted">
+                  <td className="num hidden py-2.5 text-right text-muted sm:table-cell">{g.count}</td>
+                  <td className="num py-2.5 text-right text-text-2">{g.winRate.toFixed(0)}%</td>
+                  <td className="num hidden py-2.5 text-right text-muted sm:table-cell">
                     {g.profitFactor === Infinity ? '∞' : fmtNum(g.profitFactor, 2)}
                   </td>
                   <td
                     className={clsx(
-                      'py-3 text-right num',
-                      g.avgR === null ? 'text-dim' : g.avgR >= 0 ? 'text-[#4ade80]' : 'text-[#f87171]',
+                      'num hidden py-2.5 text-right lg:table-cell',
+                      g.avgR === null ? 'text-dim' : g.avgR >= 0 ? 'text-accent' : 'text-loss',
                     )}
                   >
                     {fmtR(g.avgR)}
                   </td>
-                  <td className="py-3 text-right">
+                  <td className="truncate py-2.5 text-right">
                     <Pnl value={g.pnl} className="font-semibold">
                       {fmtMoney(g.pnl, currency, { sign: true })}
                     </Pnl>
@@ -105,40 +108,41 @@ export function PerformanceByCategory({
           </table>
         </div>
       ) : (
-        <Empty title="Sin datos en el periodo" />
+        <Empty title={t('an.noPeriod')} />
       )}
-    </Card>
+    </AnalyticsCard>
   )
 }
 
 function SortHead({
   k,
   children,
-  right,
   sort,
   onSort,
+  className,
 }: {
   k: CategorySortKey
   children: ReactNode
-  right?: boolean
   sort: { key: CategorySortKey; dir: 1 | -1 }
   onSort: (next: { key: CategorySortKey; dir: 1 | -1 }) => void
+  className?: string
 }) {
-  const toggle = () => onSort({ key: k, dir: sort.key === k ? (sort.dir === -1 ? 1 : -1) : -1 })
+  const active = sort.key === k
+  const toggle = () => onSort({ key: k, dir: active ? (sort.dir === -1 ? 1 : -1) : -1 })
   return (
-    <th className={clsx('font-medium py-2', right ? 'text-right' : 'text-left')}>
+    <th className={clsx('py-2.5 text-right font-semibold', className)} aria-sort={active ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'}>
       <button
         type="button"
         onClick={toggle}
-        className="inline-flex items-center gap-1 hover:text-text transition-colors"
+        className={clsx(
+          'inline-flex items-center gap-1 rounded-md uppercase tracking-[0.14em] transition-colors hover:text-text focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/25',
+          active ? 'text-text-2' : 'text-dim',
+        )}
       >
         {children}
         <ChevronDown
           size={11}
-          className={clsx(
-            'transition-transform',
-            sort.key === k ? (sort.dir === 1 ? 'rotate-180 opacity-100' : 'opacity-100') : 'opacity-30',
-          )}
+          className={clsx('transition-transform', active ? (sort.dir === 1 ? 'rotate-180 opacity-100' : 'opacity-100') : 'opacity-30')}
         />
       </button>
     </th>

@@ -129,6 +129,41 @@ function rowToBlob(row: EncryptedSnapshotRow): EncryptedBlob {
   }
 }
 
+/**
+ * Comprueba la contraseña maestra intentando descifrar el snapshot remoto existente.
+ * Si no hay snapshot, la contraseña se acepta (cuenta nueva sin datos en la nube).
+ */
+export async function verifyMasterPasswordAgainstCloud(
+  dbKeyHex: string,
+): Promise<{ ok: true; hasRemoteData: boolean } | { ok: false; error: string }> {
+  if (!isCloudSyncActive()) return { ok: true, hasRemoteData: false }
+
+  try {
+    const uid = await requireSessionUserId()
+    const { data, error } = await supabase
+      .from(SNAPSHOT_TABLE)
+      .select('ciphertext,nonce,cipher_version')
+      .eq('user_id', uid)
+      .maybeSingle()
+
+    if (error) return { ok: false, error: error.message }
+    if (!data) return { ok: true, hasRemoteData: false }
+
+    const key = await deriveSyncKeyFromDbKeyHex(dbKeyHex)
+    try {
+      await decryptJson<PersistedData>(rowToBlob(data as EncryptedSnapshotRow), key)
+      return { ok: true, hasRemoteData: true }
+    } catch {
+      return { ok: false, error: 'Contraseña incorrecta.' }
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : 'No se pudo verificar la contraseña con la nube.',
+    }
+  }
+}
+
 export async function pullEncryptedJournal(userId?: string): Promise<SyncPullResult> {
   if (!isCloudSyncActive()) return { ok: true, snapshot: null }
 
@@ -154,8 +189,8 @@ export async function pullEncryptedJournal(userId?: string): Promise<SyncPullRes
         data: decrypted,
       },
     }
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : 'No se pudo descargar la réplica cifrada.' }
+  } catch {
+    return { ok: false, error: 'Contraseña incorrecta o datos cifrados incompatibles.' }
   }
 }
 

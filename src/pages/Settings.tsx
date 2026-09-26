@@ -8,12 +8,11 @@ import {
   BookOpen,
   Building2,
   Check,
+  ChevronDown,
   Coins,
   Copy,
   Database,
-  Download,
   Ellipsis,
-  FileSpreadsheet,
   FolderOpen,
   History,
   HardDrive,
@@ -23,28 +22,42 @@ import {
   Globe,
   Layers,
   Plus,
+  MessageSquare,
   ShieldAlert,
   SlidersHorizontal,
   Sparkles,
   Trash2,
   Upload,
 } from 'lucide-react'
+import { version as appVersion } from '../../package.json'
 import { useStore, flushPersist, getBackup } from '@/store'
 import { Topbar } from '@/components/Topbar'
-import { Button, ColorSwatches, Confirm, Empty, Field, Input, Select, Textarea } from '@/components/ui'
+import { Button, ColorSwatches, Confirm, Empty, Field, Input, Modal, Select, Textarea } from '@/components/ui'
 import { AvatarPhoto, AvatarPicker, traderInitials } from '@/components/Avatar'
 import { useAuth } from '@/auth/AuthProvider'
 import { useTrades } from '@/hooks/useTrades'
 import { isSupabaseConfigured } from '@/lib/supabase'
+import { CLOUD_SYNC_FEATURE_ENABLED } from '@/lib/cloudSyncPref'
+import { FOLDER_BACKUP_UI_ENABLED, SHOW_LITESTREAM_PANEL } from '@/lib/featureFlags'
+import { migrateToMasterPassword } from '@/lib/crypto/keyManager'
+import { isGoogleDrivePickerConfigured, pickBackupFromGoogleDrive } from '@/lib/googleDrivePicker'
+import { takePendingRestore } from '@/lib/web/shareImport'
+import { ensureCryptoSaltSynced } from '@/lib/syncSalt'
 import {
+  chooseFolderBackupFolder,
   chooseLitestreamDestination,
+  confirmFolderBackupFolder,
   exportEncryptedBackup,
   exportFile,
+  getFolderBackupStatus,
   getLitestreamStatus,
   importEncryptedBackup,
   importFile,
   isDesktop,
+  isFolderBackupSupported,
   listBackups,
+  setFolderBackupEnabled,
+  type FolderBackupStatus,
   openLitestreamReplicaFolder,
   resetLitestreamDestination,
   restoreBackup,
@@ -55,11 +68,11 @@ import {
 import { csvToTrades, dedupeTrades, tradesToCsv } from '@/lib/csv'
 import { useImportCSV, type ImportBroker, BROKER_FILE_ACCEPT } from '@/lib/import'
 import { fmtDate, fmtMoney, todayKey } from '@/lib/format'
-import { accountEquity, netCashflow, netTradingPnl, signedCashflow } from '@/lib/capital'
+import { accountEquity, signedCashflow } from '@/lib/capital'
 import { parseJournalText } from '@/lib/db/client'
 import { LanguageSwitch } from '@/components/LanguageSwitch'
 import { useT } from '@/lib/useI18n'
-import { accountTypeHint, accountTypeLabel, marketBlurb, marketLabel } from '@/lib/i18n'
+import { accountTypeHint, accountTypeLabel, marketLabel } from '@/lib/i18n'
 import {
   ACCOUNT_COLORS,
   ACCOUNT_TYPES,
@@ -76,7 +89,7 @@ import {
   type WeekStart,
 } from '@/types'
 
-type Section = 'accounts' | 'mesa' | 'playbook' | 'data' | 'advanced'
+type Section = 'accounts' | 'preferences' | 'playbook' | 'data' | 'advanced'
 
 const RISK_PRESETS = [0.25, 0.5, 1, 1.5, 2]
 const DAILY_PRESETS = [1, 2, 3, 5]
@@ -135,27 +148,26 @@ export function SettingsPage() {
   const { refetch: refetchCloud, isLoading: cloudSyncBusy, error: cloudSyncError } = useTrades()
   const supabaseReady = isSupabaseConfigured()
 
-  const NAV: { id: Section; label: string; hint: string; icon: typeof Building2 }[] = [
-    { id: 'accounts', label: t('set.nav.accounts'), hint: t('set.nav.accountsHint'), icon: Building2 },
-    { id: 'mesa', label: t('set.nav.mesa'), hint: t('set.nav.mesaHint'), icon: SlidersHorizontal },
-    { id: 'playbook', label: t('set.nav.playbook'), hint: t('set.nav.playbookHint'), icon: BookOpen },
-    { id: 'data', label: t('set.nav.data'), hint: t('set.nav.dataHint'), icon: Database },
-    { id: 'advanced', label: t('set.nav.advanced'), hint: t('set.nav.advancedHint'), icon: ShieldAlert },
+  const NAV: { id: Section; label: string; icon: typeof Building2 }[] = [
+    { id: 'accounts', label: t('set.nav.accounts'), icon: Building2 },
+    { id: 'preferences', label: t('set.nav.mesa'), icon: SlidersHorizontal },
+    { id: 'playbook', label: t('set.nav.playbook'), icon: BookOpen },
+    { id: 'data', label: t('set.nav.data'), icon: Database },
+    { id: 'advanced', label: t('set.nav.advanced'), icon: ShieldAlert },
   ]
 
   const [section, setSection] = useState<Section>('accounts')
   const [confirmClear, setConfirmClear] = useState(false)
+  const openFeedback = useStore((s) => s.openFeedback)
   const [confirmDemo, setConfirmDemo] = useState(false)
   const [confirmDeleteAcc, setConfirmDeleteAcc] = useState(false)
   const [restoreId, setRestoreId] = useState<string | null>(null)
   const [confirmLitestreamRestore, setConfirmLitestreamRestore] = useState(false)
-  const [confirmWebRestore, setConfirmWebRestore] = useState(false)
-  const [webBackupRaw, setWebBackupRaw] = useState<string | null>(null)
-  const [webBackupPassword, setWebBackupPassword] = useState('')
   const [backups, setBackups] = useState<JournalBackup[]>([])
   const [litestream, setLitestream] = useState<LitestreamStatus | null>(null)
   const [dataPath, setDataPath] = useState('')
   const [copied, setCopied] = useState(false)
+  const [dataMore, setDataMore] = useState(false)
   const [creating, setCreating] = useState(false)
   const [draft, setDraft] = useState({
     name: '',
@@ -178,8 +190,6 @@ export function SettingsPage() {
     [accounts, settings.activeAccountId],
   )
 
-  const cashNet = useMemo(() => netCashflow(cashflows), [cashflows])
-  const tradingPnl = useMemo(() => netTradingPnl(trades), [trades])
   const equity = useMemo(
     () => accountEquity(settings.startingBalance, trades, cashflows),
     [settings.startingBalance, trades, cashflows],
@@ -188,6 +198,7 @@ export function SettingsPage() {
   const dailyPct = settings.startingBalance > 0 && settings.dailyLossLimit > 0 ? (settings.dailyLossLimit / settings.startingBalance) * 100 : 0
   const typicalFees = defaultFeesForMarket(settings.defaultMarket)
   const preferred = settings.preferredMarkets?.length ? settings.preferredMarkets : [settings.defaultMarket]
+  const modKey = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl'
 
   useEffect(() => {
     if (isDesktop()) window.api!.dataPath().then(setDataPath)
@@ -200,7 +211,7 @@ export function SettingsPage() {
   }, [section])
 
   useEffect(() => {
-    if (section !== 'data' || !isDesktop()) return
+    if (!SHOW_LITESTREAM_PANEL || section !== 'data' || !isDesktop()) return
     let cancelled = false
     const refresh = () => {
       void getLitestreamStatus().then((status) => {
@@ -246,13 +257,6 @@ export function SettingsPage() {
     } catch (e) {
       toast(e instanceof Error ? e.message : t('set.encryptedExportFail'), 'error')
     }
-  }
-
-  const pickAtriumBackup = async () => {
-    const file = await importFile([{ name: 'Atrium backup', extensions: ['atrium-backup', 'json'] }])
-    if (!file) return
-    setWebBackupRaw(file.content)
-    setConfirmWebRestore(true)
   }
 
   const exportCsv = async () => {
@@ -356,10 +360,6 @@ export function SettingsPage() {
       <div className="page-stage">
         <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)] gap-6 overflow-hidden">
           <nav className="flex lg:flex-col gap-1 overflow-x-auto lg:overflow-visible pb-1 lg:pb-0 shrink-0 animate-rise">
-            <div className="hidden lg:block px-3 mb-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim">{t('set.kicker')}</div>
-              <p className="text-[11px] text-muted mt-1 leading-relaxed">{t('set.localOnly')}</p>
-            </div>
             {NAV.map((item) => {
               const Icon = item.icon
               const on = section === item.id
@@ -370,20 +370,17 @@ export function SettingsPage() {
                   type="button"
                   onClick={() => setSection(item.id)}
                   className={clsx(
-                    'relative flex items-center gap-2.5 min-h-11 px-3 rounded-xl text-left transition-all',
+                    'relative flex items-center gap-2.5 h-10 px-3 rounded-xl text-left transition-all',
                     on ? 'bg-surface-3 text-text shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]' : 'text-muted hover:text-text hover:bg-surface-2',
                   )}
                 >
-                  {on && <span className="absolute left-1 top-2.5 bottom-2.5 w-0.5 rounded-full bg-accent" />}
+                  {on && <span className="absolute left-1 top-2 bottom-2 w-0.5 rounded-full bg-accent" />}
                   <Icon size={15} className={on ? 'text-accent' : 'text-dim'} />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-2">
-                      <span className="text-[13px] font-medium">{item.label}</span>
-                      {count !== undefined && count > 0 && (
-                        <span className={clsx('num text-[10px] px-1.5 rounded-full', on ? 'bg-black/10 text-text' : 'bg-surface-4 text-dim')}>{count}</span>
-                      )}
-                    </span>
-                    <span className="hidden lg:block text-[11px] text-dim mt-0.5">{item.hint}</span>
+                  <span className="min-w-0 flex-1 flex items-center gap-2">
+                    <span className="text-[13px] font-medium">{item.label}</span>
+                    {count !== undefined && count > 0 && (
+                      <span className={clsx('num text-[10px] px-1.5 rounded-full', on ? 'bg-black/10 text-text' : 'bg-surface-4 text-dim')}>{count}</span>
+                    )}
                   </span>
                 </button>
               )
@@ -392,33 +389,28 @@ export function SettingsPage() {
 
           <div ref={scroller} className="min-h-0 overflow-y-auto pr-1">
             <div key={section} className="max-w-2xl flex flex-col gap-4 pb-10 animate-rise">
-              {section === 'mesa' && (
+              {section === 'preferences' && (
                 <>
+                  <Panel title={t('set.profile')}>
+                    <AvatarPicker
+                      src={settings.avatar}
+                      initials={initials}
+                      onChange={(avatar) => updateSettings({ avatar })}
+                      onError={(message) => toast(message, 'error')}
+                    />
+                    <div className="mt-5">
+                      <Field label={t('set.yourName')}>
+                        <Input
+                          value={settings.traderName === 'Trader' ? '' : settings.traderName}
+                          onChange={(e) => updateSettings({ traderName: e.target.value || 'Trader' })}
+                          placeholder={t('set.yourNamePh')}
+                        />
+                      </Field>
+                    </div>
+                  </Panel>
+
                   <Panel title={t('set.language')} subtitle={t('set.languageSub')}>
                     <LanguageSwitch value={locale} onChange={(next) => updateSettings({ locale: next })} />
-                    <p className="text-[12px] text-dim mt-3 leading-relaxed">{t('set.languageHint')}</p>
-                  </Panel>
-                  <Panel>
-                    <div className="relative overflow-hidden">
-                      <div className="pointer-events-none absolute -top-20 -left-12 w-64 h-64 rounded-full bg-accent/10 blur-3xl animate-glow-breathe" />
-                      <div className="relative">
-                        <AvatarPicker
-                          src={settings.avatar}
-                          initials={initials}
-                          onChange={(avatar) => updateSettings({ avatar })}
-                          onError={(message) => toast(message, 'error')}
-                        />
-                      </div>
-                      <div className="relative mt-6">
-                        <Field label={t('set.yourName')} hint={t('set.yourNameHint')}>
-                          <Input
-                            value={settings.traderName === 'Trader' ? '' : settings.traderName}
-                            onChange={(e) => updateSettings({ traderName: e.target.value || 'Trader' })}
-                            placeholder={t('set.yourNamePh')}
-                          />
-                        </Field>
-                      </div>
-                    </div>
                   </Panel>
 
                   <Panel title={t('set.howYouLog')} subtitle={t('set.howYouLogSub')}>
@@ -453,13 +445,12 @@ export function SettingsPage() {
                               updateSettings({ preferredMarkets: next, defaultMarket })
                             }}
                             className={clsx(
-                              'text-left rounded-2xl border px-3 py-3 transition-all',
+                              'text-left rounded-xl border px-3 py-2.5 transition-all',
                               selected ? 'border-accent/35 bg-accent/[0.07]' : 'border-border bg-surface-2/40 hover:border-border-2',
                             )}
                           >
-                            <Meta size={15} className={selected ? 'text-accent' : 'text-dim'} />
-                            <div className="text-[13px] font-semibold mt-2 leading-none">{marketLabel(locale, m)}</div>
-                            <div className="text-[11px] text-dim mt-1.5">{marketBlurb(locale, m)}</div>
+                            <Meta size={14} className={selected ? 'text-accent' : 'text-dim'} />
+                            <div className="text-[13px] font-semibold mt-1.5 leading-none">{marketLabel(locale, m)}</div>
                           </button>
                         )
                       })}
@@ -514,6 +505,15 @@ export function SettingsPage() {
                       </Button>
                     }
                   />
+
+                  <Panel title={t('set.shortcuts')}>
+                    <div className="flex flex-col gap-2">
+                      <ShortcutRow keys={`${modKey}+N`} label={t('set.shortcut.newTrade')} />
+                      <ShortcutRow keys={`${modKey}+B`} label={t('set.shortcut.sidebar')} />
+                      <ShortcutRow keys="1–6" label={t('set.shortcut.pages')} />
+                      <ShortcutRow keys={`${modKey}+Enter`} label={t('set.shortcut.save')} />
+                    </div>
+                  </Panel>
                 </>
               )}
 
@@ -625,7 +625,7 @@ export function SettingsPage() {
                             {t('common.cancel')}
                           </Button>
                           <Button type="submit" variant="primary" size="sm">
-                            Crear y cambiar
+                            {t('set.createAndSwitch')}
                           </Button>
                         </div>
                       </form>
@@ -635,20 +635,13 @@ export function SettingsPage() {
                   <Panel>
                     <div className="flex items-start justify-between gap-3 mb-6">
                       <div>
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">Cuenta activa</div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">{t('set.activeAccount')}</div>
                         <h3 className="text-[18px] font-semibold tracking-tight mt-1">{active.name}</h3>
-                        <p className="text-[12px] text-muted mt-1">Estos valores solo aplican a esta cuenta.</p>
+                        <p className="text-[12px] text-muted mt-1">{t('set.activeAccountHint')}</p>
                       </div>
                       <div className="h-8 flex items-center">
                         <ColorSwatches value={active.color} onChange={(c) => updateAccount(active.id, { color: c })} offset="#0e0e10" />
                       </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-7">
-                      <HeroStat label={t('dash.equity')} value={fmtMoney(equity, settings.currency)} />
-                      <HeroStat label={t('set.initial')} value={fmtMoney(settings.startingBalance, settings.currency)} />
-                      <HeroStat label={t('set.moves')} value={fmtMoney(cashNet, settings.currency, { sign: true })} tone={cashNet} />
-                      <HeroStat label={t('set.closedPnl')} value={fmtMoney(tradingPnl, settings.currency, { sign: true })} tone={tradingPnl} />
                     </div>
 
                     <Block label={t('set.identity')}>
@@ -758,7 +751,7 @@ export function SettingsPage() {
                       <Copy size={14} /> {t('set.duplicate')}
                     </Button>
                     <Button variant="danger" size="sm" disabled={accounts.length <= 1} onClick={() => setConfirmDeleteAcc(true)}>
-                      <Trash2 size={14} /> Eliminar cuenta
+                      <Trash2 size={14} /> {t('set.deleteAccount')}
                     </Button>
                   </div>
                 </>
@@ -780,35 +773,113 @@ export function SettingsPage() {
 
               {section === 'data' && (
                 <>
-                  <Panel title={t('set.location')} subtitle={t('set.locationSub')}>
-                    <div className="rounded-2xl bg-surface-2 border border-border px-4 py-4 flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-surface-3 border border-border-2 flex items-center justify-center shrink-0">
-                        <Database size={16} className="text-muted" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[13px] font-semibold">{t('set.dataFile')}</div>
-                        <div className="text-[11px] text-dim mono break-all mt-1 leading-relaxed">{dataPath || '…'}</div>
-                        <div className="text-[12px] text-muted mt-2">
-                          {accounts.length} {accounts.length === 1 ? 'cuenta' : 'cuentas'} · esta: {trades.length} ops · {notes.length} notas
-                        </div>
-                        <div className="text-[11px] text-dim mt-1.5 leading-relaxed">
-                          {isDesktop() ? t('set.sqliteHint') : t('set.webStorageHint')}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Button variant="ghost" size="icon" title={t('set.copyPath')} onClick={() => void copyPath()}>
-                          {copied ? <Check size={15} className="text-accent" /> : <Copy size={15} />}
-                        </Button>
-                        {isDesktop() && (
-                          <Button variant="ghost" size="icon" title={t('set.openFolder')} onClick={() => window.api!.openDataFolder()}>
-                            <FolderOpen size={15} />
+                  {FOLDER_BACKUP_UI_ENABLED && <AutoBackupPanel />}
+
+                  <Panel title={t('set.backupSection')} subtitle={t('set.backupSectionSub')}>
+                    <div className="divide-y divide-border">
+                      <DataRow
+                        title={t('set.saveCopy')}
+                        action={
+                          <Button variant="primary" size="sm" onClick={() => void exportAtriumBackup()}>
+                            {t('set.export')}
                           </Button>
-                        )}
-                      </div>
+                        }
+                      />
+                      <EncryptedAtriumBackupImport />
                     </div>
                   </Panel>
 
-                  {supabaseReady && (
+                  <Panel title={t('set.transferSection')} subtitle={t('set.transferSectionSub')}>
+                    <div className="divide-y divide-border">
+                      <DataRow
+                        title={t('set.csvTitle')}
+                        action={
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={() => void exportCsv()} disabled={!trades.length}>
+                              {t('set.export')}
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => void importCsv()}>
+                              {t('set.import')}
+                            </Button>
+                          </div>
+                        }
+                      />
+                      <DataRow
+                        title={t('set.brokerCsv')}
+                        action={
+                          <div className="flex items-center gap-2">
+                            <Select
+                              value={brokerImport}
+                              onChange={(v) => setBrokerImport(v as ImportBroker)}
+                              size="sm"
+                              options={[
+                                { value: 'AUTO', label: t('set.brokerAuto') },
+                                { value: 'XTB', label: 'XTB' },
+                                { value: 'INTERACTIVE_BROKERS', label: 'Interactive Brokers' },
+                                { value: 'DEGIRO', label: 'DEGIRO' },
+                                { value: 'FOMO', label: 'Fomo' },
+                                { value: 'AXIOM', label: 'Axiom' },
+                              ]}
+                            />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={brokerImportBusy}
+                              onClick={() => void pickAndImport(brokerImport)}
+                            >
+                              {brokerImportBusy ? '…' : t('set.import')}
+                            </Button>
+                            <input
+                              ref={brokerFileRef}
+                              type="file"
+                              accept={BROKER_FILE_ACCEPT}
+                              className="hidden"
+                              onChange={(e) => onFileInputChange(e, brokerImport)}
+                            />
+                          </div>
+                        }
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDataMore((open) => !open)}
+                      className="flex items-center gap-1.5 text-[12px] text-dim hover:text-text pt-4"
+                    >
+                      <ChevronDown size={14} className={clsx('transition-transform', dataMore && 'rotate-180')} />
+                      {t('set.moreOptions')}
+                    </button>
+                    {dataMore && (
+                      <div className="divide-y divide-border mt-1">
+                        <DataRow
+                          title={t('set.mergeJson')}
+                          action={
+                            <Button variant="ghost" size="sm" onClick={() => void importJson('merge')}>
+                              {t('set.chooseFile')}
+                            </Button>
+                          }
+                        />
+                        <DataRow
+                          title={t('set.replaceBackup')}
+                          action={
+                            <Button variant="ghost" size="sm" onClick={() => void importJson('replace')}>
+                              {t('set.chooseFile')}
+                            </Button>
+                          }
+                        />
+                        <DataRow
+                          title={t('set.plainExportTitle')}
+                          hint={t('set.plainExportHint')}
+                          action={
+                            <Button variant="ghost" size="sm" onClick={() => void exportPlainJson()}>
+                              {t('set.export')}
+                            </Button>
+                          }
+                        />
+                      </div>
+                    )}
+                  </Panel>
+
+                  {CLOUD_SYNC_FEATURE_ENABLED && supabaseReady && (
                     <Panel title={t('set.cloudSync')} subtitle={t('set.cloudSyncSub')}>
                       <div className="flex flex-col gap-4">
                         <div className="rounded-2xl border border-border bg-surface-2/40 px-4 py-3.5 flex items-start gap-3">
@@ -842,6 +913,8 @@ export function SettingsPage() {
                             onClick={() => {
                               const next = !settings.cloudSyncEnabled
                               updateSettings({ cloudSyncEnabled: next })
+                              flushPersist()
+                              if (next) void ensureCryptoSaltSynced()
                               toast(next ? t('set.cloudSyncEnabledOk') : t('set.cloudSyncDisabledOk'), 'success')
                             }}
                           >
@@ -851,7 +924,14 @@ export function SettingsPage() {
                         {settings.cloudSyncEnabled && (
                           <div className="flex flex-wrap gap-2">
                             {!user ? (
-                              <Button variant="outline" size="sm" onClick={() => window.location.assign('/login')}>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  flushPersist()
+                                  window.location.assign('/login')
+                                }}
+                              >
                                 {t('set.cloudSyncSignIn')}
                               </Button>
                             ) : (
@@ -877,45 +957,7 @@ export function SettingsPage() {
                     </Panel>
                   )}
 
-                  {!isDesktop() && (
-                    <Panel title={t('set.continuousBackups')} subtitle={t('set.webBackupBody')}>
-                      <div className="flex flex-col gap-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <ActionCard
-                            icon={<Download size={16} />}
-                            title={t('set.webBackupExport')}
-                            body={t('set.webBackupBody')}
-                            action={
-                              <Button variant="secondary" size="sm" onClick={() => void exportAtriumBackup()}>
-                                {t('set.webBackupExport')}
-                              </Button>
-                            }
-                          />
-                          <ActionCard
-                            icon={<Upload size={16} />}
-                            title={t('set.webBackupImport')}
-                            body={t('set.webBackupPassword')}
-                            action={
-                              <Button variant="outline" size="sm" onClick={() => void pickAtriumBackup()}>
-                                {t('set.webBackupImport')}
-                              </Button>
-                            }
-                          />
-                        </div>
-                        <Field label={t('set.webBackupPassword')}>
-                          <Input
-                            type="password"
-                            autoComplete="current-password"
-                            value={webBackupPassword}
-                            onChange={(e) => setWebBackupPassword(e.target.value)}
-                            placeholder="••••••••"
-                          />
-                        </Field>
-                      </div>
-                    </Panel>
-                  )}
-
-                  {isDesktop() && (
+                  {SHOW_LITESTREAM_PANEL && isDesktop() && (
                     <Panel title={t('set.continuousBackups')} subtitle={t('set.continuousBackupsSub')}>
                       {!litestream?.available ? (
                         <p className="text-[13px] text-muted leading-relaxed">{t('set.litestreamUnavailable')}</p>
@@ -1028,209 +1070,139 @@ export function SettingsPage() {
                     </Panel>
                   )}
 
-                  {isDesktop() && (
-                    <Panel title={t('set.autoBackups')} subtitle={t('set.autoBackupsSub')}>
-                      {backups.length ? (
-                        <ul className="flex flex-col gap-1.5">
-                          {backups.map((b) => (
-                            <li
-                              key={b.id}
-                              className="flex items-center gap-3 rounded-2xl border border-border bg-surface-2/40 px-3.5 py-3"
-                            >
-                              <History size={15} className="text-dim shrink-0" />
-                              <div className="min-w-0 flex-1">
-                                <div className="text-[13px] font-medium truncate">
-                                  {b.kind === 'immediate' ? t('set.immediate') : backupWhen(b.mtime)}
-                                </div>
-                                <div className="text-[11px] text-dim mt-0.5">
-                                  {b.kind === 'immediate' ? backupWhen(b.mtime) : t('set.backupsFolder')} · {fmtBytes(b.bytes)}
-                                </div>
-                              </div>
-                              <Button variant="outline" size="sm" onClick={() => setRestoreId(b.id)}>
-                                Restaurar
-                              </Button>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-[13px] text-muted leading-relaxed">
-                          Aún no hay copias. Se crea un .bak en cada guardado y una copia fechada como mucho cada 10 minutos.
-                        </p>
-                      )}
-                    </Panel>
-                  )}
-
-                  <Panel title={t('set.export')} subtitle={t('set.exportSub')}>
-                    <div className="flex flex-col gap-3">
-                      <ActionCard
-                        icon={<ShieldAlert size={16} className="text-accent" />}
-                        title={t('set.encryptedExportTitle')}
-                        body={t('set.encryptedExportBody')}
-                        action={
-                          <Button variant="primary" size="sm" onClick={() => void exportAtriumBackup()}>
-                            {t('set.encryptedExportBtn')}
-                          </Button>
-                        }
-                      />
-                      <ActionCard
-                        icon={<Download size={16} />}
-                        title={t('set.plainExportTitle')}
-                        body={t('set.plainExportBody')}
-                        action={
-                          <Button variant="outline" size="sm" onClick={() => void exportPlainJson()}>
-                            {t('set.plainExportBtn')}
-                          </Button>
-                        }
-                      />
-                      <div className="rounded-xl border border-loss/25 bg-loss/5 px-4 py-3 flex gap-3">
-                        <ShieldAlert size={16} className="text-loss shrink-0 mt-0.5" />
-                        <p className="text-[12px] text-muted leading-relaxed">{t('set.plainExportWarning')}</p>
+                  <Panel title={t('set.onDevice')} subtitle={t('set.onDeviceSub')}>
+                    <div className="rounded-2xl bg-surface-2 border border-border px-4 py-4 flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-surface-3 border border-border-2 flex items-center justify-center shrink-0">
+                        <FolderOpen size={16} className="text-muted" />
                       </div>
-                      <ActionCard
-                        icon={<FileSpreadsheet size={16} />}
-                        title={t('set.csvTitle')}
-                        body={t('set.csvBody')}
-                        action={
-                          <Button variant="secondary" size="sm" onClick={() => void exportCsv()} disabled={!trades.length}>
-                            {t('set.export')} CSV
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[13px] font-semibold">{t('set.dataFile')}</div>
+                        <div className="text-[11px] text-dim mono break-all mt-1 leading-relaxed">{dataPath || '…'}</div>
+                        <div className="text-[12px] text-muted mt-2">
+                          {t('set.locationMeta', {
+                            accounts: accounts.length === 1 ? t('set.oneAccount') : t('set.nAccounts', { n: accounts.length }),
+                            trades: trades.length,
+                            notes: notes.length,
+                          })}
+                        </div>
+                        <div className="text-[11px] text-dim mt-1.5 leading-relaxed">
+                          {isDesktop() ? t('set.sqliteHint') : t('set.webStorageHint')}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button variant="ghost" size="icon" title={t('set.copyPath')} onClick={() => void copyPath()}>
+                          {copied ? <Check size={15} className="text-accent" /> : <Copy size={15} />}
+                        </Button>
+                        {isDesktop() && (
+                          <Button variant="ghost" size="icon" title={t('set.openFolder')} onClick={() => window.api!.openDataFolder()}>
+                            <FolderOpen size={15} />
                           </Button>
-                        }
-                      />
+                        )}
+                      </div>
                     </div>
-                  </Panel>
 
-                  <Panel title={t('set.import')} subtitle={t('set.importSub')}>
-                    <div className="flex flex-col gap-3">
-                      <ActionCard
-                        icon={<Upload size={16} />}
-                        title={t('set.mergeJson')}
-                        body={t('set.mergeJsonBody')}
-                        action={
-                          <Button variant="outline" size="sm" onClick={() => void importJson('merge')}>
-                            {t('set.mergeJson')}
-                          </Button>
-                        }
-                      />
-                      <ActionCard
-                        icon={<Upload size={16} />}
-                        title={t('set.replaceBackup')}
-                        body={t('set.replaceBackupBody')}
-                        action={
-                          <Button variant="outline" size="sm" onClick={() => void importJson('replace')}>
-                            {t('set.replace')}
-                          </Button>
-                        }
-                      />
-                      <ActionCard
-                        icon={<FileSpreadsheet size={16} />}
-                        title={t('set.csvThis')}
-                        body={t('set.csvThisBody')}
-                        action={
-                          <Button variant="outline" size="sm" onClick={() => void importCsv()}>
-                            {t('set.import')} CSV
-                          </Button>
-                        }
-                      />
-                      <ActionCard
-                        icon={<Upload size={16} />}
-                        title={t('set.brokerCsv')}
-                        body={t('set.brokerCsvBody')}
-                        action={
-                          <div className="flex flex-col items-stretch gap-2 min-w-[12rem]">
-                            <Select
-                              value={brokerImport}
-                              onChange={(v) => setBrokerImport(v as ImportBroker)}
-                              size="sm"
-                              options={[
-                                { value: 'AUTO', label: t('set.brokerAuto') },
-                                { value: 'XTB', label: 'XTB' },
-                                { value: 'INTERACTIVE_BROKERS', label: 'Interactive Brokers' },
-                                { value: 'DEGIRO', label: 'DEGIRO' },
-                                { value: 'FOMO', label: 'Fomo' },
-                                { value: 'AXIOM', label: 'Axiom' },
-                              ]}
-                            />
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              disabled={brokerImportBusy}
-                              onClick={() => void pickAndImport(brokerImport)}
-                            >
-                              {brokerImportBusy ? '…' : t('set.importBrokerCsv')}
-                            </Button>
-                            <input
-                              ref={brokerFileRef}
-                              type="file"
-                              accept={BROKER_FILE_ACCEPT}
-                              className="hidden"
-                              onChange={(e) => onFileInputChange(e, brokerImport)}
-                            />
-                          </div>
-                        }
-                      />
-                    </div>
-                    <p className="text-[11px] text-dim leading-relaxed mt-4">
-                      Columnas mínimas: <span className="mono">symbol, direction, entryDate, exitDate, entryPrice, exitPrice, quantity</span>
-                      . Opcionales: mercado, multiplicador, comisiones, stop, estrategia, etiquetas y P&L. Si el P&L no cuadra con los precios, se guarda como resultado manual.
-                      {' '}CSV de bróker: el motor normaliza fills → operaciones (FIFO) y actualiza el dashboard.
-                    </p>
+                    {isDesktop() && (
+                      <div className="mt-4">
+                        {backups.length ? (
+                          <ul className="flex flex-col gap-1.5">
+                            {backups.map((b) => (
+                              <li
+                                key={b.id}
+                                className="flex items-center gap-3 rounded-xl border border-border bg-surface-2/40 px-3.5 py-3"
+                              >
+                                <History size={15} className="text-dim shrink-0" />
+                                <div className="min-w-0 flex-1">
+                                  <div className="text-[13px] font-medium truncate">
+                                    {b.kind === 'immediate' ? t('set.immediate') : backupWhen(b.mtime)}
+                                  </div>
+                                  <div className="text-[11px] text-dim mt-0.5">
+                                    {b.kind === 'immediate' ? backupWhen(b.mtime) : t('set.backupsFolder')} · {fmtBytes(b.bytes)}
+                                  </div>
+                                </div>
+                                <Button variant="outline" size="sm" onClick={() => setRestoreId(b.id)}>
+                                  {t('set.restore')}
+                                </Button>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-[13px] text-muted leading-relaxed">{t('set.noLocalBackups')}</p>
+                        )}
+                      </div>
+                    )}
                   </Panel>
                 </>
               )}
 
               {section === 'advanced' && (
-                <Panel title={t('set.advanced')} subtitle={t('set.advancedSub')}>
-                  <div className="flex flex-col gap-3">
-                    <DangerRow
-                      icon={<Sparkles size={16} className="text-accent" />}
-                      title={t('set.loadSample')}
-                      body={t('set.loadSampleBody')}
-                      action={
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => (trades.length || notes.length || cashflows.length ? setConfirmDemo(true) : loadDemo())}
-                        >
-                          {t('set.loadSample')}
-                        </Button>
-                      }
-                    />
-                    <DangerRow
-                      icon={<Sparkles size={16} className="text-violet" />}
-                      title={t('set.repeatOn')}
-                      body={t('set.repeatOnBody')}
-                      action={
-                        <Button variant="outline" size="sm" onClick={() => updateSettings({ onboardingCompleted: false })}>
-                          {t('set.openOnboarding')}
-                        </Button>
-                      }
-                    />
-                    <DangerRow
-                      icon={<Trash2 size={16} className="text-loss" />}
-                      title={t('set.emptyAccount')}
-                      body={t('set.emptyAccountBody')}
-                      action={
-                        <Button variant="danger" size="sm" onClick={() => setConfirmClear(true)} disabled={!trades.length && !notes.length && !cashflows.length}>
-                          {t('set.emptyNow')}
-                        </Button>
-                      }
-                      danger
-                    />
-                  </div>
-                  <p className="text-[11px] text-dim text-center pt-5">Atrium · v1.0.0 · Los datos se guardan únicamente en tu equipo.</p>
-                </Panel>
+                <>
+                  <Panel title={t('set.advanced')} subtitle={t('set.advancedSub')}>
+                    <div className="flex flex-col gap-3">
+                      <DangerRow
+                        icon={<MessageSquare size={16} className="text-sky" />}
+                        title={t('set.feedback')}
+                        body={t('set.feedbackBody')}
+                        action={
+                          <Button variant="outline" size="sm" onClick={() => openFeedback('settings')}>
+                            {t('set.feedback')}
+                          </Button>
+                        }
+                      />
+                      <DangerRow
+                        icon={<Sparkles size={16} className="text-accent" />}
+                        title={t('set.loadSample')}
+                        body={t('set.loadSampleBody')}
+                        action={
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => (trades.length || notes.length || cashflows.length ? setConfirmDemo(true) : loadDemo())}
+                          >
+                            {t('set.loadSample')}
+                          </Button>
+                        }
+                      />
+                      <DangerRow
+                        icon={<Sparkles size={16} className="text-violet" />}
+                        title={t('set.repeatOn')}
+                        body={t('set.repeatOnBody')}
+                        action={
+                          <Button variant="outline" size="sm" onClick={() => updateSettings({ onboardingCompleted: false })}>
+                            {t('set.openOnboarding')}
+                          </Button>
+                        }
+                      />
+                      <DangerRow
+                        icon={<Trash2 size={16} className="text-loss" />}
+                        title={t('set.emptyAccount')}
+                        body={t('set.emptyAccountBody')}
+                        action={
+                          <Button variant="danger" size="sm" onClick={() => setConfirmClear(true)} disabled={!trades.length && !notes.length && !cashflows.length}>
+                            {t('set.emptyNow')}
+                          </Button>
+                        }
+                        danger
+                      />
+                    </div>
+                  </Panel>
+                  <Panel title={t('set.about')}>
+                    <p className="text-[13px] text-muted leading-relaxed">{t('set.aboutBody')}</p>
+                    <p className="text-[12px] text-dim mt-2">{t('set.version', { n: appVersion })}</p>
+                  </Panel>
+                </>
               )}
             </div>
           </div>
         </div>
       </div>
 
+
       <Confirm
         open={confirmClear}
         onClose={() => setConfirmClear(false)}
         onConfirm={() => {
           clearAll()
-          toast(`«${settings.accountName}» vaciada`, 'info')
+          toast(t('set.emptied', { name: settings.accountName }), 'info')
         }}
         title={t('set.emptyTitle')}
         message={t('set.emptyMsg')}
@@ -1310,32 +1282,513 @@ export function SettingsPage() {
         message={t('set.litestreamRestoreMsg')}
         confirmLabel={t('set.litestreamRestore')}
       />
+    </>
+  )
+}
+
+function timeAgo(ms: number, locale: string) {
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
+  const sec = Math.max(0, Math.round((Date.now() - ms) / 1000))
+  if (sec < 60) return rtf.format(-sec, 'second')
+  if (sec < 3600) return rtf.format(-Math.round(sec / 60), 'minute')
+  if (sec < 86_400) return rtf.format(-Math.round(sec / 3600), 'hour')
+  return rtf.format(-Math.round(sec / 86_400), 'day')
+}
+
+function shortFolder(folderPath: string) {
+  const parts = folderPath.split(/[\\/]/).filter(Boolean)
+  return parts.length > 2 ? `…/${parts.slice(-2).join('/')}` : folderPath
+}
+
+/** Importar .atrium-backup a mano (escritorio y web), sin sync automático. */
+function EncryptedAtriumBackupImport() {
+  const t = useT()
+  const toast = useStore((s) => s.toast)
+  const retryLoad = useStore((s) => s.retryLoad)
+  const [busy, setBusy] = useState(false)
+  const [restoreRaw, setRestoreRaw] = useState<string | null>(null)
+  const [confirmRestore, setConfirmRestore] = useState(false)
+  const [askPassword, setAskPassword] = useState(false)
+  const [password, setPassword] = useState('')
+
+  useEffect(() => {
+    const raw = takePendingRestore()
+    if (raw) {
+      setRestoreRaw(raw)
+      setConfirmRestore(true)
+    }
+  }, [])
+
+  const endRestore = () => {
+    setRestoreRaw(null)
+    setAskPassword(false)
+    setPassword('')
+    setConfirmRestore(false)
+  }
+
+  const pickFile = async () => {
+    const file = await importFile([{ name: 'Atrium backup', extensions: ['atrium-backup', 'json'] }])
+    if (!file) return
+    setRestoreRaw(file.content)
+    setConfirmRestore(true)
+  }
+
+  const restore = async (raw: string, pwd?: string) => {
+    setBusy(true)
+    try {
+      flushPersist()
+    } catch {
+      /* ignore */
+    }
+    const result = await importEncryptedBackup(raw, pwd)
+    setBusy(false)
+    if (!result.ok) {
+      if (result.needsPassword && !askPassword) {
+        setAskPassword(true)
+        return
+      }
+      toast(result.error, 'error')
+      if (!result.needsPassword) endRestore()
+      return
+    }
+    endRestore()
+    await retryLoad()
+    toast(t('set.webBackupRestored'), 'success')
+  }
+
+  const card = (
+    <DataRow
+      title={t('set.restoreCopy')}
+      action={
+        <Button variant="outline" size="sm" disabled={busy} onClick={() => void pickFile()}>
+          {t('set.restore')}
+        </Button>
+      }
+    />
+  )
+
+  return (
+    <div>
+      {card}
       <Confirm
-        open={confirmWebRestore}
-        onClose={() => {
-          setConfirmWebRestore(false)
-          setWebBackupRaw(null)
-        }}
+        open={confirmRestore && !askPassword}
+        onClose={endRestore}
         onConfirm={() => {
-          const raw = webBackupRaw
-          if (!raw) return
-          void (async () => {
-            const result = await importEncryptedBackup(raw, webBackupPassword || undefined)
-            setConfirmWebRestore(false)
-            setWebBackupRaw(null)
-            if (!result.ok) {
-              toast(result.error, 'error')
-              return
-            }
-            await retryLoad()
-            toast(t('set.webBackupRestored'), 'success')
-          })()
+          if (restoreRaw) void restore(restoreRaw)
         }}
         title={t('set.webBackupConfirmTitle')}
         message={t('set.webBackupConfirmMsg')}
+        confirmLabel={t('set.webBackupImport')}
+      />
+      <Modal
+        open={askPassword}
+        onClose={endRestore}
+        title={t('set.webBackupPassword')}
+        subtitle={t('set.restorePasswordBody')}
+        width="max-w-md"
+        footer={
+          <>
+            <Button variant="ghost" onClick={endRestore}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              disabled={busy || !password.trim() || !restoreRaw}
+              onClick={() => {
+                if (restoreRaw) void restore(restoreRaw, password)
+              }}
+            >
+              {t('set.restore')}
+            </Button>
+          </>
+        }
+      >
+        <Field label={t('set.restorePasswordLabel')}>
+          <Input
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            autoFocus
+          />
+        </Field>
+      </Modal>
+    </div>
+  )
+}
+
+function AutoBackupPanel() {
+  const t = useT()
+  const toast = useStore((s) => s.toast)
+  const retryLoad = useStore((s) => s.retryLoad)
+  const locale = useStore((s) => s.settings.locale ?? 'es')
+  const [status, setStatus] = useState<FolderBackupStatus | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [confirmReplace, setConfirmReplace] = useState(false)
+  const [restoreRaw, setRestoreRaw] = useState<string | null>(null)
+  const [confirmRestore, setConfirmRestore] = useState(false)
+  const [askPassword, setAskPassword] = useState(false)
+  const [password, setPassword] = useState('')
+  const [setupPasswordOpen, setSetupPasswordOpen] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmNewPassword, setConfirmNewPassword] = useState('')
+  const autoSave = isFolderBackupSupported()
+
+  const refresh = async () => setStatus(await getFolderBackupStatus())
+
+  useEffect(() => {
+    if (!autoSave) return
+    void refresh()
+    const timer = window.setInterval(() => void refresh(), 10_000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    const raw = takePendingRestore()
+    if (raw) {
+      setRestoreRaw(raw)
+      setConfirmRestore(true)
+    }
+  }, [])
+
+  const toggle = async () => {
+    if (!status) return
+    setBusy(true)
+    const next = !status.enabled
+    const result = await setFolderBackupEnabled(next)
+    setBusy(false)
+    if (!result.ok) {
+      toast(result.error, 'error')
+      return
+    }
+    toast(next ? t('set.autoBackupOn') : t('set.autoBackupOff'), 'success')
+    await refresh()
+  }
+
+  const chooseFolder = async () => {
+    setBusy(true)
+    const result = await chooseFolderBackupFolder()
+    setBusy(false)
+    if (!result.ok) {
+      if (result.error !== 'cancelled') toast(result.error, 'error')
+      return
+    }
+    if (result.needsConfirm) {
+      setConfirmReplace(true)
+      return
+    }
+    await refresh()
+  }
+
+  const replaceExisting = async () => {
+    setBusy(true)
+    const result = await confirmFolderBackupFolder()
+    setBusy(false)
+    if (!result.ok) toast(result.error, 'error')
+    await refresh()
+  }
+
+  const pickRestoreFile = async () => {
+    // En el navegador sin filtro: iOS/Android no conocen .atrium-backup y mostrarían el archivo en gris.
+    const file = await importFile(autoSave ? [{ name: 'Atrium backup', extensions: ['atrium-backup', 'json'] }] : [])
+    if (!file) return
+    setRestoreRaw(file.content)
+    setConfirmRestore(true)
+  }
+
+  const pickRestoreFromGoogleDrive = async () => {
+    setBusy(true)
+    try {
+      const raw = await pickBackupFromGoogleDrive()
+      if (!raw) return
+      setRestoreRaw(raw)
+      setConfirmRestore(true)
+    } catch (e) {
+      toast(e instanceof Error ? e.message : t('set.mobileRestoreDriveFail'), 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const drivePickerReady = isGoogleDrivePickerConfigured()
+
+  const endRestore = () => {
+    setRestoreRaw(null)
+    setAskPassword(false)
+    setPassword('')
+  }
+
+  const restore = async (raw: string, pwd?: string) => {
+    setBusy(true)
+    try {
+      flushPersist()
+    } catch {
+      /* ignore */
+    }
+    const result = await importEncryptedBackup(raw, pwd)
+    setBusy(false)
+    if (!result.ok) {
+      if (result.needsPassword && !askPassword) {
+        setAskPassword(true)
+        return
+      }
+      toast(result.error, 'error')
+      if (!result.needsPassword) endRestore()
+      return
+    }
+    endRestore()
+    await retryLoad()
+    if (autoSave) await refresh()
+    toast(t('set.webBackupRestored'), 'success')
+  }
+
+  const on = autoSave && !!status?.enabled
+  const locked = autoSave && !!status?.needsPassword
+
+  const endSetupPassword = () => {
+    setSetupPasswordOpen(false)
+    setNewPassword('')
+    setConfirmNewPassword('')
+  }
+
+  const submitMasterPassword = async () => {
+    if (newPassword.length < 8) {
+      toast(t('crypto.passwordMin'), 'error')
+      return
+    }
+    if (newPassword !== confirmNewPassword) {
+      toast(t('crypto.passwordMismatch'), 'error')
+      return
+    }
+    setBusy(true)
+    const result = await migrateToMasterPassword(newPassword)
+    setBusy(false)
+    if (!result.ok) {
+      toast(result.error, 'error')
+      return
+    }
+    endSetupPassword()
+    toast(t('set.autoBackupSetupPasswordOk'), 'success')
+    await refresh()
+  }
+
+  return (
+    <Panel
+      title={autoSave ? t('set.autoBackup') : t('set.mobileRestorePanelTitle')}
+      subtitle={autoSave ? t('set.autoBackupSub') : t('set.mobileRestorePanelSub')}
+      action={
+        autoSave ? (
+          <label className="flex items-center gap-2.5 cursor-pointer select-none">
+            <span className="text-[12px] text-muted">{t('set.autoBackupToggle')}</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={on}
+              aria-label={t('set.autoBackupToggle')}
+              disabled={!status || busy || (locked && !on)}
+              onClick={() => void toggle()}
+              className={clsx(
+                'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
+                on ? 'bg-accent border-accent/60' : 'bg-surface-3 border-border-2',
+              )}
+            >
+              <span
+                className={clsx(
+                  'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform',
+                  on ? 'translate-x-6' : 'translate-x-1',
+                )}
+              />
+            </button>
+          </label>
+        ) : undefined
+      }
+    >
+      <div className="flex flex-col gap-4">
+        {locked && (
+          <div className="rounded-xl border border-border bg-surface-2/40 px-4 py-3 flex flex-col gap-3">
+            <div className="flex gap-3">
+              <ShieldAlert size={16} className="text-muted shrink-0 mt-0.5" />
+              <p className="text-[12px] text-muted leading-relaxed">{t('set.autoBackupNeedsPassword')}</p>
+            </div>
+            <Button variant="primary" size="sm" className="self-start" disabled={busy} onClick={() => setSetupPasswordOpen(true)}>
+              {t('set.autoBackupSetupPassword')}
+            </Button>
+          </div>
+        )}
+
+        {on && !locked && !status?.folderPath && (
+          <div className="flex flex-col items-start gap-2.5">
+            <Button variant="primary" size="sm" disabled={busy} onClick={() => void chooseFolder()}>
+              <FolderOpen size={14} /> {t('set.autoBackupChoose')}
+            </Button>
+            <p className="text-[12px] text-muted leading-relaxed">{t('set.autoBackupHelp')}</p>
+          </div>
+        )}
+
+        {on && !locked && status?.folderPath && (
+          <div className="rounded-2xl border border-border bg-surface-2/40 px-4 py-3.5 flex items-start gap-3">
+            <div
+              className={clsx(
+                'w-10 h-10 rounded-xl border flex items-center justify-center shrink-0',
+                status.failed ? 'bg-loss/10 border-loss/30 text-loss' : 'bg-accent/10 border-accent/30 text-accent',
+              )}
+            >
+              {status.failed ? <ShieldAlert size={16} /> : <Check size={16} />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[13px] font-semibold truncate" title={status.folderPath}>
+                {t('set.autoBackupSavingIn')}: {shortFolder(status.folderPath)}
+              </div>
+              {status.failed ? (
+                <p className="text-[12px] text-loss/90 mt-1.5 leading-relaxed">{t('set.autoBackupFailed')}</p>
+              ) : (
+                <div className="text-[12px] text-muted mt-1.5">
+                  {status.lastBackupAt
+                    ? t('set.autoBackupLast', { when: timeAgo(status.lastBackupAt, locale) })
+                    : t('set.autoBackupPending')}
+                </div>
+              )}
+            </div>
+            <Button variant="outline" size="sm" disabled={busy} onClick={() => void chooseFolder()}>
+              {status.failed ? t('set.autoBackupChooseOther') : t('set.autoBackupChange')}
+            </Button>
+          </div>
+        )}
+
+        {autoSave ? (
+          <ActionCard
+            icon={<History size={16} />}
+            title={t('set.restoreFromFolderTitle')}
+            body={t('set.restoreFromFolderBody')}
+            action={
+              <Button variant="outline" size="sm" disabled={busy} onClick={() => void pickRestoreFile()}>
+                <Upload size={14} /> {t('set.restoreFromFolder')}
+              </Button>
+            }
+          />
+        ) : (
+          <div className="rounded-2xl border border-border bg-surface-2/40 px-4 py-4 flex flex-col gap-4">
+            <div>
+              <p className="text-[14px] font-semibold leading-snug">{t('set.mobileRestoreLead')}</p>
+              <p className="text-[12px] text-muted mt-2 leading-relaxed">{t('set.mobileRestoreHint')}</p>
+            </div>
+            <Button
+              variant="primary"
+              size="md"
+              className="w-full justify-center"
+              disabled={busy || !drivePickerReady}
+              onClick={() => void pickRestoreFromGoogleDrive()}
+            >
+              <Cloud size={16} /> {t('set.mobileRestoreDrive')}
+            </Button>
+            {!drivePickerReady && (
+              <p className="text-[11px] text-amber-400/90 leading-relaxed">{t('set.mobileRestoreDriveSetup')}</p>
+            )}
+            <Button variant="outline" size="md" className="w-full justify-center" disabled={busy} onClick={() => void pickRestoreFile()}>
+              <Upload size={16} /> {t('set.mobileRestorePick')}
+            </Button>
+            <p className="text-[11px] text-dim leading-relaxed">{t('set.mobileRestorePickHint')}</p>
+          </div>
+        )}
+      </div>
+
+      <Confirm
+        open={confirmReplace}
+        onClose={() => setConfirmReplace(false)}
+        onConfirm={() => void replaceExisting()}
+        title={t('set.autoBackupReplaceTitle')}
+        message={t('set.autoBackupReplaceMsg')}
+        confirmLabel={t('set.autoBackupReplace')}
+      />
+      <Confirm
+        open={confirmRestore}
+        onClose={() => setConfirmRestore(false)}
+        onConfirm={() => {
+          if (restoreRaw) void restore(restoreRaw)
+        }}
+        title={t('set.restoreFromFolder')}
+        message={t('set.restoreFromFolderConfirm')}
         confirmLabel={t('set.restore')}
       />
-    </>
+      <Modal
+        open={askPassword}
+        onClose={endRestore}
+        title={t('set.restorePasswordTitle')}
+        subtitle={t('set.restorePasswordBody')}
+        width="max-w-md"
+        footer={
+          <>
+            <Button variant="ghost" onClick={endRestore}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              disabled={busy || !password.trim() || !restoreRaw}
+              onClick={() => {
+                if (restoreRaw) void restore(restoreRaw, password)
+              }}
+            >
+              {t('set.restore')}
+            </Button>
+          </>
+        }
+      >
+        <Field label={t('set.restorePasswordLabel')}>
+          <Input
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            autoFocus
+          />
+        </Field>
+      </Modal>
+      <Modal
+        open={setupPasswordOpen}
+        onClose={endSetupPassword}
+        title={t('set.autoBackupSetupPasswordTitle')}
+        subtitle={t('set.autoBackupSetupPasswordBody')}
+        width="max-w-md"
+        footer={
+          <>
+            <Button variant="ghost" onClick={endSetupPassword}>
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="primary"
+              disabled={busy || newPassword.length < 8 || newPassword !== confirmNewPassword}
+              onClick={() => void submitMasterPassword()}
+            >
+              {t('set.autoBackupSetupPassword')}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <Field label={t('crypto.choosePassword')}>
+            <Input
+              type="password"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="••••••••"
+              autoFocus
+            />
+          </Field>
+          <Field label={t('set.autoBackupSetupPasswordConfirm')}>
+            <Input
+              type="password"
+              autoComplete="new-password"
+              value={confirmNewPassword}
+              onChange={(e) => setConfirmNewPassword(e.target.value)}
+              placeholder="••••••••"
+            />
+          </Field>
+        </div>
+      </Modal>
+    </Panel>
   )
 }
 
@@ -1371,16 +1824,6 @@ function Block({ label, children }: { label: string; children: ReactNode }) {
     <div className="mt-7 pt-6 border-t border-border">
       <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim mb-4">{label}</div>
       {children}
-    </div>
-  )
-}
-
-function HeroStat({ label, value, tone }: { label: string; value: string; tone?: number }) {
-  const color = tone === undefined ? 'text-text' : tone > 0 ? 'text-accent' : tone < 0 ? 'text-loss' : 'text-muted'
-  return (
-    <div className="rounded-2xl bg-surface-2/70 border border-border px-3.5 py-3.5">
-      <div className="text-[11px] font-medium text-muted">{label}</div>
-      <div className={clsx('num text-[15px] font-semibold tracking-tight mt-1.5 leading-none', color)}>{value}</div>
     </div>
   )
 }
@@ -1432,6 +1875,27 @@ function QuietRow({ title, body, action }: { title: string; body: string; action
         <p className="text-[12px] text-dim mt-0.5">{body}</p>
       </div>
       {action}
+    </div>
+  )
+}
+
+function DataRow({ title, hint, action }: { title: string; hint?: string; action: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-3">
+      <div className="min-w-0">
+        <div className="text-[13px] font-medium">{title}</div>
+        {hint && <p className="text-[12px] text-dim mt-0.5">{hint}</p>}
+      </div>
+      <div className="shrink-0">{action}</div>
+    </div>
+  )
+}
+
+function ShortcutRow({ keys, label }: { keys: string; label: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-1.5">
+      <span className="text-[13px] text-muted">{label}</span>
+      <kbd className="num text-[11px] font-medium text-text bg-surface-3 border border-border px-2 py-1 rounded-lg">{keys}</kbd>
     </div>
   )
 }
@@ -1773,7 +2237,7 @@ function PlaybookPanel({
                             return { ...d, checklist }
                           })
                         }}
-                        placeholder={`Punto ${i + 1}`}
+                        placeholder={t('set.checklistItem', { n: i + 1 })}
                       />
                       {draft.checklist.length > 1 && (
                         <button
@@ -1840,7 +2304,7 @@ function PlaybookPanel({
                   </div>
                   <div className="flex gap-1 shrink-0">
                     <Button variant="ghost" size="sm" onClick={() => startEdit(s)}>
-                      Editar
+                      {t('common.edit')}
                     </Button>
                     <Button variant="ghost" size="sm" className="text-loss hover:bg-loss/10" onClick={() => setConfirmId(s.id)}>
                       <Trash2 size={14} />

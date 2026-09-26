@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { cleanSymbol, cleanSymbolsCsv } from './lib/fmpSecurity'
+import { feedbackDevApiProxy } from './lib/feedbackDevProxy'
 
 type EnvMap = Record<string, string>
 
@@ -94,7 +95,7 @@ function fmpDevApiProxy(env: EnvMap): Plugin {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
-    plugins: [react(), tailwindcss(), fmpDevApiProxy(env)],
+    plugins: [react(), tailwindcss(), fmpDevApiProxy(env), feedbackDevApiProxy(env)],
     resolve: {
       alias: {
         '@': path.join(import.meta.dirname, 'src'),

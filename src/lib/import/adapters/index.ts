@@ -1,4 +1,10 @@
-import type { BrokerAdapter, BrokerParseContext, NormalizedExecution } from '../types'
+import type {
+  AdapterParseResult,
+  BrokerAdapter,
+  BrokerParseContext,
+  NormalizedExecution,
+  ReadyTradeInput,
+} from '../types'
 import {
   inferInstrumentType,
   isBlank,
@@ -48,9 +54,52 @@ function headerHas(headers: string[], needles: string[]): boolean {
   return needles.some((n) => set.has(normalizeHeader(n)))
 }
 
-/** XTB — Closed Positions (informe real xStation EN: Instrument/Ticker/…/(UTC)). */
+/** Adaptadores FIFO_FILLS: cada fila es un fill. */
+export function fifoFills(executions: NormalizedExecution[]): AdapterParseResult {
+  return { executions, readyTrades: [] }
+}
+
+function rowKeySet(row: Record<string, string>): Set<string> {
+  return new Set(Object.keys(row).map(normalizeHeader))
+}
+
+function hasCloseSchema(row: Record<string, string>): boolean {
+  const keys = rowKeySet(row)
+  return (
+    keys.has('closetimeutc') ||
+    keys.has('closetime') ||
+    keys.has('horadecierre') ||
+    keys.has('closeprice') ||
+    keys.has('preciodecierre')
+  )
+}
+
+/** Hoja Open Positions de xStation (sin columnas de cierre). */
+function isOpenPositionSchema(row: Record<string, string>): boolean {
+  if (hasCloseSchema(row)) return false
+  const keys = rowKeySet(row)
+  return (
+    keys.has('currentprice') ||
+    keys.has('netprofit') ||
+    keys.has('instrumentposition') ||
+    keys.has('netprofitpercent')
+  )
+}
+
+function xtbRowKey(
+  positionId: string | undefined,
+  qty: number,
+  openAt: string,
+  closeAt: string | null,
+  closePrice: number | null,
+): string {
+  return `xtb:${positionId ?? 'na'}:${qty}:${openAt}:${closeAt ?? ''}:${closePrice ?? ''}`
+}
+
+/** XTB — READY_POSITIONS: cada fila Closed/Open es un trade; no partir en fills FIFO. */
 export const xtbAdapter: BrokerAdapter = {
   id: 'XTB',
+  outputMode: 'READY_POSITIONS',
   matches(headers) {
     const hasTicker = headerHas(headers, ['Ticker', 'Symbol', 'Símbolo', 'Simbolo', 'Instrument'])
     const hasType = headerHas(headers, ['Type', 'Tipo', 'Side'])
@@ -70,7 +119,8 @@ export const xtbAdapter: BrokerAdapter = {
     return hasTicker && (hasType || hasVol) && (hasVol || hasTime)
   },
   parse(rows, ctx) {
-    const out: NormalizedExecution[] = []
+    const executions: NormalizedExecution[] = []
+    const readyTrades: ReadyTradeInput[] = []
     const dec = ctx.decimalSeparator ?? ','
 
     for (const row of rows) {
@@ -143,94 +193,115 @@ export const xtbAdapter: BrokerAdapter = {
         parseLocaleNumber(pickField(row, ['Swap', 'Rollover', 'Storage']), dec) ?? 0
       const feesTotal = Math.abs(commission) + Math.abs(swap)
 
-      // Solo P&L de posiciones CERRADAS (no Net Profit flotante de Open Positions)
       const reportedNetPnl =
         closeAt && closePrice != null
           ? parseLocaleNumber(
-              pickField(row, ['Profit/Loss', 'Profit / Loss', 'Net Profit', 'Net P/L', 'Resultado']),
+              pickField(row, [
+                'Profit/Loss',
+                'Profit / Loss',
+                'Net Profit',
+                'Net P/L',
+                'Resultado',
+                'Gross P/L',
+                'Gross Profit',
+              ]),
               dec,
             )
           : null
 
       const category = pickField(row, ['Category', 'Categoría', 'Categoria'])
       const instrumentType = ctx.defaultInstrumentType ?? inferInstrumentType(ticker, category ?? 'CFD')
+      const ccy = currenciesFromTicker(ticker, ctx)
 
       const positionId =
         pickField(row, ['Position ID', 'Position', 'Posición', 'Posicion', 'ID', 'Order', 'Ticket']) ??
         (instrumentRaw && /^\d+$/.test(instrumentRaw) ? instrumentRaw : undefined)
       const qtyAbs = Math.abs(qty)
+      const direction = openSide === 'BUY' ? 'LONG' : 'SHORT'
+      const multiplier = 1
 
-      // Fila de posición cerrada XTB = open + close en la misma línea
-      if (openPrice !== null && openPrice >= 0 && openAt) {
-        out.push(
-          baseExecution(
-            {
-              externalId: positionId ? `${positionId}-open` : undefined,
-              broker: 'XTB',
-              ticker,
-              side: openSide,
-              quantity: qtyAbs,
-              price: openPrice,
-              fees: closeAt && closePrice != null ? 0 : feesTotal,
-              executedAt: openAt,
-              instrumentType,
-              raw: row,
-            },
-            ctx,
-          ),
-        )
+      // Closed Positions: una fila = un trade cerrado. No explotar a fills.
+      if (openPrice !== null && openPrice >= 0 && openAt && closePrice !== null && closePrice >= 0 && closeAt) {
+        const dirSign = direction === 'LONG' ? 1 : -1
+        const computedPnl = dirSign * (closePrice - openPrice) * qtyAbs * multiplier - feesTotal
+        readyTrades.push({
+          provenance: 'BROKER_CLOSED_ROW',
+          ticker,
+          instrumentType,
+          direction,
+          status: 'CLOSED',
+          quantity: 0,
+          quantityClosed: qtyAbs,
+          avgEntryPrice: openPrice,
+          avgExitPrice: closePrice,
+          feesTotal,
+          netPnl: reportedNetPnl ?? computedPnl,
+          baseCurrency: ccy.base,
+          quoteCurrency: ccy.quote,
+          multiplier,
+          openedAt: openAt,
+          closedAt: closeAt,
+          externalId: xtbRowKey(positionId, qtyAbs, openAt, closeAt, closePrice),
+          raw: row,
+        })
+        continue
       }
 
-      if (closePrice !== null && closePrice >= 0 && closeAt) {
-        const closeSide: 'BUY' | 'SELL' = openSide === 'BUY' ? 'SELL' : 'BUY'
-        out.push(
-          baseExecution(
-            {
-              externalId: positionId ? `${positionId}-close` : undefined,
-              broker: 'XTB',
-              ticker,
-              side: closeSide,
-              quantity: qtyAbs,
-              price: closePrice,
-              fees: feesTotal,
-              executedAt: closeAt,
-              instrumentType,
-              ...(reportedNetPnl !== null ? { reportedNetPnl } : {}),
-              raw: row,
-            },
-            ctx,
-          ),
-        )
-      } else if (openPrice === null || !openAt) {
-        const price = openPrice ?? closePrice
-        const when = openAt ?? closeAt
-        if (price === null || price < 0 || !when) continue
-        out.push(
-          baseExecution(
-            {
-              externalId: positionId,
-              broker: 'XTB',
-              ticker,
-              side: openSide,
-              quantity: qtyAbs,
-              price,
-              fees: feesTotal,
-              executedAt: when,
-              instrumentType,
-              raw: row,
-            },
-            ctx,
-          ),
-        )
+      // Open Positions: un lote abierto = un trade OPEN. No entra al libro FIFO.
+      if (isOpenPositionSchema(row) && openPrice !== null && openPrice >= 0 && openAt) {
+        readyTrades.push({
+          provenance: 'BROKER_OPEN_ROW',
+          ticker,
+          instrumentType,
+          direction,
+          status: 'OPEN',
+          quantity: qtyAbs,
+          quantityClosed: 0,
+          avgEntryPrice: openPrice,
+          avgExitPrice: null,
+          feesTotal,
+          netPnl: null,
+          baseCurrency: ccy.base,
+          quoteCurrency: ccy.quote,
+          multiplier,
+          openedAt: openAt,
+          closedAt: null,
+          externalId: xtbRowKey(positionId, qtyAbs, openAt, null, null),
+          raw: row,
+        })
+        continue
       }
+
+      // Historial de ejecuciones (CSV sin columnas Close): fill suelto → FIFO.
+      const price = openPrice ?? closePrice
+      const when = openAt ?? closeAt
+      if (price === null || price < 0 || !when) continue
+      executions.push(
+        baseExecution(
+          {
+            externalId: positionId,
+            broker: 'XTB',
+            ticker,
+            side: openSide,
+            quantity: qtyAbs,
+            price,
+            fees: feesTotal,
+            executedAt: when,
+            instrumentType,
+            raw: row,
+          },
+          ctx,
+        ),
+      )
     }
-    return out
+    return { executions, readyTrades }
   },
 }
 
-/** Interactive Brokers — Activity / Trade Confirmation Flex CSV. */
+/** Interactive Brokers — FIFO_FILLS (Activity / Trade Confirmation Flex CSV). */
 export const interactiveBrokersAdapter: BrokerAdapter = {
   id: 'INTERACTIVE_BROKERS',
+  outputMode: 'FIFO_FILLS',
   matches(headers) {
     return (
       headerHas(headers, ['Symbol', 'Quantity', 'T. Price', 'TradePrice', 'Price']) &&
@@ -304,13 +375,14 @@ export const interactiveBrokersAdapter: BrokerAdapter = {
         ),
       )
     }
-    return out
+    return fifoFills(out)
   },
 }
 
-/** DEGIRO — Account / Transactions CSV (decimal coma, DD-MM-YYYY). */
+/** DEGIRO — FIFO_FILLS (Account / Transactions CSV; decimal coma, DD-MM-YYYY). */
 export const degiroAdapter: BrokerAdapter = {
   id: 'DEGIRO',
+  outputMode: 'FIFO_FILLS',
   matches(headers) {
     return (
       headerHas(headers, ['Product', 'ISIN', 'Quantity', 'Price']) &&
@@ -378,13 +450,14 @@ export const degiroAdapter: BrokerAdapter = {
         ),
       )
     }
-    return out
+    return fifoFills(out)
   },
 }
 
-/** Fomo — esqueleto (export tip. crypto/CFD). Ajustar columnas cuando tengas un sample real. */
+/** Fomo — FIFO_FILLS (esqueleto crypto/CFD). */
 export const fomoAdapter: BrokerAdapter = {
   id: 'FOMO',
+  outputMode: 'FIFO_FILLS',
   matches(headers) {
     return headerHas(headers, ['Pair', 'Market', 'Symbol']) && headerHas(headers, ['Side', 'Amount', 'Price'])
   },
@@ -422,13 +495,14 @@ export const fomoAdapter: BrokerAdapter = {
         ),
       )
     }
-    return out
+    return fifoFills(out)
   },
 }
 
-/** Axiom — esqueleto. Mapear columnas reales del export cuando estén disponibles. */
+/** Axiom — FIFO_FILLS (esqueleto). */
 export const axiomAdapter: BrokerAdapter = {
   id: 'AXIOM',
+  outputMode: 'FIFO_FILLS',
   matches(headers) {
     return headerHas(headers, ['Instrument', 'Symbol']) && headerHas(headers, ['Buy/Sell', 'Side', 'Action'])
   },
@@ -466,10 +540,15 @@ export const axiomAdapter: BrokerAdapter = {
         ),
       )
     }
-    return out
+    return fifoFills(out)
   },
 }
 
+/**
+ * Registro de adaptadores y su modo:
+ * - XTB → READY_POSITIONS (Closed/Open ya son trades; futuro: MetaTrader igual)
+ * - IB / DEGIRO / FOMO / AXIOM → FIFO_FILLS
+ */
 export const BROKER_ADAPTERS: BrokerAdapter[] = [
   xtbAdapter,
   interactiveBrokersAdapter,

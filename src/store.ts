@@ -22,7 +22,8 @@ import {
   settingsFromAccount,
 } from '@/types'
 import { isDesktop, loadData, saveData, saveDataSync, parseJournalFile, wipeLocalStorage } from '@/lib/db/client'
-import { writeCloudSyncPref } from '@/lib/cloudSyncPref'
+import { mergeCloudSyncSettings, resolveCloudSyncEnabled, writeCloudSyncPref } from '@/lib/cloudSyncPref'
+import { ensureCryptoSaltSynced } from '@/lib/syncSalt'
 import {
   bumpLocalMutationClock,
   computeJournalMutationAt,
@@ -36,6 +37,10 @@ import { generateDemoTrades, generateDemoNotes } from '@/lib/demo'
 import { ensureLocale, getAppLocale, setAppLocale, t } from '@/lib/i18n'
 import { RANGE_OPTIONS, type Range } from '@/lib/range'
 import type { ShareTarget } from '@/lib/shareCard'
+import type { FeedbackDiagnostics, FeedbackOpenFrom } from '../lib/discordFeedback'
+import { version as appVersion } from '../package.json'
+import { markAppVersionSeen } from '@/lib/whatsNewSeen'
+import { captureFeedbackContext } from '@/lib/feedbackContext'
 
 export type Page = 'dashboard' | 'trades' | 'calendar' | 'analytics' | 'journal' | 'settings'
 
@@ -89,6 +94,11 @@ interface State {
 
   tradeModal: { open: boolean; trade?: Trade; presetDate?: string }
   shareTarget: ShareTarget | null
+
+  feedbackOpen: boolean
+  feedbackContext: FeedbackDiagnostics | null
+  openFeedback: (from: FeedbackOpenFrom) => void
+  closeFeedback: () => void
 
   init: () => Promise<void>
   unlockDatabase: () => Promise<void>
@@ -340,6 +350,7 @@ async function applyCloudSyncAfterLoad(get: () => State): Promise<void> {
   const payload: PersistedData = { version: 2, settings, accounts, trades: [], notes: [] }
   const localAt = computeJournalMutationAt(payload)
   bumpLocalMutationClock(localAt)
+  const syncEnabled = resolveCloudSyncEnabled(settings.cloudSyncEnabled)
   try {
     const result = await syncJournalWithCloud(payload, localAt)
     if (!result.ok) {
@@ -353,17 +364,21 @@ async function applyCloudSyncAfterLoad(get: () => State): Promise<void> {
       setAppLocale(loc)
       useStore.setState({
         ...hydrated,
-        settings: {
+        settings: mergeCloudSyncSettings({
           ...hydrated.settings,
           lastCloudSyncAt: new Date(result.at).toISOString(),
-        },
+          cloudSyncEnabled: syncEnabled || hydrated.settings.cloudSyncEnabled,
+        }),
       })
       persistNow(get, true)
       return
     }
     if (result.applied === 'local') {
       useStore.setState((s) => ({
-        settings: { ...s.settings, lastCloudSyncAt: new Date(result.at).toISOString() },
+        settings: mergeCloudSyncSettings({
+          ...s.settings,
+          lastCloudSyncAt: new Date(result.at).toISOString(),
+        }),
       }))
     }
   } catch (e) {
@@ -399,6 +414,13 @@ export const useStore = create<State>((set, get) => ({
   dbLocked: false,
   tradeModal: { open: false },
   shareTarget: null,
+  feedbackOpen: false,
+  feedbackContext: null,
+
+  openFeedback: (from) => {
+    set({ feedbackOpen: true, feedbackContext: captureFeedbackContext(from) })
+  },
+  closeFeedback: () => set({ feedbackOpen: false, feedbackContext: null }),
 
   init: async () => {
     const result = await loadData()
@@ -414,12 +436,17 @@ export const useStore = create<State>((set, get) => ({
       set({ loaded: true, dbLocked: false, loadError: result.message })
       return
     }
-    const hydrated = result.status === 'empty' ? hydrate(null) : hydrate(result.data)
+    const hydratedRaw = result.status === 'empty' ? hydrate(null) : hydrate(result.data)
+    const settings = mergeCloudSyncSettings(hydratedRaw.settings)
+    const hydrated = { ...hydratedRaw, settings }
     const loc = hydrated.settings.locale ?? 'es'
     await ensureLocale(loc)
     setAppLocale(loc)
     set({ ...hydrated, loaded: true, dbLocked: false, loadError: null })
-    writeCloudSyncPref(!!hydrated.settings.cloudSyncEnabled)
+    if (hydrated.settings.cloudSyncEnabled) {
+      const saltSync = await ensureCryptoSaltSynced()
+      if (!saltSync.ok) get().toast(saltSync.error, 'error')
+    }
     if (result.status === 'ok' && (result.skippedTrades || result.skippedNotes)) {
       const loc = getAppLocale()
       const bits = [
@@ -446,12 +473,13 @@ export const useStore = create<State>((set, get) => ({
       return
     }
     if (result.status !== 'ok' && result.status !== 'empty') return
-    const hydrated = result.status === 'empty' ? hydrate(null) : hydrate(result.data)
+    const hydratedRaw = result.status === 'empty' ? hydrate(null) : hydrate(result.data)
+    const settings = mergeCloudSyncSettings(hydratedRaw.settings)
+    const hydrated = { ...hydratedRaw, settings }
     const loc = hydrated.settings.locale ?? 'es'
     await ensureLocale(loc)
     setAppLocale(loc)
     set({ ...hydrated, loaded: true, dbLocked: false, loadError: null })
-    writeCloudSyncPref(!!hydrated.settings.cloudSyncEnabled)
     await applyCloudSyncAfterLoad(get)
   },
 
@@ -846,7 +874,9 @@ export const useStore = create<State>((set, get) => ({
       avatar: s.settings.avatar,
       demoData,
       locale: s.settings.locale ?? 'es',
+      lastSeenAppVersion: appVersion,
     }
+    markAppVersionSeen(appVersion)
     const others = flushed.filter((a) => a.id !== account.id)
     writePref('atrium.page', 'dashboard')
     set({ accounts: [account, ...others], trades, notes, cashflows, settings, page: 'dashboard', tutorialActive: false, loadError: null })

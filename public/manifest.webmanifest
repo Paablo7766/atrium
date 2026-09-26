@@ -1,0 +1,31 @@
+{
+  "name": "Atrium",
+  "short_name": "Atrium",
+  "description": "Diario de trading",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e0e10",
+  "theme_color": "#0e0e10",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "share_target": {
+    "action": "/share-import",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "backup",
+          "accept": ["*/*"]
+        }
+      ]
+    }
+  }
+}

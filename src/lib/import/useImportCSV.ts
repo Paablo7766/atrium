@@ -2,6 +2,7 @@ import { useCallback, useRef, useState, type ChangeEvent, type RefObject } from 
 import { useStore } from '@/store'
 import { dedupeTrades } from '@/lib/csv'
 import { useT } from '@/lib/useI18n'
+import { useGoToPage } from '@/lib/useGoToPage'
 import { isCloudSyncActive, pushLocalJournalToCloud } from '@/lib/tradeSync'
 import { flushPersist } from '@/store'
 import type { BrokerId, ImportEngineResult } from './types'
@@ -104,7 +105,7 @@ export function useImportCSV(options: UseImportCSVOptions = {}): UseImportCSVRet
   const t = useT()
   const toast = useStore((s) => s.toast)
   const importData = useStore((s) => s.importData)
-  const setPage = useStore((s) => s.setPage)
+  const goToPage = useGoToPage()
   const existingTrades = useStore((s) => s.trades)
   const settings = useStore((s) => s.settings)
 
@@ -134,7 +135,7 @@ export function useImportCSV(options: UseImportCSVOptions = {}): UseImportCSVRet
       const { executions, trades: consolidated, errors, warnings, skippedRows, broker: resolvedBroker } =
         engineResult as ImportEngineResult & { trades: ReturnType<CSVImportEngine['toTrades']> }
 
-      if (errors.length && !executions.length) {
+      if (errors.length && !executions.length && !consolidated.length) {
         const msg = errors[0] ?? t('import.invalidFormat')
         const fail = emptyFail(resolvedBroker, errors, fileName)
         fail.warnings = warnings
@@ -149,7 +150,7 @@ export function useImportCSV(options: UseImportCSVOptions = {}): UseImportCSVRet
         return fail
       }
 
-      if (!executions.length) {
+      if (!executions.length && !consolidated.length) {
         const fail = emptyFail(resolvedBroker, [t('import.noExecutions')], fileName)
         fail.warnings = warnings
         fail.skippedRows = skippedRows
@@ -249,14 +250,14 @@ export function useImportCSV(options: UseImportCSVOptions = {}): UseImportCSVRet
 
       toast(bits.join(' · '), errors.length || skipped || skippedRows ? 'info' : 'success')
 
-      if (navigateToDashboard) setPage('dashboard')
+      if (navigateToDashboard) goToPage('dashboard')
       return result
     },
     [
       existingTrades,
       importData,
       navigateToDashboard,
-      setPage,
+      goToPage,
       settings,
       t,
       toast,

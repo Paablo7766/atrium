@@ -31,6 +31,10 @@ import { Button, Confirm } from '@/components/ui'
 import { hasLegacyBrowserJournal, isDesktop, listBackups, openDataFolder, restoreBackup, type JournalBackup } from '@/lib/db/client'
 import { useT } from '@/lib/useI18n'
 import { TradesProvider } from '@/hooks/useTrades'
+import { ShareRestoreBootstrap } from '@/components/ShareRestoreBootstrap'
+import { SHARE_RESTORE_BOOTSTRAP_ENABLED } from '@/lib/featureFlags'
+import { FeedbackModal } from '@/components/FeedbackModal'
+import { WhatsNewModal } from '@/components/WhatsNewModal'
 
 const SettingsPage = lazy(() => import('@/pages/Settings').then((m) => ({ default: m.SettingsPage })))
 const TradeModal = lazy(() => import('@/components/TradeModal').then((m) => ({ default: m.TradeModal })))
@@ -105,8 +109,13 @@ function ProtectedApp() {
   const shareTarget = useStore((s) => s.shareTarget)
   const setPage = useStore((s) => s.setPage)
   const toggleSidebar = useStore((s) => s.toggleSidebar)
+  const feedbackOpen = useStore((s) => s.feedbackOpen)
+  const feedbackContext = useStore((s) => s.feedbackContext)
+  const closeFeedback = useStore((s) => s.closeFeedback)
+  const toast = useStore((s) => s.toast)
   const location = useLocation()
   const navigate = useNavigate()
+  const t = useT()
   const [legacyMigrationPending, setLegacyMigrationPending] = useState(
     () => !isDesktop() && hasLegacyBrowserJournal(),
   )
@@ -228,6 +237,7 @@ function ProtectedApp() {
 
   return (
     <TradesProvider>
+      {SHARE_RESTORE_BOOTSTRAP_ENABLED && <ShareRestoreBootstrap />}
       <div className="h-full flex bg-bg">
         <Sidebar />
         <main data-tour="stage" className="flex-1 min-w-0 flex flex-col h-full stage-ambient">
@@ -264,6 +274,13 @@ function ProtectedApp() {
         )}
         <Toasts />
         <Tour />
+        <FeedbackModal
+          open={feedbackOpen}
+          onClose={closeFeedback}
+          context={feedbackContext}
+          onSent={() => toast(t('feedback.sent'), 'success')}
+        />
+        <WhatsNewModal />
       </div>
     </TradesProvider>
   )

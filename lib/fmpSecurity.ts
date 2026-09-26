@@ -39,14 +39,17 @@ export function fmpKey(): string | undefined {
 }
 
 /** CORS: restrict to ALLOWED_ORIGINS when set; otherwise same-origin friendly wildcard. */
-export function corsHeaders(req: Request): Record<string, string> {
+export function corsHeaders(
+  req: Request,
+  options?: { methods?: string },
+): Record<string, string> {
   const allowed = (process.env.ALLOWED_ORIGINS ?? '')
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean)
   const origin = req.headers.get('Origin')
   const base: Record<string, string> = {
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Methods': options?.methods ?? 'GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Vary': 'Origin',
     'X-Content-Type-Options': 'nosniff',

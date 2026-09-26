@@ -9,6 +9,8 @@ import {
 } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { isSupabaseConfigured, supabase } from '@/lib/supabase'
+import { CLOUD_SYNC_FEATURE_ENABLED } from '@/lib/cloudSyncPref'
+import { ensureCryptoSaltSynced } from '@/lib/syncSalt'
 
 export type AuthContextValue = {
   session: Session | null
@@ -69,7 +71,7 @@ export function mapAuthError(message: string | undefined | null): string {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const cloudEnabled = isSupabaseConfigured()
+  const cloudEnabled = CLOUD_SYNC_FEATURE_ENABLED && isSupabaseConfigured()
   const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(cloudEnabled)
 
@@ -97,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(null)
       } else {
         setSession(data.session)
+        void ensureCryptoSaltSynced()
       }
       setIsLoading(false)
     })()
@@ -104,6 +107,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
       setSession(next)
       setIsLoading(false)
+      if (next?.user) {
+        void ensureCryptoSaltSynced()
+      }
     })
 
     return () => {

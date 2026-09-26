@@ -112,8 +112,8 @@ export function Login() {
           </h1>
           <p className="text-sm text-muted mt-2 leading-relaxed">
             {tab === 'signin'
-              ? 'Accede a tu Trading Journal. Sin cuenta no hay acceso a la interfaz.'
-              : 'Regístrate para guardar y sincronizar tus operaciones en la nube.'}
+              ? 'Segundo dispositivo: inicia sesión con el mismo email y contraseña de cuenta que en tu ordenador. Luego usa la misma contraseña maestra del diario.'
+              : 'Primer dispositivo: crea tu cuenta de sync. Después configura el diario y activa «Sync multi-dispositivo» en Ajustes si aún no lo hiciste.'}
           </p>
 
           <form onSubmit={(e) => void onSubmit(e)} className="mt-6 space-y-4">

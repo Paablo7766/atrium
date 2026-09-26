@@ -113,8 +113,16 @@ async function main() {
     await page.waitForTimeout(300)
   }
   const dataText = await page.locator('body').innerText()
-  if (!dataText.includes('Exportar copia cifrada') && !dataText.includes('Export encrypted backup')) {
+  if (!dataText.includes('Exportar cifrado') && !dataText.includes('Export encrypted')) {
     throw new Error('Falta la exportación de copia cifrada en Ajustes.')
+  }
+  if (
+    !dataText.includes('Elegir mi copia') &&
+    !dataText.includes('Choose my backup') &&
+    !dataText.includes('Restaurar desde carpeta') &&
+    !dataText.includes('Restore from folder')
+  ) {
+    throw new Error('Falta la importación de copia en Ajustes (web/móvil).')
   }
 
   console.log('OK web storage: onboarding, persistencia cifrada, unlock, paridad de páginas.')

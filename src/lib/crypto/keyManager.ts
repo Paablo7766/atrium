@@ -31,11 +31,24 @@ export async function getCryptoStatus(): Promise<CryptoStatusResponse> {
  * Configura cifrado con contraseña maestra.
  * Solo persiste la sal; la clave se deriva con PBKDF2 (≥200.000 iteraciones).
  */
-export async function setupMasterPassword(password: string): Promise<CryptoResult> {
-  if (!isDesktop()) return web.setupMasterPassword(password)
+export async function setupMasterPassword(
+  password: string,
+  options?: web.SetupMasterPasswordOptions,
+): Promise<CryptoResult> {
+  if (!isDesktop()) return web.setupMasterPassword(password, options)
   const api = cryptoApi()
   if (!api) return { ok: false, error: 'El cifrado local no está disponible.' }
   return api.setupPassword(password)
+}
+
+/** Escritorio: pasa de clave del sistema a contraseña maestra sin perder el diario. */
+export async function migrateToMasterPassword(password: string): Promise<CryptoResult> {
+  if (!isDesktop()) return { ok: false, error: 'Solo está disponible en la app de ordenador.' }
+  const api = cryptoApi()
+  if (!api?.migrateToMasterPassword) {
+    return { ok: false, error: 'Actualiza la app de escritorio para usar esta opción.' }
+  }
+  return api.migrateToMasterPassword(password)
 }
 
 /**

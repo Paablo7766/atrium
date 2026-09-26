@@ -3,13 +3,16 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
-import { Card, ChartTooltip, Empty } from '@/components/ui'
+import { ChartTooltip, Empty } from '@/components/ui'
+import { AnalyticsCard } from '@/components/analytics/primitives'
 import { tradeR } from '@/lib/stats'
+import { getAppLocale, t } from '@/lib/i18n'
 import type { Trade } from '@/types'
 
 const GREEN = '#4ade80'
@@ -31,6 +34,15 @@ const BUCKETS: { key: string; label: string; min: number; max: number }[] = [
   { key: '1-2', label: '1 a 2R', min: 1, max: 2 },
   { key: 'gt-2', label: '>2R', min: 2, max: Infinity },
 ]
+
+const TICK: Record<string, string> = {
+  'lt-2': '<−2R',
+  '-2--1': '−2…−1',
+  '-1-0': '−1…0',
+  '0-1': '0…1',
+  '1-2': '1…2',
+  'gt-2': '>2R',
+}
 
 function inBucket(r: number, min: number, max: number) {
   if (max === Infinity) return r >= min
@@ -55,7 +67,7 @@ export function RDistribution({
   subtitle,
   emptyTitle,
   emptyHint,
-  height = 228,
+  height = 220,
 }: {
   /** Si se pasa, se calcula el histograma desde los trades tipados. */
   trades?: Trade[]
@@ -71,30 +83,34 @@ export function RDistribution({
   const total = buckets.reduce((a, b) => a + b.n, 0)
 
   return (
-    <Card title={title} subtitle={subtitle}>
+    <AnalyticsCard title={title} subtitle={subtitle} className="h-full" bodyClassName="flex flex-col justify-end">
       {total > 0 ? (
         <RHistogramChart data={buckets} height={height} />
       ) : (
-        <Empty title={emptyTitle ?? 'Sin stops'} description={emptyHint} />
+        <div className="flex h-full min-h-[220px] items-center justify-center">
+          <Empty title={emptyTitle ?? t(getAppLocale(), 'an.noStops')} description={emptyHint} />
+        </div>
       )}
-    </Card>
+    </AnalyticsCard>
   )
 }
 
-export function RHistogramChart({ data, height = 228 }: { data: RBucket[]; height?: number }) {
+export function RHistogramChart({ data, height = 220 }: { data: RBucket[]; height?: number }) {
+  const total = data.reduce((a, b) => a + b.n, 0)
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} margin={{ top: 12, right: 8, left: 0, bottom: 4 }} barCategoryGap="22%">
+      <BarChart data={data} margin={{ top: 10, right: 8, left: 0, bottom: 0 }} barCategoryGap="24%">
         <CartesianGrid vertical={false} stroke="#1a1a1f" />
-        <XAxis dataKey="label" tick={AXIS} tickLine={false} axisLine={false} interval={0} />
-        <YAxis
+        <XAxis
+          dataKey="key"
           tick={AXIS}
           tickLine={false}
           axisLine={false}
-          width={36}
-          allowDecimals={false}
-          tickFormatter={(v) => String(v)}
+          interval={0}
+          tickFormatter={(k: string) => TICK[k] ?? k}
         />
+        <YAxis tick={AXIS} tickLine={false} axisLine={false} width={32} allowDecimals={false} tickFormatter={(v) => String(v)} />
+        <ReferenceLine y={0} stroke="#2a2a31" />
         <Tooltip
           cursor={false}
           content={({ active, payload }) => {
@@ -102,19 +118,18 @@ export function RHistogramChart({ data, height = 228 }: { data: RBucket[]; heigh
             const p = payload[0].payload as RBucket
             return (
               <ChartTooltip
-                label={p.label}
-                rows={[{ name: 'Operaciones', value: p.n, color: p.negative ? RED : GREEN }]}
+                label={TICK[p.key] ?? p.label}
+                rows={[
+                  { name: t(getAppLocale(), 'chart.trades'), value: p.n, color: p.negative ? RED : GREEN },
+                  { name: t(getAppLocale(), 'an.ofTotal'), value: `${total ? Math.round((p.n / total) * 100) : 0}%` },
+                ]}
               />
             )
           }}
         />
-        <Bar dataKey="n" radius={[6, 6, 0, 0]} maxBarSize={42} activeBar={false}>
+        <Bar dataKey="n" radius={[6, 6, 6, 6]} maxBarSize={36} activeBar={false}>
           {data.map((d) => (
-            <Cell
-              key={d.key}
-              fill={d.negative ? RED : GREEN}
-              fillOpacity={d.n ? (d.negative ? 0.75 : 0.9) : 0.15}
-            />
+            <Cell key={d.key} fill={d.negative ? RED : GREEN} fillOpacity={d.n ? 0.85 : 0.12} />
           ))}
         </Bar>
       </BarChart>

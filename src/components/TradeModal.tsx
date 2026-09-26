@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { clsx } from 'clsx'
-import { ArrowDownRight, ArrowUpRight, Check, ChevronDown, Minus, Share2, Trash2 } from 'lucide-react'
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, Check, ChevronDown, Minus, Share2, Trash2 } from 'lucide-react'
 import { useStore } from '@/store'
 import { DEFAULT_MISTAKES, EMOTIONS, MARKETS, orderedMarketOptions, type Direction, type Emotion, type Market, type PlaybookSetup, type Trade, type TradeFormMode, type TradeStatus } from '@/types'
-import { Button, Field, Input, Modal, Segmented, Select, Stars, Textarea, Confirm } from './ui'
+import { Button, Field, Input, Modal, Pnl, Segmented, Select, Stars, Textarea, Confirm } from './ui'
+import { AssetLogo } from './AssetLogo'
 import { fmtMoney, fmtR, fromLocalInputValue, toLocalInputValue, todayKey } from '@/lib/format'
 import { useT, useLocale } from '@/lib/useI18n'
-import { directionLabel, emotionLabel, marketLabel, mistakeLabel } from '@/lib/i18n'
+import { directionLabel, emotionLabel, marketLabel, mistakeLabel, type AppLocale } from '@/lib/i18n'
 import { dailyPnl, tradePnl, tradeR, tradeRisk, uniqueValues } from '@/lib/stats'
 import { accountEquity, suggestedQuantity } from '@/lib/capital'
 import { INSTRUMENT_PRESETS, presetForSymbol } from '@/lib/instruments'
@@ -290,12 +291,23 @@ export function TradeModal() {
   }, [open, f, mode, trade])
 
   const glow = !isClosed ? 'neutral' : preview.pnl > 0 ? 'gain' : preview.pnl < 0 ? 'loss' : 'neutral'
-  const livePnl = mode === 'simple' || f.usePnlOverride ? num(f.pnlOverride) : isClosed ? preview.pnl : undefined
-  const liveLine = f.symbol
-    ? [f.symbol, marketLabel(locale, f.market), f.direction === 'NONE' ? null : directionLabel(locale, f.direction), isClosed && livePnl !== undefined ? fmtMoney(livePnl, settings.currency, { sign: true }) : null]
-        .filter(Boolean)
-        .join(' · ')
-    : ''
+  const logoTicker = useDebounced(f.symbol.trim(), 450)
+  const headerLine = f.symbol.trim() ? (
+    <span className="inline-flex items-center gap-2 max-w-full min-w-0 align-middle">
+      {logoTicker && <AssetLogo ticker={logoTicker} size="xs" />}
+      <span className="mono font-semibold text-text truncate">{f.symbol.trim().toUpperCase()}</span>
+      <span className="text-dim">·</span>
+      <span className="truncate">{marketLabel(locale, f.market)}</span>
+      {f.direction !== 'NONE' && (
+        <>
+          <span className="text-dim">·</span>
+          <span className={clsx('shrink-0', f.direction === 'LONG' ? 'text-accent' : 'text-loss')}>{directionLabel(locale, f.direction)}</span>
+        </>
+      )}
+    </span>
+  ) : (
+    tx(MODE_META[mode].subtitleKey)
+  )
 
   const fieldProps = {
     f,
@@ -316,14 +328,14 @@ export function TradeModal() {
         onClose={requestClose}
         glow={glow}
         title={
-          <span>
-            <span className="block text-[10px] font-medium uppercase tracking-[0.22em] text-dim mb-1.5">{tx('modal.kicker')}</span>
-            {trade ? tx('modal.edit') : tx('modal.new')}
+          <span className="block">
+            <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-dim mb-1.5">{tx('modal.kicker')}</span>
+            <span className="text-gradient">{trade ? tx('modal.edit') : tx('modal.new')}</span>
           </span>
         }
-        subtitle={liveLine || tx(MODE_META[mode].subtitleKey)}
+        subtitle={headerLine}
         width={MODE_META[mode].width}
-        className="!rounded-[22px] !max-h-[min(88vh,760px)]"
+        className="!rounded-[22px] !max-h-[min(90vh,800px)]"
         action={
           <Segmented
             size="sm"
@@ -337,50 +349,59 @@ export function TradeModal() {
           />
         }
         footer={
-          <div className="flex items-center justify-between w-full gap-3">
-            <div className="min-w-0 flex items-center gap-3">
+          <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className={clsx('min-w-0 flex-wrap items-center gap-1', trade || error ? 'flex' : 'hidden sm:flex')}>
               {trade && (
-                <Button variant="ghost" className="text-loss hover:bg-loss/10" onClick={() => setConfirmDel(true)}>
-                  <Trash2 size={15} /> {tx('common.delete')}
+                <Button variant="ghost" size="sm" className="hover:text-loss hover:bg-loss/10" onClick={() => setConfirmDel(true)}>
+                  <Trash2 size={14} /> {tx('common.delete')}
                 </Button>
               )}
               {trade && trade.status === 'CLOSED' && (
                 <Button
                   variant="ghost"
+                  size="sm"
                   onClick={() => {
                     openShareCard({ kind: 'trade', tradeId: trade.id })
                   }}
                 >
-                  <Share2 size={15} /> {tx('modal.card')}
+                  <Share2 size={14} /> {tx('modal.card')}
                 </Button>
               )}
               {error ? (
-                <p className="text-[12px] text-loss leading-snug animate-field-in">{error}</p>
+                <p
+                  role="alert"
+                  className="ml-1 min-w-0 max-w-full rounded-lg border border-loss/20 bg-loss/[0.07] px-2.5 py-1 text-[12px] leading-snug text-loss animate-field-in"
+                >
+                  {error}
+                </p>
               ) : (
-                <p className="text-[11px] text-dim hidden sm:block">{tx('modal.ctrlEnter')}</p>
+                <p className="ml-1 hidden text-[11px] text-dim sm:block">{tx('modal.ctrlEnter')}</p>
               )}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <Button variant="ghost" onClick={requestClose}>
+            <div className="flex items-center gap-2 sm:shrink-0">
+              <Button variant="ghost" onClick={requestClose} className="flex-1 sm:flex-none">
                 {tx('common.cancel')}
               </Button>
-              <Button variant="primary" size="lg" onClick={submit} className="shadow-glow min-w-[148px] transition-transform duration-200 active:scale-[0.98]">
+              <Button variant="primary" size="lg" onClick={submit} className="flex-[2] sm:flex-none sm:min-w-[140px]">
                 {trade ? tx('modal.save') : tx('modal.register')}
               </Button>
             </div>
           </div>
         }
       >
-        <div key={mode} className="animate-section-rise">
+        <div key={mode} className="@container min-w-0">
           {lossLimitHit && (
-            <div className="mb-6 flex items-start gap-2.5 rounded-2xl border border-loss/30 bg-loss/10 px-4 py-3 text-[13px] leading-relaxed animate-field-in">
-              <span className="text-loss font-semibold shrink-0">{tx('modal.dailyLimit')}</span>
-              <span className="text-text-2">
-                {tx('modal.dailyLimitBody', {
-                  pnl: fmtMoney(todayAgg!.pnl, settings.currency, { sign: true }),
-                  limit: fmtMoney(-settings.dailyLossLimit, settings.currency),
-                })}
-              </span>
+            <div className="mb-3 flex items-start gap-3 rounded-2xl border border-loss/20 bg-loss/[0.06] px-4 py-3 text-[12px] leading-relaxed animate-field-in">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0 text-loss" />
+              <div className="min-w-0">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-loss">{tx('modal.dailyLimit')}</div>
+                <p className="mt-0.5 text-text-2">
+                  {tx('modal.dailyLimitBody', {
+                    pnl: fmtMoney(todayAgg!.pnl, settings.currency, { sign: true }),
+                    limit: fmtMoney(-settings.dailyLossLimit, settings.currency),
+                  })}
+                </p>
+              </div>
             </div>
           )}
           {mode === 'simple' && <SimpleFields {...fieldProps} previewR={preview.r} />}
@@ -424,6 +445,20 @@ export function TradeModal() {
   )
 }
 
+function useDebounced<T>(value: T, ms: number): T {
+  const [v, setV] = useState(value)
+  useEffect(() => {
+    const id = setTimeout(() => setV(value), ms)
+    return () => clearTimeout(id)
+  }, [value, ms])
+  return v
+}
+
+const CONTROL = 'h-11 rounded-xl focus-visible:ring-1 focus-visible:ring-white/25'
+const SELECT = '[&>button]:h-11'
+const HERO_INPUT = 'h-12 px-4 text-[19px] font-semibold tracking-tight rounded-xl focus-visible:border-white/30 focus-visible:ring-1 focus-visible:ring-white/25'
+const INSET = 'shadow-[0_1px_0_0_rgba(255,255,255,0.03)_inset]'
+
 type FieldsBase = {
   f: Form
   set: <K extends keyof Form>(k: K, v: Form[K]) => void
@@ -434,6 +469,37 @@ type FieldsBase = {
   playbook: PlaybookSetup[]
   mistakes: string[]
   preferredMarkets?: Market[]
+}
+
+function InstrumentFields({
+  f,
+  set,
+  setSymbol,
+  symbols,
+  preferredMarkets,
+  label,
+  placeholder,
+  listId,
+}: Pick<FieldsBase, 'f' | 'set' | 'setSymbol' | 'symbols' | 'preferredMarkets'> & { label: string; placeholder: string; listId: string }) {
+  const tx = useT()
+  return (
+    <>
+      <div className="grid grid-cols-1 gap-3 items-end @sm:grid-cols-[minmax(0,1fr)_148px]">
+        <Field label={label}>
+          <Input list={listId} value={f.symbol} onChange={(e) => setSymbol(e.target.value)} placeholder={placeholder} mono autoFocus className={HERO_INPUT} />
+          <datalist id={listId}>
+            {symbols.map((s) => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
+        </Field>
+        <Field label={tx('modal.market')}>
+          <MarketSelect value={f.market} preferred={preferredMarkets} onChange={(m) => set('market', m)} className="[&>button]:h-12" />
+        </Field>
+      </div>
+      <PresetRow symbol={f.symbol} onPick={setSymbol} />
+    </>
+  )
 }
 
 function SimpleFields({ f, set, setSymbol, symbols, currency, isClosed, playbook, mistakes, previewR, preferredMarkets }: FieldsBase & { previewR: number | null }) {
@@ -452,57 +518,44 @@ function SimpleFields({ f, set, setSymbol, symbols, currency, isClosed, playbook
   const extra = [f.entryPrice, f.stopLoss, f.strategy, f.emotion, f.notes, f.setupId, ...f.mistakes].filter((v) => String(v).trim()).length
 
   return (
-    <div className="flex flex-col gap-6 min-w-0">
-      <FormSection title={tx('modal.theTrade')} delay={30}>
-        <div className="grid grid-cols-[1fr_auto] gap-2.5 items-end">
-          <Field label={tx('modal.what')}>
-            <Input
-              list="symbols-simple"
-              value={f.symbol}
-              onChange={(e) => setSymbol(e.target.value)}
-              placeholder={tx('modal.whatPh')}
-              mono
-              autoFocus
-              className="h-12 text-[20px] font-semibold tracking-tight rounded-[16px] px-4 transition-shadow duration-300 focus:shadow-[0_0_0_4px_rgba(74,222,128,0.1)]"
-            />
-            <datalist id="symbols-simple">
-              {symbols.map((s) => (
-                <option key={s} value={s} />
-              ))}
-            </datalist>
-          </Field>
-          <Field label={tx('modal.market')} className="w-[132px] shrink-0">
-            <MarketSelect value={f.market} preferred={preferredMarkets} onChange={(m) => set('market', m)} />
-          </Field>
-        </div>
-        <PresetRow symbol={f.symbol} onPick={setSymbol} compact />
-        <div className="mt-4">
-          <p className="text-[11px] font-medium text-muted tracking-wide mb-2">{tx('modal.direction')}</p>
-          <DirectionPick value={f.direction} onChange={(d) => set('direction', d)} size="sm" />
-        </div>
-      </FormSection>
+    <div className="flex flex-col gap-3 min-w-0">
+      <Panel label={tx('modal.theTrade')} delay={20}>
+        <InstrumentFields
+          f={f}
+          set={set}
+          setSymbol={setSymbol}
+          symbols={symbols}
+          preferredMarkets={preferredMarkets}
+          label={tx('modal.what')}
+          placeholder={tx('modal.whatPh')}
+          listId="symbols-simple"
+        />
+      </Panel>
 
-      <FormSection title={tx('modal.sideWhen')} delay={60}>
-        <div className="grid grid-cols-2 gap-3">
+      <Panel label={tx('modal.sideWhen')} delay={50}>
+        <Field label={tx('modal.direction')}>
+          <DirectionPick value={f.direction} onChange={(d) => set('direction', d)} />
+        </Field>
+        <div className="mt-4 grid grid-cols-1 gap-3 @sm:grid-cols-2">
           <Field label={tx('modal.when')}>
-            <Input type="date" value={dateValue} onChange={(e) => setDate(e.target.value)} className="rounded-[14px] h-11" />
+            <Input type="date" value={dateValue} onChange={(e) => setDate(e.target.value)} className={CONTROL} />
           </Field>
           <Field label={tx('modal.status')}>
-            <StatusToggle value={f.status} onChange={(s) => set('status', s)} simple />
+            <StatusToggle value={f.status} onChange={(s) => set('status', s)} full />
           </Field>
         </div>
-      </FormSection>
+      </Panel>
 
-      {isClosed && (
-        <FormSection title={tx('modal.result')} delay={80}>
-          <PnlPad pnl={pnl} currency={currency} r={previewR} value={f.pnlOverride} onChange={(v) => set('pnlOverride', v)} compact />
-        </FormSection>
+      {isClosed ? (
+        <PnlPad pnl={pnl} currency={currency} r={previewR} value={f.pnlOverride} onChange={(v) => set('pnlOverride', v)} />
+      ) : (
+        <OpenNote />
       )}
 
-      <Fold title={tx('modal.context')} hint={tx('modal.contextHint')} badge={extra ? String(extra) : undefined} defaultOpen={extra > 0}>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label={tx('modal.entryPrice')} hint={tx('modal.entryPriceHintOpt')}>
-            <Input mono inputMode="decimal" value={f.entryPrice} onChange={(e) => set('entryPrice', e.target.value)} placeholder="—" className="rounded-[14px]" />
+      <Fold title={tx('modal.context')} hint={tx('modal.contextHint')} badge={extra ? String(extra) : undefined} defaultOpen={extra > 0} delay={110}>
+        <div className="grid grid-cols-1 gap-3 @sm:grid-cols-2">
+          <Field label={tx('modal.entryPrice')}>
+            <Input mono inputMode="decimal" value={f.entryPrice} onChange={(e) => set('entryPrice', e.target.value)} placeholder="—" className={CONTROL} />
           </Field>
           <Field label={tx('modal.stop')}>
             <Input
@@ -512,28 +565,25 @@ function SimpleFields({ f, set, setSymbol, symbols, currency, isClosed, playbook
               onChange={(e) => set('stopLoss', e.target.value)}
               placeholder="—"
               disabled={!num(f.entryPrice)}
-              className="rounded-[14px]"
+              className={CONTROL}
             />
           </Field>
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-dim">{f.stopLoss && !num(f.entryPrice) ? tx('modal.stopNeedEntry') : tx('modal.entryPriceHintOpt')}</p>
+        <div className="mt-4 grid grid-cols-1 gap-3 @sm:grid-cols-2">
           <Field label={tx('trades.strategy')} hint={tx('modal.strategyHint')}>
-            <Input value={f.strategy} onChange={(e) => set('strategy', e.target.value)} placeholder={tx('modal.strategyPh')} className="rounded-[14px]" />
+            <Input value={f.strategy} onChange={(e) => set('strategy', e.target.value)} placeholder={tx('modal.strategyPh')} className={CONTROL} />
           </Field>
           <Field label={tx('modal.emotion')}>
-            <Select
-              value={f.emotion}
-              onChange={(v) => set('emotion', v as Emotion | '')}
-              placeholder={tx('emotion.none')}
-              options={[{ value: '', label: tx('emotion.none') }, ...EMOTIONS.map((e) => ({ value: e, label: emotionLabel(locale, e) }))]}
-            />
+            <EmotionSelect value={f.emotion} onChange={(v) => set('emotion', v)} locale={locale} />
           </Field>
         </div>
-        {f.stopLoss && !num(f.entryPrice) && <p className="text-[11px] text-dim mt-2">{tx('modal.stopNeedEntry')}</p>}
-        <div className="mt-4">
+        <SubBlock label={tx('modal.process')}>
           <ProcessFields f={f} set={set} playbook={playbook} mistakes={mistakes} />
-        </div>
-        <Field label={tx('modal.note')} className="mt-4">
-          <Textarea value={f.notes} onChange={(e) => set('notes', e.target.value)} placeholder={tx('modal.notePh')} className="min-h-[72px] rounded-[14px]" />
-        </Field>
+        </SubBlock>
+        <SubBlock label={tx('modal.note')}>
+          <Textarea value={f.notes} onChange={(e) => set('notes', e.target.value)} placeholder={tx('modal.notePh')} className="min-h-[76px] rounded-xl" />
+        </SubBlock>
       </Fold>
     </div>
   )
@@ -575,50 +625,72 @@ function PremiumFields({
   const tx = useT()
   const locale = useLocale()
 
-  return (
-    <div className="flex flex-col gap-6 min-w-0">
-      <FormSection title={tx('modal.instrument')} delay={30}>
-        <div className="grid grid-cols-[1fr_auto] gap-2.5 items-end">
-          <Field label={tx('modal.symbol')}>
-            <Input
-              list="symbols-premium"
-              value={f.symbol}
-              onChange={(e) => setSymbol(e.target.value)}
-              placeholder={tx('modal.symbolPh2')}
-              mono
-              autoFocus
-              className="h-11 text-[17px] font-semibold tracking-tight rounded-[14px] transition-shadow duration-300 focus:shadow-[0_0_0_4px_rgba(74,222,128,0.1)]"
-            />
-            <datalist id="symbols-premium">
-              {symbols.map((s) => (
-                <option key={s} value={s} />
-              ))}
-            </datalist>
-          </Field>
-          <Field label={tx('modal.market')} className="w-[132px] shrink-0">
-            <MarketSelect value={f.market} preferred={preferredMarkets} onChange={(m) => set('market', m)} />
-          </Field>
-        </div>
-        <PresetRow symbol={f.symbol} onPick={setSymbol} compact />
-        <div className="mt-4">
-          <p className="text-[11px] font-medium text-muted tracking-wide mb-2">{tx('modal.direction')}</p>
-          <DirectionPick value={f.direction} onChange={(d) => set('direction', d)} size="sm" />
-        </div>
-      </FormSection>
+  const resultRef = useRef<HTMLDivElement>(null)
+  const [resultOut, setResultOut] = useState(false)
+  useEffect(() => {
+    const el = resultRef.current
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const root = el.closest<HTMLElement>('.overflow-y-auto')
+    const io = new IntersectionObserver(
+      ([e]) => {
+        const top = e.rootBounds?.top ?? 0
+        setResultOut(!e.isIntersecting && e.boundingClientRect.bottom <= top + 1)
+      },
+      { root, rootMargin: '-40px 0px 0px 0px', threshold: 0 },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
 
-      <FormSection title={tx('modal.execution')} hint={tx('modal.executionHint')} delay={50}>
-        <div className="mb-3">
-          <StatusToggle value={f.status} onChange={(s) => set('status', s)} />
+  const metrics: { label: string; value: string; warn?: boolean }[] = []
+  if (preview.risk) metrics.push({ label: tx('modal.risk1r'), value: fmtMoney(preview.risk, currency) })
+  if (riskPct !== null) metrics.push({ label: tx('modal.acctPct'), value: `${riskPct.toFixed(2)}%`, warn: riskWarn })
+  if (preview.plannedR) metrics.push({ label: tx('modal.plannedR'), value: `${preview.plannedR.toFixed(2)}R` })
+
+  return (
+    <div className="relative flex flex-col gap-3 min-w-0">
+      <div className="sticky -top-4 z-20 -mb-3 h-0">
+        <div
+          aria-hidden={!resultOut}
+          className={clsx(
+            'absolute right-0 top-0 inline-flex h-8 items-center gap-2 rounded-full border border-border-2 bg-surface-2/95 px-3 text-[12px] backdrop-blur-md shadow-[0_12px_32px_-10px_rgba(0,0,0,0.9)] transition-all duration-300',
+            resultOut && isClosed && shownPnl !== undefined ? 'opacity-100 translate-y-0' : 'pointer-events-none -translate-y-1 opacity-0',
+          )}
+        >
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">{tx('modal.result')}</span>
+          <Pnl value={shownPnl ?? 0} neutralZero={false} className="font-semibold">
+            {fmtMoney(shownPnl ?? 0, currency, { sign: true })}
+          </Pnl>
+          {preview.r !== null && <span className="num text-muted">{fmtR(preview.r)}</span>}
         </div>
-        <div className="grid grid-cols-2 gap-3">
+      </div>
+
+      <Panel label={tx('modal.instrument')} delay={20}>
+        <InstrumentFields
+          f={f}
+          set={set}
+          setSymbol={setSymbol}
+          symbols={symbols}
+          preferredMarkets={preferredMarkets}
+          label={tx('modal.symbol')}
+          placeholder={tx('modal.symbolPh2')}
+          listId="symbols-premium"
+        />
+        <Field label={tx('modal.direction')} className="mt-4">
+          <DirectionPick value={f.direction} onChange={(d) => set('direction', d)} />
+        </Field>
+      </Panel>
+
+      <Panel label={tx('modal.execution')} delay={50} extra={<StatusToggle value={f.status} onChange={(s) => set('status', s)} />}>
+        <div className="grid grid-cols-1 gap-3 @sm:grid-cols-2">
           <Field label={tx('modal.entry')}>
-            <Input type="datetime-local" value={f.entryDate} onChange={(e) => set('entryDate', e.target.value)} className="rounded-[14px]" />
+            <Input type="datetime-local" value={f.entryDate} onChange={(e) => set('entryDate', e.target.value)} className={CONTROL} />
           </Field>
           <Field label={tx('modal.exit')}>
-            <Input type="datetime-local" value={f.exitDate} onChange={(e) => set('exitDate', e.target.value)} disabled={!isClosed} className="rounded-[14px]" />
+            <Input type="datetime-local" value={f.exitDate} onChange={(e) => set('exitDate', e.target.value)} disabled={!isClosed} className={CONTROL} />
           </Field>
           <Field label={tx('modal.entryPrice')}>
-            <Input mono inputMode="decimal" value={f.entryPrice} onChange={(e) => set('entryPrice', e.target.value)} placeholder="0.00" className="rounded-[14px]" />
+            <Input mono inputMode="decimal" value={f.entryPrice} onChange={(e) => set('entryPrice', e.target.value)} placeholder="0.00" className={CONTROL} />
           </Field>
           <Field label={tx('modal.exitPrice')}>
             <Input
@@ -628,13 +700,13 @@ function PremiumFields({
               onChange={(e) => set('exitPrice', e.target.value)}
               placeholder="0.00"
               disabled={!isClosed || f.usePnlOverride}
-              className="rounded-[14px]"
+              className={CONTROL}
             />
           </Field>
         </div>
-      </FormSection>
+      </Panel>
 
-      <FormSection title={tx('modal.result')} delay={70}>
+      <div ref={resultRef}>
         <ResultStrip
           isClosed={isClosed}
           pnl={shownPnl}
@@ -644,101 +716,74 @@ function PremiumFields({
           override={f.pnlOverride}
           onToggle={() => set('usePnlOverride', !f.usePnlOverride)}
           onOverride={(v) => set('pnlOverride', v)}
+          metrics={metrics}
         />
-        {(preview.risk || preview.plannedR || riskPct !== null) && (
-          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-[12px] text-muted">
-            {preview.risk ? (
-              <span>
-                {tx('modal.risk1r')} <span className="num text-text font-semibold">{fmtMoney(preview.risk, currency)}</span>
-              </span>
-            ) : null}
-            {riskPct !== null ? (
-              <span className={riskWarn ? 'text-amber' : undefined}>
-                {tx('modal.acctPct')} <span className="num font-semibold">{riskPct.toFixed(2)}%</span>
-              </span>
-            ) : null}
-            {preview.plannedR ? (
-              <span>
-                {tx('modal.plannedR')} <span className="num text-text font-semibold">{preview.plannedR.toFixed(2)}R</span>
-              </span>
-            ) : null}
-          </div>
-        )}
-      </FormSection>
-
-      <div className="flex flex-col gap-3">
-        <Fold title={tx('modal.sizeRisk')} hint={tx('modal.sizeRiskHint')} badge={sizeExtra ? String(sizeExtra) : undefined} defaultOpen={sizeExtra > 0}>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={tx('modal.qty')}>
-              <Input mono inputMode="decimal" value={f.quantity} onChange={(e) => set('quantity', e.target.value)} className="rounded-[14px]" />
-            </Field>
-            <Field label={tx('modal.multiplier')} hint={tx('modal.multiplierHint')}>
-              <Input mono inputMode="decimal" value={f.multiplier} onChange={(e) => set('multiplier', e.target.value)} className="rounded-[14px]" />
-            </Field>
-            <Field label={tx('modal.fees')}>
-              <Input mono inputMode="decimal" value={f.fees} onChange={(e) => set('fees', e.target.value)} className="rounded-[14px]" />
-            </Field>
-            <Field label={tx('modal.stop')} hint={tx('modal.stopHint')}>
-              <Input mono inputMode="decimal" value={f.stopLoss} onChange={(e) => set('stopLoss', e.target.value)} placeholder="0.00" className="rounded-[14px]" />
-            </Field>
-            <Field label={tx('modal.tp')}>
-              <Input mono inputMode="decimal" value={f.takeProfit} onChange={(e) => set('takeProfit', e.target.value)} placeholder="0.00" className="rounded-[14px]" />
-            </Field>
-            <div className="flex items-end">
-              {size ? (
-                <button
-                  type="button"
-                  onClick={() => set('quantity', String(size.qty))}
-                  className="w-full h-11 px-3.5 rounded-[14px] border border-border-2 bg-surface-3/60 text-[12px] text-left hover:border-accent/40 hover:bg-accent/5 active:scale-[0.99] transition-all duration-200"
-                >
-                  <span className="block text-dim">{tx('modal.sizeLine', { pct: riskPerTrade, money: fmtMoney(size.riskMoney, currency) })}</span>
-                  <span className="text-accent font-semibold">{tx('modal.useSize', { qty: size.qty })}</span>
-                </button>
-              ) : (
-                <div className="w-full h-11 px-3.5 rounded-[14px] border border-dashed border-border bg-transparent flex items-center text-[12px] text-dim">
-                  {tx('modal.stopForR')}
-                </div>
-              )}
-            </div>
-          </div>
-        </Fold>
-
-        <Fold title={tx('modal.context')} hint={tx('modal.contextHint2')} badge={contextExtra ? String(contextExtra) : undefined} defaultOpen={contextExtra > 0}>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label={tx('trades.strategy')}>
-              <Input list="strategies-premium" value={f.strategy} onChange={(e) => set('strategy', e.target.value)} placeholder={tx('modal.strategyPh2')} className="rounded-[14px]" />
-              <datalist id="strategies-premium">
-                {strategies.map((s) => (
-                  <option key={s} value={s} />
-                ))}
-              </datalist>
-            </Field>
-            <Field label={tx('modal.tags')}>
-              <Input value={f.tags} onChange={(e) => set('tags', e.target.value)} placeholder={tx('modal.tagsPh')} className="rounded-[14px]" />
-            </Field>
-            <Field label={tx('modal.emotion')}>
-              <Select
-                value={f.emotion}
-                onChange={(v) => set('emotion', v as Emotion | '')}
-                placeholder={tx('emotion.none')}
-                options={[{ value: '', label: tx('emotion.none') }, ...EMOTIONS.map((e) => ({ value: e, label: emotionLabel(locale, e) }))]}
-              />
-            </Field>
-            <Field label={tx('modal.rating')}>
-              <div className="h-11 flex items-center px-1">
-                <Stars value={f.rating} onChange={(v) => set('rating', v)} size={22} />
-              </div>
-            </Field>
-          </div>
-          <Field label={tx('modal.note')} className="mt-3">
-            <Textarea value={f.notes} onChange={(e) => set('notes', e.target.value)} placeholder={tx('modal.notePh2')} className="rounded-[14px] min-h-[72px]" />
-          </Field>
-        </Fold>
-
-        <Fold title={tx('modal.process')} hint={tx('modal.processHint')} badge={processExtra ? String(processExtra) : undefined} defaultOpen={processExtra > 0}>
-          <ProcessFields f={f} set={set} playbook={playbook} mistakes={mistakes} />
-        </Fold>
       </div>
+
+      <Fold title={tx('modal.sizeRisk')} hint={tx('modal.sizeRiskHint')} badge={sizeExtra ? String(sizeExtra) : undefined} defaultOpen={sizeExtra > 0} delay={110}>
+        <div className="grid grid-cols-1 gap-3 @sm:grid-cols-2">
+          <Field label={tx('modal.qty')}>
+            <Input mono inputMode="decimal" value={f.quantity} onChange={(e) => set('quantity', e.target.value)} className={CONTROL} />
+          </Field>
+          <Field label={tx('modal.multiplier')} hint={tx('modal.multiplierHint')}>
+            <Input mono inputMode="decimal" value={f.multiplier} onChange={(e) => set('multiplier', e.target.value)} className={CONTROL} />
+          </Field>
+          <Field label={tx('modal.fees')}>
+            <Input mono inputMode="decimal" value={f.fees} onChange={(e) => set('fees', e.target.value)} className={CONTROL} />
+          </Field>
+          <Field label={tx('modal.stop')} hint={tx('modal.stopHint')}>
+            <Input mono inputMode="decimal" value={f.stopLoss} onChange={(e) => set('stopLoss', e.target.value)} placeholder="0.00" className={CONTROL} />
+          </Field>
+          <Field label={tx('modal.tp')}>
+            <Input mono inputMode="decimal" value={f.takeProfit} onChange={(e) => set('takeProfit', e.target.value)} placeholder="0.00" className={CONTROL} />
+          </Field>
+          <div className="flex flex-col justify-end">
+            {size ? (
+              <button
+                type="button"
+                onClick={() => set('quantity', String(size.qty))}
+                className="flex h-11 w-full items-center justify-between gap-2 rounded-xl border border-border-2 bg-surface-2 px-3.5 text-left text-[12px] transition-all duration-200 hover:border-border-3 hover:bg-surface-3 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/25"
+              >
+                <span className="truncate text-dim">{tx('modal.sizeLine', { pct: riskPerTrade, money: fmtMoney(size.riskMoney, currency) })}</span>
+                <span className="shrink-0 font-semibold text-text">{tx('modal.useSize', { qty: size.qty })}</span>
+              </button>
+            ) : (
+              <div className="flex h-11 w-full items-center rounded-xl border border-dashed border-border px-3.5 text-[12px] text-dim">{tx('modal.stopForR')}</div>
+            )}
+          </div>
+        </div>
+      </Fold>
+
+      <Fold title={tx('modal.context')} hint={tx('modal.contextHint2')} badge={contextExtra ? String(contextExtra) : undefined} defaultOpen={contextExtra > 0} delay={140}>
+        <div className="grid grid-cols-1 gap-3 @sm:grid-cols-2">
+          <Field label={tx('trades.strategy')}>
+            <Input list="strategies-premium" value={f.strategy} onChange={(e) => set('strategy', e.target.value)} placeholder={tx('modal.strategyPh2')} className={CONTROL} />
+            <datalist id="strategies-premium">
+              {strategies.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+          </Field>
+          <Field label={tx('modal.tags')}>
+            <Input value={f.tags} onChange={(e) => set('tags', e.target.value)} placeholder={tx('modal.tagsPh')} className={CONTROL} />
+          </Field>
+          <Field label={tx('modal.emotion')}>
+            <EmotionSelect value={f.emotion} onChange={(v) => set('emotion', v)} locale={locale} />
+          </Field>
+          <Field label={tx('modal.rating')}>
+            <div className="flex h-11 items-center rounded-xl border border-border bg-surface-2/60 px-3">
+              <Stars value={f.rating} onChange={(v) => set('rating', v)} size={20} />
+            </div>
+          </Field>
+        </div>
+        <SubBlock label={tx('modal.note')}>
+          <Textarea value={f.notes} onChange={(e) => set('notes', e.target.value)} placeholder={tx('modal.notePh2')} className="min-h-[76px] rounded-xl" />
+        </SubBlock>
+      </Fold>
+
+      <Fold title={tx('modal.process')} hint={tx('modal.processHint')} badge={processExtra ? String(processExtra) : undefined} defaultOpen={processExtra > 0} delay={170}>
+        <ProcessFields f={f} set={set} playbook={playbook} mistakes={mistakes} />
+      </Fold>
     </div>
   )
 }
@@ -772,6 +817,8 @@ function ProcessFields({
   }
   const tx = useT()
   const locale = useLocale()
+  const items = setup?.checklist ?? []
+  const doneCount = items.filter((c) => f.checklistDone.includes(c.id)).length
 
   return (
     <div className="flex flex-col gap-4">
@@ -780,34 +827,46 @@ function ProcessFields({
           value={f.setupId}
           onChange={pickSetup}
           placeholder={tx('common.noSetup')}
+          className={SELECT}
           options={[{ value: '', label: tx('common.noSetup') }, ...playbook.map((s) => ({ value: s.id, label: s.name }))]}
         />
       </Field>
-      {setup?.checklist.length ? (
-        <div>
-          <div className="text-[11px] font-medium text-muted mb-2">{tx('modal.checklist', { name: setup.name })}</div>
-          <div className="flex flex-col gap-1.5">
-            {setup.checklist.map((item) => {
+      {setup && items.length ? (
+        <div className="animate-field-in">
+          <div className="mb-2 flex items-baseline justify-between gap-3">
+            <span className="truncate text-[11px] font-medium tracking-wide text-muted">{tx('modal.checklist', { name: setup.name })}</span>
+            <span className="num shrink-0 text-[11px] text-muted">
+              {doneCount}/{items.length}
+            </span>
+          </div>
+          <div className="mb-3 h-1 overflow-hidden rounded-full bg-surface-4">
+            <div className="h-full rounded-full bg-text/80 transition-all duration-500" style={{ width: `${(doneCount / items.length) * 100}%` }} />
+          </div>
+          <div className="grid grid-cols-1 gap-2 @sm:grid-cols-2">
+            {items.map((item) => {
               const on = f.checklistDone.includes(item.id)
               return (
                 <button
                   key={item.id}
                   type="button"
+                  role="checkbox"
+                  aria-checked={on}
                   onClick={() => toggleCheck(item.id)}
                   className={clsx(
-                    'flex items-center gap-2.5 rounded-2xl px-3.5 py-2.5 text-left text-[13px] border transition-all duration-200',
-                    on ? 'bg-accent/10 border-accent/25 text-text' : 'bg-surface-3/60 border-border text-muted hover:text-text',
+                    'flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left text-[12px] transition-all duration-200 active:scale-[0.99]',
+                    'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/25',
+                    on ? 'border-border-2 bg-surface-3/60 text-text' : 'border-border text-muted hover:border-border-2 hover:text-text',
                   )}
                 >
                   <span
                     className={clsx(
-                      'w-[18px] h-[18px] rounded-md border flex items-center justify-center shrink-0 transition-colors',
-                      on ? 'bg-accent border-accent text-black' : 'border-border-3',
+                      'flex h-4 w-4 shrink-0 items-center justify-center rounded-[5px] transition-colors',
+                      on ? 'bg-text text-black' : 'border border-border-3',
                     )}
                   >
                     {on && <Check size={11} strokeWidth={3} />}
                   </span>
-                  {item.label}
+                  <span className="min-w-0 flex-1 leading-snug">{item.label}</span>
                 </button>
               )
             })}
@@ -822,10 +881,12 @@ function ProcessFields({
               <button
                 key={m}
                 type="button"
+                aria-pressed={on}
                 onClick={() => toggleMistake(m)}
                 className={clsx(
-                  'h-8 px-3 rounded-full text-[12px] font-semibold border transition-all duration-200',
-                  on ? 'bg-loss/15 text-loss border-loss/30' : 'bg-surface-3 text-muted border-border hover:text-text',
+                  'h-7 rounded-full border px-2.5 text-[12px] font-medium transition-all duration-200 active:scale-[0.97]',
+                  'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/25',
+                  on ? 'border-loss/25 bg-loss/10 text-loss' : 'border-border bg-surface-2 text-muted hover:border-border-2 hover:text-text',
                 )}
               >
                 {mistakeLabel(locale, m)}
@@ -838,42 +899,66 @@ function ProcessFields({
   )
 }
 
+function EmotionSelect({ value, onChange, locale }: { value: Emotion | ''; onChange: (v: Emotion | '') => void; locale: AppLocale }) {
+  const tx = useT()
+  return (
+    <Select
+      value={value}
+      onChange={(v) => onChange(v as Emotion | '')}
+      placeholder={tx('emotion.none')}
+      className={SELECT}
+      options={[{ value: '', label: tx('emotion.none') }, ...EMOTIONS.map((e) => ({ value: e, label: emotionLabel(locale, e) }))]}
+    />
+  )
+}
+
+function OpenNote() {
+  const tx = useT()
+  return (
+    <div className={clsx('flex items-center gap-3 rounded-2xl border border-sky/20 bg-sky/[0.05] px-4 py-3.5 text-[12px] animate-section-rise', INSET)} style={{ animationDelay: '80ms' }}>
+      <LiveDot />
+      <span className="font-semibold text-sky">{tx('common.inProgress')}</span>
+      <span className="min-w-0 truncate text-muted">{tx('modal.openHint')}</span>
+    </div>
+  )
+}
+
+function LiveDot() {
+  return (
+    <span className="relative flex h-2 w-2 shrink-0">
+      <span className="absolute inset-0 rounded-full bg-sky/60 animate-ping-soft" />
+      <span className="relative h-2 w-2 rounded-full bg-sky" />
+    </span>
+  )
+}
+
+function resultTone(n: number | undefined) {
+  if (n !== undefined && n > 0) return 'border-accent/20 bg-accent/[0.05]'
+  if (n !== undefined && n < 0) return 'border-loss/20 bg-loss/[0.05]'
+  return 'border-border bg-surface/70'
+}
+
 function PnlPad({
   pnl,
   currency,
   r,
   value,
   onChange,
-  compact,
 }: {
   pnl: number | undefined
   currency: 'USD' | 'EUR' | 'GBP'
   r: number | null
   value: string
   onChange: (v: string) => void
-  compact?: boolean
 }) {
   const tx = useT()
   return (
-    <div
-      className={clsx(
-        'relative overflow-hidden border transition-all duration-300',
-        compact ? 'rounded-[18px] p-4' : 'rounded-[22px] p-5',
-        pnl !== undefined && pnl > 0
-          ? 'bg-accent/[0.07] border-accent/25 shadow-[inset_0_1px_0_rgba(74,222,128,0.08)]'
-          : pnl !== undefined && pnl < 0
-            ? 'bg-loss/[0.07] border-loss/25 shadow-[inset_0_1px_0_rgba(248,113,113,0.08)]'
-            : 'bg-surface-3/50 border-border-2',
-      )}
+    <section
+      className={clsx('rounded-2xl border p-4 @sm:p-5 transition-colors duration-300 animate-section-rise', INSET, resultTone(pnl))}
+      style={{ animationDelay: '80ms' }}
     >
-      {pnl !== undefined && pnl !== 0 && (
-        <div
-          className="absolute -right-10 -top-12 w-36 h-36 rounded-full blur-3xl animate-glow-breathe pointer-events-none"
-          style={{ background: pnl > 0 ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.16)' }}
-        />
-      )}
-      <div className={clsx('relative flex items-center justify-between gap-3', compact ? 'mb-2.5' : 'mb-3.5')}>
-        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">{tx('modal.brokerNet')}</span>
+      <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-dim">{tx('modal.result')}</h3>
         <div className="flex gap-1.5">
           <ResultChip
             active={pnl !== undefined && pnl > 0}
@@ -899,7 +984,7 @@ function PnlPad({
             {tx('modal.be')}
           </ResultChip>
         </div>
-      </div>
+      </header>
       <Input
         mono
         inputMode="decimal"
@@ -907,20 +992,23 @@ function PnlPad({
         onChange={(e) => onChange(e.target.value)}
         placeholder={tx('modal.pnlPh')}
         className={clsx(
-          'relative font-semibold tracking-tight rounded-[16px] bg-surface/40 border-border/60 transition-shadow duration-300 focus:shadow-[0_0_0_4px_rgba(255,255,255,0.04)]',
-          compact ? 'h-14 text-[26px]' : 'h-[68px] text-[32px]',
-          pnl !== undefined && pnl > 0 && 'text-accent',
-          pnl !== undefined && pnl < 0 && 'text-loss',
+          'num h-14 rounded-xl border-white/[0.06] bg-surface/60 px-4 text-[28px] font-semibold tracking-tight focus-visible:ring-1 focus-visible:ring-white/25',
+          pnl !== undefined && pnl > 0 && '!text-accent',
+          pnl !== undefined && pnl < 0 && '!text-loss',
         )}
       />
-      <p className={clsx('relative text-[11px] text-dim', compact ? 'mt-2' : 'mt-3')}>{tx('modal.withFees')}</p>
-      {pnl !== undefined && (
-        <div key={String(pnl)} className={clsx('relative num text-[14px] font-semibold mt-1 animate-ticker', pnl > 0 ? 'text-accent' : pnl < 0 ? 'text-loss' : 'text-muted')}>
-          {fmtMoney(pnl, currency, { sign: true })}
-          {r !== null && <span className="text-muted font-medium"> · {fmtR(r)}</span>}
-        </div>
-      )}
-    </div>
+      <div className="mt-2.5 flex items-center justify-between gap-3">
+        <span className="min-w-0 truncate text-[11px] text-dim">
+          {tx('modal.brokerNet')} · {tx('modal.withFees')}
+        </span>
+        {pnl !== undefined && (
+          <span key={String(pnl)} className="num shrink-0 text-[13px] font-semibold animate-ticker">
+            <Pnl value={pnl}>{fmtMoney(pnl, currency, { sign: true })}</Pnl>
+            {r !== null && <span className="font-medium text-muted"> · {fmtR(r)}</span>}
+          </span>
+        )}
+      </div>
+    </section>
   )
 }
 
@@ -933,6 +1021,7 @@ function ResultStrip({
   override,
   onToggle,
   onOverride,
+  metrics,
 }: {
   isClosed: boolean
   pnl: number | undefined
@@ -942,138 +1031,105 @@ function ResultStrip({
   override: string
   onToggle: () => void
   onOverride: (v: string) => void
+  metrics: { label: string; value: string; warn?: boolean }[]
 }) {
   const tx = useT()
-  if (!isClosed) {
-    return (
-      <div className="rounded-[22px] border border-border-2 bg-surface-3/50 px-5 py-4">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">{tx('modal.open')}</div>
-        <div className="text-[22px] font-semibold tracking-tight mt-1">—</div>
-        <p className="text-[12px] text-muted mt-1">{tx('modal.openHint')}</p>
-      </div>
-    )
-  }
   const n = pnl ?? 0
   return (
-    <div
+    <section
       className={clsx(
-        'relative overflow-hidden rounded-[22px] border p-5 transition-colors duration-300',
-        n > 0 ? 'bg-accent/[0.08] border-accent/25' : n < 0 ? 'bg-loss/[0.08] border-loss/25' : 'bg-surface-3/60 border-border-2',
+        'rounded-2xl border p-4 @sm:p-5 transition-colors duration-300 animate-section-rise',
+        INSET,
+        isClosed ? resultTone(n === 0 ? undefined : n) : 'border-sky/20 bg-sky/[0.04]',
       )}
+      style={{ animationDelay: '80ms' }}
     >
-      {n !== 0 && (
-        <div
-          className="absolute -right-8 -top-10 w-32 h-32 rounded-full blur-3xl animate-glow-breathe pointer-events-none"
-          style={{ background: n > 0 ? 'rgba(74,222,128,0.22)' : 'rgba(248,113,113,0.18)' }}
-        />
-      )}
-      <div className="flex items-start justify-between gap-3 relative">
-        <div className="min-w-0">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-dim">{useOverride ? tx('modal.manualPnl') : tx('modal.netPnl')}</div>
-          {useOverride ? (
-            <Input
-              mono
-              inputMode="decimal"
-              value={override}
-              onChange={(e) => onOverride(e.target.value)}
-              placeholder="0.00"
-              className={clsx(
-                'h-14 text-[28px] font-semibold tracking-tight rounded-2xl bg-transparent border-0 px-0 mt-1',
-                n > 0 && 'text-accent',
-                n < 0 && 'text-loss',
-              )}
-            />
-          ) : (
-            <div key={String(n)} className={clsx('num text-[34px] font-semibold tracking-tight mt-1 animate-ticker', n > 0 ? 'text-accent' : n < 0 ? 'text-loss' : 'text-text')}>
+      <header className="flex flex-wrap items-center justify-between gap-2">
+        {isClosed ? (
+          <h3 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-dim">{useOverride ? tx('modal.manualPnl') : tx('modal.netPnl')}</h3>
+        ) : (
+          <h3 className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-sky">
+            <LiveDot />
+            {tx('common.inProgress')}
+          </h3>
+        )}
+        {isClosed && (
+          <Segmented
+            size="sm"
+            value={useOverride ? 'manual' : 'calc'}
+            onChange={(v) => {
+              if ((v === 'manual') !== useOverride) onToggle()
+            }}
+            options={[
+              { value: 'calc', label: tx('modal.calculated') },
+              { value: 'manual', label: tx('modal.manual') },
+            ]}
+          />
+        )}
+      </header>
+
+      {!isClosed ? (
+        <>
+          <div className="num mt-2 text-[28px] font-semibold leading-none tracking-tight text-dim">—</div>
+          <p className="mt-2 text-[12px] text-muted">{tx('modal.openHint')}</p>
+        </>
+      ) : useOverride ? (
+        <>
+          <Input
+            mono
+            inputMode="decimal"
+            value={override}
+            onChange={(e) => onOverride(e.target.value)}
+            placeholder="0.00"
+            autoFocus
+            className={clsx(
+              'num mt-3 h-14 rounded-xl border-white/[0.06] bg-surface/60 px-4 text-[28px] font-semibold tracking-tight focus-visible:ring-1 focus-visible:ring-white/25',
+              n > 0 && '!text-accent',
+              n < 0 && '!text-loss',
+            )}
+          />
+          <div className="mt-2 text-[12px] text-muted">{r !== null ? <span className="num">{fmtR(r)}</span> : tx('modal.brokerPnlHint')}</div>
+        </>
+      ) : (
+        <>
+          <div key={String(n)} className="mt-2.5 animate-ticker">
+            <Pnl value={n} neutralZero={false} className="text-[30px] font-semibold leading-none tracking-tight">
               {fmtMoney(n, currency, { sign: true })}
+            </Pnl>
+          </div>
+          <div className="mt-2 text-[12px] text-muted">{r !== null ? <span className="num text-text-2">{fmtR(r)}</span> : tx('modal.addStopR')}</div>
+        </>
+      )}
+
+      {metrics.length > 0 && (
+        <div className="mt-4 grid grid-cols-3 gap-3 border-t border-white/[0.06] pt-3.5">
+          {metrics.map((m) => (
+            <div key={m.label} className="min-w-0">
+              <div className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">{m.label}</div>
+              <div className={clsx('num mt-1 truncate text-[13px] font-semibold', m.warn ? 'text-amber' : 'text-text')}>{m.value}</div>
             </div>
-          )}
-          <div className="text-[12px] text-muted mt-1">{r !== null ? fmtR(r) : tx('modal.addStopR')}</div>
+          ))}
         </div>
-        <button
-          type="button"
-          onClick={onToggle}
-          className={clsx(
-            'h-8 px-3 rounded-full text-[12px] font-semibold border shrink-0 transition-colors',
-            useOverride ? 'bg-text text-black border-text' : 'bg-surface-2 text-muted border-border-2 hover:text-text',
-          )}
-        >
-          {useOverride ? tx('modal.calculated') : tx('modal.manual')}
-        </button>
-      </div>
-    </div>
+      )}
+    </section>
   )
 }
 
-function DirectionPick({ value, onChange, size = 'md' }: { value: Direction; onChange: (d: Direction) => void; size?: 'sm' | 'md' | 'lg' }) {
+function DirectionPick({ value, onChange }: { value: Direction; onChange: (d: Direction) => void }) {
   const tx = useT()
   const items = [
-    {
-      value: 'LONG' as const,
-      title: tx('dir.bought'),
-      short: tx('dir.long'),
-      sub: tx('dir.long'),
-      Icon: ArrowUpRight,
-      tone: 'long' as const,
-    },
-    {
-      value: 'SHORT' as const,
-      title: tx('dir.sold'),
-      short: tx('dir.short'),
-      sub: tx('dir.short'),
-      Icon: ArrowDownRight,
-      tone: 'short' as const,
-    },
-    {
-      value: 'NONE' as const,
-      title: tx('dir.noneCard'),
-      short: '—',
-      sub: tx('dir.none'),
-      Icon: Minus,
-      tone: 'none' as const,
-    },
+    { value: 'LONG' as const, label: tx('dir.long'), Icon: ArrowUpRight, tint: 'text-accent' },
+    { value: 'SHORT' as const, label: tx('dir.short'), Icon: ArrowDownRight, tint: 'text-loss' },
+    { value: 'NONE' as const, label: tx('dir.none'), Icon: Minus, tint: 'text-dim' },
   ]
-
-  if (size === 'sm') {
-    return (
-      <div
-        className="relative flex items-center p-1 rounded-2xl bg-surface-3/80 border border-border h-11 w-full"
-        role="radiogroup"
-        aria-label={tx('modal.direction')}
-      >
-        <span
-          className="absolute top-1 bottom-1 rounded-[14px] bg-text shadow-sm transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
-          style={{
-            left: `calc(${items.findIndex((d) => d.value === value)} * (100% - 8px) / 3 + 4px)`,
-            width: 'calc((100% - 8px) / 3)',
-          }}
-        />
-        {items.map((d) => {
-          const active = value === d.value
-          const Icon = d.Icon
-          return (
-            <button
-              key={d.value}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => onChange(d.value)}
-              className={clsx(
-                'relative z-[1] flex-1 h-full rounded-[14px] text-[12px] font-semibold transition-colors duration-200 inline-flex items-center justify-center gap-1.5',
-                active ? 'text-black' : 'text-muted hover:text-text',
-              )}
-            >
-              <Icon size={13} strokeWidth={2.25} />
-              {d.short}
-            </button>
-          )
-        })}
-      </div>
-    )
-  }
+  const idx = items.findIndex((d) => d.value === value)
 
   return (
-    <div className="grid grid-cols-3 gap-2.5" role="radiogroup" aria-label={tx('modal.direction')}>
+    <div className="relative flex h-11 w-full items-center rounded-xl border border-border bg-surface-2 p-1" role="radiogroup" aria-label={tx('modal.direction')}>
+      <span
+        className="absolute bottom-1 top-1 rounded-[9px] bg-text shadow-[0_1px_2px_rgba(0,0,0,0.35)] transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+        style={{ left: `calc(${idx} * (100% - 8px) / 3 + 4px)`, width: 'calc((100% - 8px) / 3)' }}
+      />
       {items.map((d) => {
         const active = value === d.value
         const Icon = d.Icon
@@ -1085,57 +1141,13 @@ function DirectionPick({ value, onChange, size = 'md' }: { value: Direction; onC
             aria-checked={active}
             onClick={() => onChange(d.value)}
             className={clsx(
-              'group relative overflow-hidden rounded-[16px] border text-left transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
-              'active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-text/25',
-              size === 'lg' ? 'min-h-[68px] px-3 py-2.5' : 'min-h-[58px] px-2.5 py-2',
-              active && 'animate-pick-settle',
-              active && d.tone === 'long' && 'bg-accent/[0.11] border-accent/40 text-accent shadow-[0_0_28px_-14px_rgba(74,222,128,0.7),inset_0_1px_0_rgba(74,222,128,0.12)]',
-              active && d.tone === 'short' && 'bg-loss/[0.11] border-loss/40 text-loss shadow-[0_0_28px_-14px_rgba(248,113,113,0.55),inset_0_1px_0_rgba(248,113,113,0.1)]',
-              active && d.tone === 'none' && 'bg-surface-4/90 border-border-3 text-text shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]',
-              !active && 'bg-[#121214] border-border/80 text-muted hover:text-text hover:border-border-3 hover:bg-surface-3/70',
+              'relative z-[1] inline-flex h-full min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[9px] text-[12px] font-semibold transition-colors duration-200',
+              'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/25',
+              active ? 'text-black' : 'text-muted hover:text-text',
             )}
           >
-            {active && d.tone !== 'none' && (
-              <span
-                className="pointer-events-none absolute -right-6 -top-8 h-20 w-20 rounded-full blur-2xl opacity-70"
-                style={{ background: d.tone === 'long' ? 'rgba(74,222,128,0.28)' : 'rgba(248,113,113,0.24)' }}
-              />
-            )}
-            <span className="relative flex flex-col h-full">
-              <span className="flex items-center justify-between gap-2">
-                <span
-                  className={clsx(
-                    'inline-flex items-center justify-center rounded-[11px] transition-all duration-300',
-                    size === 'lg' ? 'h-8 w-8' : 'h-7 w-7',
-                    active && d.tone === 'long' && 'bg-accent/20 text-accent',
-                    active && d.tone === 'short' && 'bg-loss/20 text-loss',
-                    active && d.tone === 'none' && 'bg-surface-3 text-text',
-                    !active && 'bg-surface-3/80 text-dim group-hover:text-muted',
-                  )}
-                >
-                  <Icon size={size === 'lg' ? 15 : 14} strokeWidth={2.25} />
-                </span>
-                {active && (
-                  <span key={d.value} className="animate-soft-pop inline-flex h-5 w-5 items-center justify-center rounded-full bg-current/15">
-                    <Check size={11} strokeWidth={3} className="opacity-90" />
-                  </span>
-                )}
-              </span>
-              <span className={clsx('block font-semibold leading-none tracking-tight mt-auto pt-2.5', size === 'lg' ? 'text-[15px]' : 'text-[14px]')}>
-                {d.title}
-              </span>
-              <span
-                className={clsx(
-                  'block text-[11px] mt-1 leading-none transition-colors',
-                  active && d.tone === 'long' && 'text-accent/75',
-                  active && d.tone === 'short' && 'text-loss/75',
-                  active && d.tone === 'none' && 'text-muted',
-                  !active && 'text-dim',
-                )}
-              >
-                {d.sub}
-              </span>
-            </span>
+            <Icon size={14} strokeWidth={2.25} className={clsx('shrink-0', !active && d.tint)} />
+            <span className="truncate">{d.label}</span>
           </button>
         )
       })}
@@ -1143,10 +1155,10 @@ function DirectionPick({ value, onChange, size = 'md' }: { value: Direction; onC
   )
 }
 
-function PresetRow({ symbol, onPick, compact }: { symbol: string; onPick: (s: string) => void; compact?: boolean }) {
-  const shown = INSTRUMENT_PRESETS.slice(0, compact ? 6 : 8)
+function PresetRow({ symbol, onPick }: { symbol: string; onPick: (s: string) => void }) {
+  const shown = INSTRUMENT_PRESETS.slice(0, 6)
   return (
-    <div className={clsx('flex flex-wrap gap-1.5', compact ? 'mt-2' : 'mt-3')}>
+    <div className="mt-3 flex flex-wrap gap-1.5">
       {shown.map((p) => {
         const on = symbol.trim().toUpperCase() === p.symbol
         return (
@@ -1154,10 +1166,12 @@ function PresetRow({ symbol, onPick, compact }: { symbol: string; onPick: (s: st
             key={p.symbol}
             type="button"
             title={p.hint}
+            aria-pressed={on}
             onClick={() => onPick(p.symbol)}
             className={clsx(
-              'h-8 px-2.5 rounded-xl text-[11px] font-semibold mono transition-all duration-200 active:scale-[0.96]',
-              on ? 'bg-text text-black shadow-sm' : 'bg-surface-3/80 text-muted hover:text-text hover:bg-surface-4',
+              'mono h-7 rounded-lg border px-2.5 text-[11px] font-semibold transition-all duration-200 active:scale-[0.96]',
+              'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/25',
+              on ? 'border-text bg-text text-black' : 'border-border bg-surface-2 text-muted hover:border-border-3 hover:text-text',
             )}
           >
             {p.symbol}
@@ -1182,13 +1196,15 @@ function ResultChip({
   return (
     <button
       type="button"
+      aria-pressed={active}
       onClick={onClick}
       className={clsx(
-        'h-8 px-3 rounded-full text-[12px] font-semibold border transition-all duration-200 active:scale-[0.96]',
-        active && tone === 'green' && 'bg-accent/15 text-accent border-accent/30',
-        active && tone === 'red' && 'bg-loss/15 text-loss border-loss/30',
-        active && tone === 'neutral' && 'bg-surface-4 text-text border-border-3',
-        !active && 'bg-surface-2/80 text-muted border-border-2 hover:text-text',
+        'h-7 rounded-full border px-2.5 text-[12px] font-semibold transition-all duration-200 active:scale-[0.96]',
+        'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/25',
+        active && tone === 'green' && 'border-accent/25 bg-accent/10 text-accent',
+        active && tone === 'red' && 'border-loss/25 bg-loss/10 text-loss',
+        active && tone === 'neutral' && 'border-border-3 bg-surface-4 text-text',
+        !active && 'border-border bg-surface-2/80 text-muted hover:border-border-2 hover:text-text',
       )}
     >
       {children}
@@ -1196,19 +1212,27 @@ function ResultChip({
   )
 }
 
-function FormSection({ n, title, hint, delay, children }: { n?: string; title: string; hint?: string; delay?: number; children: ReactNode }) {
+function Panel({ label, extra, delay, children }: { label: string; extra?: ReactNode; delay?: number; children: ReactNode }) {
   return (
-    <section className="animate-section-rise" style={delay ? { animationDelay: `${delay}ms` } : undefined}>
-      <div className="flex items-center gap-3 mb-3">
-        {n && (
-          <span className="num text-[11px] font-medium text-dim/80 tracking-[0.14em] tabular-nums">{n}</span>
-        )}
-        <h3 className="text-[13px] font-semibold tracking-tight text-text">{title}</h3>
-        <span className="flex-1 h-px bg-gradient-to-r from-border-2 via-border to-transparent" />
-      </div>
-      {hint && <p className="text-[12px] text-dim -mt-1.5 mb-3 leading-relaxed max-w-[52ch]">{hint}</p>}
+    <section
+      className={clsx('rounded-2xl border border-border bg-surface/70 p-4 @sm:p-5 animate-section-rise', INSET)}
+      style={delay ? { animationDelay: `${delay}ms` } : undefined}
+    >
+      <header className="mb-4 flex min-h-5 items-center justify-between gap-3">
+        <h3 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-dim">{label}</h3>
+        {extra}
+      </header>
       {children}
     </section>
+  )
+}
+
+function SubBlock({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="mt-5 border-t border-border pt-4">
+      <div className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-dim">{label}</div>
+      {children}
+    </div>
   )
 }
 
@@ -1217,68 +1241,85 @@ function Fold({
   hint,
   badge,
   defaultOpen,
+  delay,
   children,
 }: {
   title: string
   hint?: string
   badge?: string
   defaultOpen?: boolean
+  delay?: number
   children: ReactNode
 }) {
   const [open, setOpen] = useState(!!defaultOpen)
   return (
-    <section className="rounded-[20px] border border-border-2/90 bg-surface-3/25 overflow-hidden transition-colors duration-300 hover:border-border-2">
+    <section
+      className={clsx('overflow-hidden rounded-2xl border border-border bg-surface/70 transition-colors duration-300 hover:border-border-2 animate-section-rise', INSET)}
+      style={delay ? { animationDelay: `${delay}ms` } : undefined}
+    >
       <button
         type="button"
+        aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-surface-3/35 transition-colors"
+        className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.015] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-white/20 @sm:px-5"
       >
         <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-semibold tracking-tight">{title}</div>
-          {hint && <div className="text-[11px] text-dim mt-0.5 truncate">{hint}</div>}
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-semibold tracking-tight">{title}</span>
+            {badge && (
+              <span className="num inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-md border border-border bg-surface-3 px-1 text-[10px] font-semibold text-muted">
+                {badge}
+              </span>
+            )}
+          </div>
+          {hint && <div className="mt-0.5 truncate text-[11px] text-dim">{hint}</div>}
         </div>
-        {badge && (
-          <span className="text-[11px] font-semibold tabular-nums text-muted bg-surface-3 border border-border px-2 h-6 rounded-full flex items-center">
-            {badge}
-          </span>
-        )}
-        <ChevronDown size={16} className={clsx('text-dim shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]', open && 'rotate-180')} />
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border text-dim">
+          <ChevronDown size={14} className={clsx('transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]', open && 'rotate-180')} />
+        </span>
       </button>
-      {open && <div className="px-4 pb-4 pt-1 border-t border-border/70 animate-field-in">{children}</div>}
+      {open && <div className="border-t border-border px-4 pb-5 pt-4 animate-field-in @sm:px-5">{children}</div>}
     </section>
   )
 }
 
-function StatusToggle({ value, onChange, simple }: { value: TradeStatus; onChange: (s: TradeStatus) => void; simple?: boolean }) {
+function StatusToggle({ value, onChange, full }: { value: TradeStatus; onChange: (s: TradeStatus) => void; full?: boolean }) {
   const tx = useT()
   const options: TradeStatus[] = ['CLOSED', 'OPEN']
   const idx = options.indexOf(value)
 
   return (
     <div
-      className={clsx(
-        'relative flex items-center p-1 rounded-2xl bg-surface-3/80 border border-border',
-        simple ? 'h-11 w-full' : 'w-fit h-10',
-      )}
+      role="radiogroup"
+      aria-label={tx('modal.status')}
+      className={clsx('relative flex items-center rounded-xl border border-border bg-surface-2', full ? 'h-11 w-full p-1' : 'h-8 w-fit p-[3px]')}
     >
       <span
-        className="absolute top-1 bottom-1 rounded-[14px] bg-text shadow-sm transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
-        style={{
-          left: `calc(${idx} * (100% - 8px) / 2 + 4px)`,
-          width: 'calc((100% - 8px) / 2)',
-        }}
+        className={clsx(
+          'absolute rounded-[9px] bg-text shadow-[0_1px_2px_rgba(0,0,0,0.35)] transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]',
+          full ? 'bottom-1 top-1' : 'bottom-[3px] top-[3px]',
+        )}
+        style={
+          full
+            ? { left: `calc(${idx} * (100% - 8px) / 2 + 4px)`, width: 'calc((100% - 8px) / 2)' }
+            : { left: `calc(${idx} * (100% - 6px) / 2 + 3px)`, width: 'calc((100% - 6px) / 2)' }
+        }
       />
       {options.map((s) => (
         <button
           key={s}
           type="button"
+          role="radio"
+          aria-checked={value === s}
           onClick={() => onChange(s)}
           className={clsx(
-            'relative z-[1] rounded-[14px] text-[12px] font-semibold transition-colors duration-200',
-            simple ? 'flex-1 h-full' : 'h-full px-4',
+            'relative z-[1] inline-flex h-full flex-1 items-center justify-center gap-1.5 rounded-[9px] text-[12px] font-semibold transition-colors duration-200',
+            'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/25',
+            full ? '' : 'px-3',
             value === s ? 'text-black' : 'text-muted hover:text-text',
           )}
         >
+          {s === 'OPEN' && <span className={clsx('h-1.5 w-1.5 rounded-full bg-sky', value === 'OPEN' && 'animate-pulse')} />}
           {s === 'CLOSED' ? tx('common.closed') : tx('common.open')}
         </button>
       ))}
@@ -1290,10 +1331,12 @@ function MarketSelect({
   value,
   preferred,
   onChange,
+  className,
 }: {
   value: Market
   preferred?: Market[]
   onChange: (market: Market) => void
+  className?: string
 }) {
   const locale = useLocale()
   const tx = useT()
@@ -1313,6 +1356,7 @@ function MarketSelect({
       onChange={(v) => onChange(v as Market)}
       options={groups ? undefined : MARKETS.map((m) => ({ value: m, label: marketLabel(locale, m) }))}
       groups={groups}
+      className={className}
     />
   )
 }

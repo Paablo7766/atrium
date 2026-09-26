@@ -5,6 +5,7 @@ import electron from 'vite-plugin-electron/simple'
 import path from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { cleanSymbol, cleanSymbolsCsv } from './lib/fmpSecurity'
+import { feedbackDevApiProxy } from './lib/feedbackDevProxy'
 
 /**
  * Electron solo en desktop local (`npm run dev` / `npm run build` / `npm run dist`).
@@ -116,6 +117,7 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
       fmpDevApiProxy(env),
+      feedbackDevApiProxy(env),
       ...(enableElectron
         ? [
             electron({

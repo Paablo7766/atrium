@@ -64,10 +64,13 @@ const csv = parts[0]
 assert(/CLOSED POSITION|Symbol/i.test(csv), 'picked closed sheet / has Symbol')
 assert(!/^ID,Type,Amount/m.test(csv.split('\n')[0] ?? ''), 'not cash header as first data')
 
-const { executions, trades, errors, warnings } = new CSVImportEngine().importAndGroup(parts, 'XTB')
-assert(executions.length >= 4, `expected ≥4 fills (open+close×2), got ${executions.length}. errors=${errors.join('; ')} csv=\n${csv}`)
+const { executions, readyTrades, trades, errors, warnings } = new CSVImportEngine().importAndGroup(parts, 'XTB')
+assert(executions.length === 0, `Closed Positions no deben emitir fills FIFO, got ${executions.length}. errors=${errors.join('; ')} csv=\n${csv}`)
+assert(readyTrades.length === 2, `2 ready trades got ${readyTrades.length}`)
 assert(trades.length === 2, `2 trades got ${trades.length}`)
 assert(trades.every((t) => t.status === 'CLOSED'), 'all closed')
+const eurusd = trades.find((t) => t.ticker === 'EURUSD')
+assert(eurusd && Math.abs((eurusd.netPnl ?? 0) - 500) < 1e-6, `EURUSD uses Gross P/L 500 got ${eurusd?.netPnl}`)
 
 console.log('verify-xlsx-import: OK', {
   executions: executions.length,

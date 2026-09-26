@@ -33,6 +33,14 @@ export type LitestreamStatus = {
   error: string | null
 }
 
+export type FolderBackupStatus = {
+  enabled: boolean
+  folderPath: string | null
+  lastBackupAt: number | null
+  failed: boolean
+  needsPassword: boolean
+}
+
 export type Filter = { name: string; extensions: string[] }
 
 export interface DesktopApi {
@@ -51,18 +59,25 @@ export interface DesktopApi {
     restore: () => Promise<{ ok: true } | { ok: false; error: string }>
     openReplicaFolder: () => Promise<void>
   }
+  folderBackup?: {
+    getStatus: () => Promise<FolderBackupStatus>
+    setEnabled: (enabled: boolean) => Promise<{ ok: true } | { ok: false; error: string }>
+    chooseFolder: () => Promise<{ ok: true; needsConfirm: boolean } | { ok: false; error: string }>
+    confirmFolder: () => Promise<{ ok: true } | { ok: false; error: string }>
+  }
   exportFile: (content: string, defaultName: string, filters: Filter[]) => Promise<boolean>
   importFile: (filters: Filter[]) => Promise<{ name: string; content: string } | null>
   platform: string
   crypto?: {
     getStatus: () => Promise<CryptoStatusResponse>
     setupPassword: (password: string) => Promise<CryptoResult>
+    migrateToMasterPassword?: (password: string) => Promise<CryptoResult>
     setupSecureStorage: () => Promise<CryptoResult>
     unlockPassword: (password: string) => Promise<CryptoResult>
     tryAutoUnlock: () => Promise<CryptoResult>
     deriveSyncKey?: () => Promise<{ ok: true; keyHex: string } | { ok: false; error: string }>
     deriveSyncKeyFromPassword?: (password: string) => Promise<{ ok: true; keyHex: string } | { ok: false; error: string }>
-    getExportMaterial?: () => Promise<
+    getExportMaterial?: (password?: string) => Promise<
       { ok: true; keyHex: string; salt: string; iterations: number } | { ok: false; error: string }
     >
   }

@@ -168,10 +168,11 @@ export function DrawdownChart({ data, currency, height = 180 }: { data: EquityPo
             const p = payload[0].payload as EquityPoint
             return (
               <ChartTooltip
-                variant="mint"
                 label={`${fmtDate(p.date, 'dd MMM yyyy')} · ${p.symbol}`}
-                rows={[{ name: t(getAppLocale(), 'chart.drawdown'), value: fmtMoney(p.drawdown, currency), block: true }]}
-                footer={{ name: 'Equity', value: fmtMoney(p.equity, currency) }}
+                rows={[
+                  { name: t(getAppLocale(), 'chart.drawdown'), value: fmtMoney(p.drawdown, currency), color: RED },
+                  { name: 'Equity', value: fmtMoney(p.equity, currency) },
+                ]}
               />
             )
           }}
@@ -204,6 +205,7 @@ export function Sparkline({ data, positive, height = 36 }: { data: number[]; pos
             <stop offset="100%" stopColor={color} stopOpacity={0} />
           </linearGradient>
         </defs>
+        <YAxis hide domain={['dataMin', 'dataMax']} />
         <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.75} fill={`url(#${id})`} dot={false} isAnimationActive={false} />
       </AreaChart>
     </ResponsiveContainer>

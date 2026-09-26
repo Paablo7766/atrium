@@ -2,7 +2,7 @@ import { safeStorage } from 'electron'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { getEncryptionKeyHex } from '@/lib/db/connection'
+import { getEncryptionKeyHex, setEncryptionKey } from '@/lib/db/connection'
 import { PBKDF2_ITERATIONS } from './types'
 import type { CryptoMeta, CryptoMode, CryptoStatus } from './types'
 import { SYNC_HKDF_INFO } from './types'
@@ -15,6 +15,28 @@ export const SECURE_KEY_FILE = '.db-key.secure'
 export const LEGACY_KEY_FILE = '.db-key'
 
 const KEY_BYTES = 32
+
+/** Clave de la sesión de escritorio (p. ej. tras desbloquear); respaldo si el módulo de conexión pierde la referencia. */
+let sessionDbKeyHex: string | null = null
+
+export function pinSessionDbKey(key: string): void {
+  const trimmed = key.trim()
+  sessionDbKeyHex = trimmed.length >= KEY_BYTES * 2 ? trimmed : null
+}
+
+export function clearSessionDbKey(): void {
+  sessionDbKeyHex = null
+}
+
+function resolveActiveDbKeyHex(): string | null {
+  const live = getEncryptionKeyHex()
+  if (live) return live
+  if (sessionDbKeyHex) {
+    setEncryptionKey(sessionDbKeyHex)
+    return getEncryptionKeyHex()
+  }
+  return null
+}
 
 export function generateSaltHex(): string {
   return crypto.randomBytes(16).toString('hex')
@@ -269,8 +291,17 @@ export function unlockWithPassword(userDataDir: string, password: string): KeyRe
 
 export function getExportKeyMaterial(
   userDataDir: string,
+  masterPassword?: string,
 ): { ok: true; keyHex: string; salt: string; iterations: number } | { ok: false; error: string } {
-  const keyHex = getEncryptionKeyHex()
+  let keyHex = resolveActiveDbKeyHex()
+  if (!keyHex && masterPassword?.trim()) {
+    const derived = unlockWithPassword(userDataDir, masterPassword)
+    if (derived.ok) {
+      pinSessionDbKey(derived.key)
+      setEncryptionKey(derived.key)
+      keyHex = derived.key
+    }
+  }
   if (!keyHex) {
     return { ok: false, error: 'Desbloquea el diario con tu contraseña maestra para exportar una copia cifrada.' }
   }

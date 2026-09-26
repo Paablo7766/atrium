@@ -99,7 +99,11 @@ function freezeTrade(b: OpenTradeBuilder, status: 'OPEN' | 'CLOSED', eps: number
 }
 
 /**
- * Agrupa executions de un mismo ticker en trades (round-trips) con matching FIFO.
+ * Agrupa **fills sueltos** de un mismo ticker en trades (round-trips) con matching FIFO.
+ *
+ * Solo para adaptadores `FIFO_FILLS` (IB, DEGIRO, FOMO, AXIOM) o fills residuales.
+ * Las filas Closed/Open de adaptadores `READY_POSITIONS` (XTB; futuro MetaTrader)
+ * van por `finalizeReadyTrades` / `assembleImportTrades` y NO deben pasar por aquí.
  *
  * - BUY con posición flat o long → abre / añade lotes long.
  * - SELL con long abierto → cierra FIFO (parcial o total); remanente abre short.

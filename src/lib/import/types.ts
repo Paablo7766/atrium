@@ -81,16 +81,64 @@ export interface BrokerParseContext {
   defaultInstrumentType?: InstrumentType
 }
 
+/**
+ * Cómo consume el engine lo que emite el adaptador.
+ *
+ * - `FIFO_FILLS` — cada fila es una ejecución suelta (IB, DEGIRO, FOMO, AXIOM).
+ *   El engine las agrupa con FIFO por ticker.
+ * - `READY_POSITIONS` — el export ya trae operaciones formadas (XTB Closed/Open
+ *   Positions; futuro MetaTrader deal/closed). Esas filas NO pasan por FIFO.
+ *   Pueden quedar fills residuales (historial de ejecuciones sin close en la misma fila).
+ */
+export type AdapterOutputMode = 'FIFO_FILLS' | 'READY_POSITIONS'
+
+/** Origen de un trade que el bróker ya entregó cerrado o abierto. */
+export type ReadyTradeProvenance = 'BROKER_CLOSED_ROW' | 'BROKER_OPEN_ROW'
+
+/**
+ * Operación ya formada por el bróker. El engine la convierte 1:1 a
+ * `ConsolidatedTrade` y no la mezcla con fills de otros orígenes.
+ */
+export interface ReadyTradeInput {
+  provenance: ReadyTradeProvenance
+  ticker: string
+  instrumentType: InstrumentType
+  direction: TradeDirection
+  status: TradeLifecycleStatus
+  quantity: number
+  quantityClosed: number
+  avgEntryPrice: number
+  avgExitPrice: number | null
+  feesTotal: number
+  netPnl: number | null
+  baseCurrency: string
+  quoteCurrency: string
+  multiplier: number
+  openedAt: string
+  closedAt: string | null
+  externalId?: string
+  raw?: Record<string, string>
+}
+
+export interface AdapterParseResult {
+  /** Fills sueltos → `groupAllExecutionsIntoTrades`. */
+  executions: NormalizedExecution[]
+  /** Round-trips / abiertas ya formadas → `finalizeReadyTrades` (sin FIFO). */
+  readyTrades: ReadyTradeInput[]
+}
+
 export interface BrokerAdapter {
   readonly id: BrokerId
+  readonly outputMode: AdapterOutputMode
   /** true si el header parece de este broker (auto-detect). */
   matches(headers: string[]): boolean
-  parse(rows: Record<string, string>[], ctx: BrokerParseContext): NormalizedExecution[]
+  parse(rows: Record<string, string>[], ctx: BrokerParseContext): AdapterParseResult
 }
 
 export interface ImportEngineResult {
   broker: BrokerId
   executions: NormalizedExecution[]
+  readyTrades: ReadyTradeInput[]
   errors: string[]
   warnings: string[]
   skippedRows: number

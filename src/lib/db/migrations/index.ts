@@ -1,9 +1,13 @@
 import type Database from 'better-sqlite3-multiple-ciphers'
 import { SCHEMA_VERSION, TABLES } from '../schema'
 import { SQL_001_INITIAL } from './001_initial'
+import { SQL_002_CLOUD_SYNC_SETTINGS } from './002_cloud_sync_settings'
+import { SQL_003_LAST_SEEN_APP_VERSION } from './003_last_seen_app_version'
 
 const MIGRATION_SQL: Record<number, string> = {
   1: SQL_001_INITIAL,
+  2: SQL_002_CLOUD_SYNC_SETTINGS,
+  3: SQL_003_LAST_SEEN_APP_VERSION,
 }
 
 function currentVersion(db: Database.Database): number {

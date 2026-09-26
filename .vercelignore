@@ -1,0 +1,12 @@
+# Web deploy only — exclude Electron/desktop artifacts and local caches
+node_modules
+dist
+dist-electron
+release
+release-pack
+electron
+.git
+.vite
+out
+.tmp*
+*.log

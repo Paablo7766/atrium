@@ -1,7 +1,7 @@
 {
   "name": "atrium",
   "productName": "Atrium",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Diario de trading profesional para escritorio",
   "private": true,
   "main": "dist-electron/main.js",
@@ -94,6 +94,7 @@
     "playwright": "^1.63.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
+    "vercel": "^59.23.2",
     "vite": "^8.3.0",
     "vite-plugin-electron": "^1.1.2",
     "vitest": "^3.2.7"

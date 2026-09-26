@@ -1,7 +1,8 @@
 /**
  * Gestión de clave en el navegador.
- * Solo contraseña maestra (no hay Keychain). La sal vive en localStorage;
- * la clave derivada permanece en memoria y nunca se persiste.
+ * Solo contraseña maestra (no hay Keychain). La sal vive en localStorage y,
+ * con sync activo, también en Supabase (user_crypto_salts — valor público PBKDF2).
+ * La clave derivada permanece en memoria y nunca se persiste.
  */
 import type { CryptoMeta, CryptoResult, CryptoStatus } from './types'
 import { PBKDF2_ITERATIONS, SYNC_HKDF_INFO } from './types'
@@ -113,12 +114,39 @@ export function clearWebKey(): void {
   clearAesKeyCache()
 }
 
+export type SetupMasterPasswordOptions = {
+  /** Sal compartida (p. ej. descargada de Supabase en un segundo dispositivo). */
+  saltHex?: string
+  /** Comprueba que la clave derivada descifra datos remotos existentes. */
+  verifyWithCloud?: (
+    dbKeyHex: string,
+  ) => Promise<{ ok: true; hasRemoteData: boolean } | { ok: false; error: string }>
+}
+
+/** Escribe la sal remota en localStorage sin clave ni canario (segundo dispositivo). */
+export function stageLocalSalt(saltHex: string, iterations: number = PBKDF2_ITERATIONS): void {
+  writeMeta({
+    mode: 'password',
+    salt: saltHex.trim().toLowerCase(),
+    kdf: 'pbkdf2',
+    iterations: iterations >= PBKDF2_ITERATIONS ? iterations : PBKDF2_ITERATIONS,
+  })
+}
+
+/** true si hay sal local pero aún no hay canario (sal remota aplicada, falta contraseña). */
+export async function hasStagedSaltOnly(): Promise<boolean> {
+  const meta = readMeta()
+  if (!meta?.salt) return false
+  return !(await hasCanary())
+}
+
 export async function getCryptoStatus(): Promise<CryptoStatus> {
   const meta = readMeta()
   if (!meta) {
     return { configured: false, mode: null, secureStorageAvailable: false, needsUnlock: false }
   }
-  const locked = !memoryKeyHex && (await hasCanary())
+  const staged = await hasStagedSaltOnly()
+  const locked = !memoryKeyHex && !staged && (await hasCanary())
   return {
     configured: true,
     mode: 'password',
@@ -127,20 +155,52 @@ export async function getCryptoStatus(): Promise<CryptoStatus> {
   }
 }
 
-export async function setupMasterPassword(password: string): Promise<CryptoResult> {
+export async function setupMasterPassword(
+  password: string,
+  options?: SetupMasterPasswordOptions,
+): Promise<CryptoResult> {
   const trimmed = password.trim()
   if (trimmed.length < MIN_PASSWORD) {
     return { ok: false, error: 'La contraseña debe tener al menos 8 caracteres.' }
   }
-  if (readMeta()) return { ok: false, error: 'El cifrado ya está configurado.' }
 
-  const salt = generateSaltHex()
+  const existing = readMeta()
+  const hasCanaryLocal = await hasCanary()
+  if (existing && hasCanaryLocal && memoryKeyHex) {
+    return { ok: false, error: 'El cifrado ya está configurado.' }
+  }
+  if (existing && hasCanaryLocal && !options?.saltHex) {
+    return { ok: false, error: 'El cifrado ya está configurado.' }
+  }
+
+  const salt = (options?.saltHex ?? existing?.salt ?? generateSaltHex()).trim().toLowerCase()
+  if (!/^[0-9a-f]{32}$/i.test(salt)) {
+    return { ok: false, error: 'La sal de cifrado no es válida.' }
+  }
+
   const key = await deriveKeyFromPassword(trimmed, salt)
+
+  if (options?.verifyWithCloud) {
+    const verified = await options.verifyWithCloud(key)
+    if (!verified.ok) {
+      return { ok: false, error: verified.error }
+    }
+    if (!verified.hasRemoteData && hasCanaryLocal) {
+      if (!(await verifyCanary(key))) {
+        return { ok: false, error: 'Contraseña incorrecta.' }
+      }
+    }
+  } else if (hasCanaryLocal) {
+    if (!(await verifyCanary(key))) {
+      return { ok: false, error: 'Contraseña incorrecta.' }
+    }
+  }
+
   writeMeta({
     mode: 'password',
     salt,
     kdf: 'pbkdf2',
-    iterations: PBKDF2_ITERATIONS,
+    iterations: existing?.iterations ?? PBKDF2_ITERATIONS,
   })
   memoryKeyHex = key
   try {

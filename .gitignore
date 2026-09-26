@@ -35,3 +35,5 @@ out/
 # Litestream binaries (download with npm run download:litestream)
 electron/resources/litestream/**/*
 !electron/resources/litestream/README.md
+.vercel
+.env*

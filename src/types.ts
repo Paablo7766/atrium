@@ -157,6 +157,8 @@ export interface Settings {
   cloudSyncEnabled?: boolean
   /** ISO timestamp de la última sync cloud exitosa. */
   lastCloudSyncAt?: string
+  /** Última versión de package.json cuya tarjeta Novedades ya se mostró. */
+  lastSeenAppVersion?: string
 }
 
 export interface PersistedData {

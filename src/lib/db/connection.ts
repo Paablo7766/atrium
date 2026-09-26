@@ -225,8 +225,14 @@ export function openDatabaseWithKey(key: string): Database.Database {
 }
 
 export function getDatabase(): Database.Database {
-  if (!dbInstance) return openDatabase()
-  return dbInstance
+  if (dbInstance) {
+    if (!encryptionKey) {
+      closeDatabase()
+      throw new Error('Database locked: encryption key not set')
+    }
+    return dbInstance
+  }
+  return openDatabase()
 }
 
 export function isDatabaseOpen(): boolean {
@@ -238,4 +244,15 @@ export function closeDatabase(): void {
     dbInstance.close()
     dbInstance = null
   }
+}
+
+/** Cambia la clave SQLCipher del diario abierto (p. ej. al pasar de clave del sistema a contraseña maestra). */
+export function rekeyDatabase(newKeyHex: string): void {
+  if (!dbInstance) throw new Error('Database not open')
+  const hex = newKeyHex.trim().toLowerCase()
+  if (!/^[0-9a-f]{64}$/.test(hex)) {
+    throw new Error('Invalid encryption key length')
+  }
+  dbInstance.exec(`PRAGMA rekey = "x'${hex}'"`)
+  encryptionKey = hex
 }

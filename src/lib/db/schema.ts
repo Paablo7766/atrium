@@ -16,8 +16,8 @@ export const TABLES = {
   playbookItems: 'playbook_items',
 } as const
 
-/** Current schema version — bump when adding migrations/00N_*.sql */
-export const SCHEMA_VERSION = 1
+/** Current schema version — bump when adding migrations/00N_*.ts */
+export const SCHEMA_VERSION = 3
 
 export type SettingsRow = {
   id: 1
@@ -38,6 +38,12 @@ export type SettingsRow = {
   tutorial_completed: number
   demo_data: number
   locale: string
+  /** 0/1 — sync multi-dispositivo activado */
+  cloud_sync_enabled: number
+  /** ISO timestamp de la última sync cloud exitosa */
+  last_cloud_sync_at: string | null
+  /** Última versión de la app cuya tarjeta Novedades ya se mostró */
+  last_seen_app_version: string | null
 }
 
 export type AccountRow = {

@@ -20,7 +20,7 @@ export function Card({ className, children, title, subtitle, action, padded = tr
       {(title || action) && (
         <header className="relative flex items-start justify-between gap-4 px-6 pt-5 pb-3.5">
           <div className="min-w-0">
-            {title && <h3 className="text-[13px] font-semibold tracking-tight text-text">{title}</h3>}
+            {title && <h3 className="text-[13px] font-semibold tracking-normal text-text">{title}</h3>}
             {subtitle && <p className="text-[13px] text-muted mt-1 leading-snug">{subtitle}</p>}
           </div>
           {action && <div className="shrink-0 no-drag">{action}</div>}
@@ -43,9 +43,10 @@ export function Button({
   ...rest
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: Size }) {
   const base =
-    'inline-flex items-center justify-center gap-2 font-medium rounded-xl transition-all duration-150 select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-40 active:scale-[0.98]'
+    'inline-flex items-center justify-center gap-2 font-medium rounded-xl transition-all duration-150 select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-white/25 disabled:opacity-40 active:scale-[0.98]'
   const variants: Record<Variant, string> = {
-    primary: 'bg-accent text-black font-semibold hover:bg-[#5ce392]',
+    primary:
+      'bg-[linear-gradient(180deg,#ffffff_0%,#d4d4d8_100%)] text-black font-semibold shadow-[inset_0_1px_0_#fff,inset_0_-1px_0_rgba(0,0,0,0.14),0_0_0_1px_rgba(255,255,255,0.12),0_8px_24px_-12px_rgba(255,255,255,0.35)] hover:brightness-[1.04] hover:shadow-[inset_0_1px_0_#fff,inset_0_-1px_0_rgba(0,0,0,0.14),0_0_0_1px_rgba(255,255,255,0.2),0_12px_32px_-12px_rgba(255,255,255,0.45)]',
     secondary: 'bg-surface-3 text-text border border-border-2 hover:bg-surface-4 hover:border-border-3',
     outline: 'bg-transparent text-text-2 border border-border-2 hover:border-border-3 hover:text-text',
     ghost: 'bg-transparent text-muted hover:text-text hover:bg-surface-3',
@@ -241,7 +242,7 @@ export function ColorSwatches({
 }
 
 const inputCls =
-  'w-full h-9.5 px-3 rounded-xl bg-surface-2 border border-border-2 text-sm text-text placeholder:text-dim focus:outline-none focus:border-accent/50 focus:ring-2 focus:ring-accent/15 transition-all'
+  'w-full h-9.5 px-3 rounded-xl bg-surface-2 border border-border-2 text-sm text-text placeholder:text-dim focus:outline-none focus:border-white/25 focus:ring-2 focus:ring-white/[0.06] transition-all'
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { mono?: boolean }>(({ className, mono, ...rest }, ref) => (
   <input ref={ref} className={clsx(inputCls, mono && 'mono', className)} {...rest} />
@@ -388,7 +389,7 @@ export function Select({
             ? 'h-8 px-3 rounded-full bg-surface-3 text-[12px] font-semibold border-0 hover:text-text'
             : inputCls,
           empty ? 'text-muted' : 'text-text',
-          open && (size === 'sm' ? 'text-text' : 'border-accent/50 ring-2 ring-accent/15'),
+          open && (size === 'sm' ? 'text-text' : 'border-white/25 ring-2 ring-white/[0.06]'),
         )}
       >
         <span className="truncate flex-1">{label}</span>
@@ -416,7 +417,7 @@ export function Select({
                 >
                   <span className="truncate flex-1">{o.label}</span>
                   {o.hint && <span className="text-[11px] text-dim shrink-0">{o.hint}</span>}
-                  {on && <Check size={14} className="text-accent shrink-0" />}
+                  {on && <Check size={14} className="text-text shrink-0" />}
                 </button>
               )
             })}
@@ -470,7 +471,7 @@ export function Modal({
       <div className="absolute inset-0 bg-[#050506]/80 backdrop-blur-md animate-modal-veil" onClick={onClose} />
       <div
         className="absolute inset-0 pointer-events-none animate-modal-veil"
-        style={{ background: 'radial-gradient(720px 380px at 50% 108%, rgba(74,222,128,0.07), transparent 62%)' }}
+        style={{ background: 'radial-gradient(720px 380px at 50% 108%, rgba(228,228,235,0.06), transparent 62%)' }}
       />
       <div
         className={clsx(
@@ -566,7 +567,7 @@ export function Stars({ value, onChange, size = 14 }: { value: number; onChange?
 }
 
 // ---------- Ring ----------
-export function Ring({ value, size = 44, stroke = 4, color = 'var(--color-accent)', track = 'var(--color-surface-4)', children }: {
+export function Ring({ value, size = 44, stroke = 4, color = 'var(--color-text)', track = 'var(--color-surface-4)', children }: {
   value: number // 0..100
   size?: number
   stroke?: number
@@ -632,7 +633,7 @@ export function ChartTooltip({
   if (variant === 'mint') {
     const blocks = rows.filter((r) => r.block)
     return (
-      <div className="rounded-[20px] bg-accent text-black px-4 py-3.5 min-w-[208px] shadow-[0_18px_50px_-12px_rgba(74,222,128,0.55)]">
+      <div className="rounded-[20px] bg-[linear-gradient(180deg,#ffffff_0%,#d4d4d8_100%)] text-black px-4 py-3.5 min-w-[208px] shadow-[inset_0_1px_0_#fff,0_18px_50px_-12px_rgba(255,255,255,0.28)]">
         {label && <div className="text-[11px] font-semibold text-black/55 mb-2.5">{label}</div>}
         {blocks.length > 0 && (
           <div className="grid grid-cols-2 gap-2 mb-3">
@@ -692,7 +693,7 @@ export function Meter({
         {valueLabel}
       </div>
       <div className="mt-2 h-1.5 rounded-full bg-surface-4 overflow-hidden">
-        <div className="h-full rounded-full bg-accent transition-all duration-500" style={{ width: `${w}%` }} />
+        <div className="h-full rounded-full bg-text/80 transition-all duration-500" style={{ width: `${w}%` }} />
       </div>
       {(minLabel || maxLabel) && (
         <div className="flex justify-between mt-1.5 text-[10px] text-dim num">

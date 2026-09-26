@@ -19,6 +19,10 @@ export type {
   ConsolidatedTrade,
   BrokerParseContext,
   BrokerAdapter,
+  AdapterOutputMode,
+  AdapterParseResult,
+  ReadyTradeInput,
+  ReadyTradeProvenance,
   ImportEngineResult,
   GroupTradesOptions,
 } from './types'
@@ -35,6 +39,7 @@ export {
 
 export { CSVImportEngine } from './engine'
 export { groupExecutionsIntoTrades, groupAllExecutionsIntoTrades } from './groupTrades'
+export { assembleImportTrades, finalizeReadyTrades, FIFO_FILL_ADAPTERS, READY_POSITION_ADAPTERS } from './readyTrades'
 export {
   BROKER_ADAPTERS,
   getAdapter,

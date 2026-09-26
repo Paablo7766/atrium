@@ -4,6 +4,8 @@ import type { PersistedData } from '@/types'
 import {
   CRYPTO_META_FILE,
   deleteSecureKeyFile,
+  deriveKeyFromPassword,
+  generateSaltHex,
   getCryptoStatus,
   loadLegacyPlainKey,
   migrateLegacyKeyFile,
@@ -12,7 +14,11 @@ import {
   setupWithSecureStorage,
   tryAutoUnlock as tryAutoUnlockKey,
   unlockWithPassword,
+  writeCryptoMeta,
+  pinSessionDbKey,
+  clearSessionDbKey,
 } from '@/lib/crypto/keyManagerMain'
+import { PBKDF2_ITERATIONS } from '@/lib/crypto/types'
 import {
   closeDatabase,
   clearEncryptionKey,
@@ -24,6 +30,8 @@ import {
   hasEncryptionKey,
   isDatabaseOpen,
   openDatabaseWithKey,
+  rekeyDatabase,
+  setEncryptionKey,
   setUserDataDir,
 } from './connection'
 import { parseJournalFile } from './import'
@@ -150,11 +158,15 @@ function openWithKey(key: string): boolean {
       logInitError(error, 'openWithKey failed — swallowed previously as generic init error')
       closeDatabase()
       clearEncryptionKey()
+      clearSessionDbKey()
       return false
     }
   }
 
-  if (tryOpen()) return true
+  if (tryOpen()) {
+    pinSessionDbKey(key)
+    return true
+  }
 
   if (!fs.existsSync(dbFile())) return false
 
@@ -163,7 +175,10 @@ function openWithKey(key: string): boolean {
     const status = getCryptoStatus(getUserDataDir(), true)
     if (status.mode === 'secure-storage' && size <= ORPHAN_DB_MAX_BYTES) {
       removeDbFiles()
-      if (tryOpen()) return true
+      if (tryOpen()) {
+        pinSessionDbKey(key)
+        return true
+      }
     }
   } catch {
     /* ignore */
@@ -173,7 +188,11 @@ function openWithKey(key: string): boolean {
 }
 
 function bootstrapEncryptionKey(userDataDir: string): boolean {
-  if (isDatabaseOpen()) return true
+  if (isDatabaseOpen()) {
+    if (hasEncryptionKey()) return true
+    closeDatabase()
+    return false
+  }
 
   migrateLegacyKeyFile(userDataDir)
   const status = getCryptoStatus(userDataDir, dbFileExists())
@@ -208,6 +227,7 @@ export function prepareJournalDb(userDataDir: string): void {
 export function shutdownJournalDb(): void {
   closeDatabase()
   clearEncryptionKey()
+  clearSessionDbKey()
   prepared = false
 }
 
@@ -242,11 +262,24 @@ export function isJournalUnrecoverable(): boolean {
 }
 
 export function journalCryptoStatus() {
-  return getCryptoStatus(getUserDataDir(), dbFileExists())
+  const status = getCryptoStatus(getUserDataDir(), dbFileExists())
+  if (status.mode === 'password' && hasEncryptionKey()) {
+    return { ...status, needsUnlock: false }
+  }
+  return status
 }
 
 export function journalSetupPassword(password: string): { ok: true } | { ok: false; error: string } {
   const dir = getUserDataDir()
+  const existing = readCryptoMeta(dir)
+  if (existing?.mode === 'password') {
+    if (isDatabaseOpen()) return { ok: true }
+    return journalUnlockPassword(password)
+  }
+  if (existing) {
+    return { ok: false, error: 'El cifrado ya está configurado.' }
+  }
+
   const result = setupWithPassword(dir, password)
   if (!result.ok) return result
   if (!openWithKey(result.key)) {
@@ -301,6 +334,55 @@ export function journalUnlockPassword(password: string): { ok: true } | { ok: fa
     }
   }
   migrateLegacyJsonIfNeeded(getDatabase(), dir)
+  return { ok: true }
+}
+
+/** Pasa de clave automática del sistema a contraseña maestra (copia automática y restauración en móvil). */
+export function journalMigrateToMasterPassword(password: string): { ok: true } | { ok: false; error: string } {
+  const dir = getUserDataDir()
+  const meta = readCryptoMeta(dir)
+  if (!meta) return { ok: false, error: 'El cifrado local no está configurado.' }
+  if (meta.mode === 'password') {
+    return { ok: false, error: 'Tu diario ya usa contraseña maestra.' }
+  }
+  if (meta.mode !== 'secure-storage') {
+    return { ok: false, error: 'No se puede cambiar el modo de cifrado.' }
+  }
+
+  const trimmed = password.trim()
+  if (trimmed.length < 8) {
+    return { ok: false, error: 'La contraseña debe tener al menos 8 caracteres.' }
+  }
+
+  if (!hasEncryptionKey()) {
+    const unlocked = journalTryAutoUnlock()
+    if (!unlocked.ok) return unlocked
+  }
+
+  try {
+    if (!isDatabaseOpen()) getDatabase()
+  } catch {
+    return { ok: false, error: initError() }
+  }
+
+  const salt = generateSaltHex()
+  const newKey = deriveKeyFromPassword(trimmed, salt)
+  try {
+    rekeyDatabase(newKey)
+  } catch (err) {
+    console.error('[journalMigrateToMasterPassword] rekey failed', err)
+    return { ok: false, error: 'No se pudo actualizar el cifrado del diario.' }
+  }
+
+  writeCryptoMeta(dir, {
+    mode: 'password',
+    salt,
+    kdf: 'pbkdf2',
+    iterations: PBKDF2_ITERATIONS,
+  })
+  deleteSecureKeyFile(dir)
+  setEncryptionKey(newKey)
+  pinSessionDbKey(newKey)
   return { ok: true }
 }
 
@@ -410,6 +492,7 @@ function resolveBackup(userDataDir: string, id: string): string | null {
 function reunlockAfterRestore(): { ok: true } | { ok: false; error: string } {
   closeDatabase()
   clearEncryptionKey()
+  clearSessionDbKey()
   if (bootstrapEncryptionKey(getUserDataDir())) return { ok: true }
   const status = getCryptoStatus(getUserDataDir(), true)
   if (status.mode === 'password') {
