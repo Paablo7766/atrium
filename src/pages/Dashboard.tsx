@@ -17,6 +17,7 @@ import { deltaPct, equityBefore, filterByPreviousRange, filterByRange, filterCas
 import { cleanTicker } from '@/lib/ticker'
 import type { Trade } from '@/types'
 import { useT } from '@/lib/useI18n'
+import { useGoToPage } from '@/lib/useGoToPage'
 import { rangeHint, rangeOptions } from '@/lib/i18n'
 
 export function Dashboard() {
@@ -24,7 +25,7 @@ export function Dashboard() {
   const trades = useStore((s) => s.trades)
   const cashflows = useStore((s) => s.cashflows)
   const settings = useStore((s) => s.settings)
-  const setPage = useStore((s) => s.setPage)
+  const goToPage = useGoToPage()
   const openTradeModal = useStore((s) => s.openTradeModal)
   const loadDemo = useStore((s) => s.loadDemo)
   const clearAll = useStore((s) => s.clearAll)
@@ -180,7 +181,7 @@ export function Dashboard() {
     <>
       <Topbar title={t('dash.title')} subtitle={settings.accountName} />
 
-      <div className="page animate-fade-in">
+      <div className="page">
         {demoDesk && (trades.length > 0 || notes.length > 0) && (
           <div className="flex items-center gap-3 rounded-2xl border border-violet/25 bg-violet/10 px-5 py-3.5 text-sm">
             <Sparkles size={16} className="text-violet shrink-0" />
@@ -209,7 +210,7 @@ export function Dashboard() {
                 {t('dash.lossHitBody', { pnl: fmtMoney(todayAgg!.pnl, settings.currency, { sign: true }), limit: fmtMoney(-settings.dailyLossLimit, settings.currency) })}
               </span>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setPage('journal')}>
+            <Button variant="outline" size="sm" onClick={() => goToPage('journal')}>
               {t('dash.goJournal')}
             </Button>
           </div>
@@ -379,7 +380,7 @@ export function Dashboard() {
               isLoadingQuotes ? (
                 <Loader2 size={14} className="text-muted animate-spin" />
               ) : (
-                <Button variant="ghost" size="sm" onClick={() => setPage('trades')}>
+                <Button variant="ghost" size="sm" onClick={() => goToPage('trades')}>
                   {t('dash.seeAll')} <ArrowRight size={14} />
                 </Button>
               )
@@ -417,7 +418,7 @@ export function Dashboard() {
             title={t('dash.recent')}
             subtitle={openCount ? t('dash.openCount', { n: openCount }) : rangeHint(locale, range)}
             action={
-              <Button variant="ghost" size="sm" onClick={() => setPage('trades')}>
+              <Button variant="ghost" size="sm" onClick={() => goToPage('trades')}>
                 {t('dash.seeAll')} <ArrowRight size={14} />
               </Button>
             }
@@ -445,7 +446,7 @@ export function Dashboard() {
             title={t('dash.strategies')}
             subtitle={rangeHint(locale, range)}
             action={
-              <Button variant="ghost" size="sm" onClick={() => setPage('analytics')}>
+              <Button variant="ghost" size="sm" onClick={() => goToPage('analytics')}>
                 {t('nav.analytics')} <ArrowRight size={14} />
               </Button>
             }
@@ -475,7 +476,7 @@ export function Dashboard() {
                 {moreStrategies > 0 && (
                   <button
                     type="button"
-                    onClick={() => setPage('analytics')}
+                    onClick={() => goToPage('analytics')}
                     className="mt-4 text-[12px] text-muted hover:text-text transition-colors"
                   >
                     {t('dash.moreN', { n: moreStrategies })}

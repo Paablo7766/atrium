@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useState } from 'react'
 import { clsx } from 'clsx'
 import { ArrowRight } from 'lucide-react'
 import { useStore, type Page } from '@/store'
+import { useGoToPage } from '@/lib/useGoToPage'
 import { useT } from '@/lib/useI18n'
 import type { MessageKey } from '@/lib/i18n'
 
@@ -29,7 +30,7 @@ export function Tour() {
   const completed = useStore((s) => s.settings.tutorialCompleted)
   const startTutorial = useStore((s) => s.startTutorial)
   const finishTutorial = useStore((s) => s.finishTutorial)
-  const setPage = useStore((s) => s.setPage)
+  const goToPage = useGoToPage()
   const t = useT()
 
   const [index, setIndex] = useState(0)
@@ -39,7 +40,7 @@ export function Tour() {
   const last = index === STEPS.length - 1
 
   const close = () => {
-    setPage('dashboard')
+    goToPage('dashboard')
     finishTutorial()
   }
 
@@ -53,8 +54,8 @@ export function Tour() {
 
   useEffect(() => {
     if (!active || !step) return
-    setPage(step.page)
-  }, [active, index, step, setPage])
+    goToPage(step.page)
+  }, [active, index, step, goToPage])
 
   const measure = () => {
     if (!step?.selector) {
@@ -96,7 +97,7 @@ export function Tour() {
       if (e.key === 'Escape') {
         e.preventDefault()
         e.stopPropagation()
-        setPage('dashboard')
+        goToPage('dashboard')
         finishTutorial()
         return
       }
@@ -104,7 +105,7 @@ export function Tour() {
         e.preventDefault()
         e.stopPropagation()
         if (last) {
-          setPage('dashboard')
+          goToPage('dashboard')
           finishTutorial()
         } else setIndex((i) => i + 1)
       }
@@ -116,7 +117,7 @@ export function Tour() {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [active, index, last, finishTutorial, setPage])
+  }, [active, index, last, finishTutorial, goToPage])
 
   if (!active || !step) return null
 

@@ -1,9 +1,9 @@
-import { useMemo, useRef, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+﻿import { useMemo, useRef, useState, type FormEvent } from 'react'
 import { clsx } from 'clsx'
 import { LayoutDashboard, ListOrdered, CalendarDays, BarChart3, NotebookPen, Settings, Plus, Search, PanelLeftClose, PanelLeft, ChevronDown, X } from 'lucide-react'
 import { useStore, type Page } from '@/store'
-import { pathForPage } from '@/lib/routes'
+import { useActivePage } from '@/lib/useActivePage'
+import { useGoToPage } from '@/lib/useGoToPage'
 import { BrandMark } from '@/components/BrandMark'
 import { AvatarPhoto, traderInitials } from '@/components/Avatar'
 import { Menu, menuRowClass } from '@/components/ui'
@@ -14,9 +14,8 @@ import { ACCOUNT_COLORS } from '@/types'
 import { useT } from '@/lib/useI18n'
 
 export function Sidebar() {
-  const navigate = useNavigate()
-  const page = useStore((s) => s.page)
-  const setPage = useStore((s) => s.setPage)
+  const page = useActivePage()
+  const goToPage = useGoToPage()
   const openTradeModal = useStore((s) => s.openTradeModal)
   const setTradesQuery = useStore((s) => s.setTradesQuery)
   const collapsed = useStore((s) => s.sidebarCollapsed)
@@ -33,10 +32,7 @@ export function Sidebar() {
   const searchRef = useRef<HTMLInputElement>(null)
   const accRef = useRef<HTMLButtonElement>(null)
 
-  const goTo = (id: Page) => {
-    setPage(id)
-    navigate(pathForPage(id))
-  }
+  const goTo = (id: Page) => goToPage(id)
 
   const stats = useMemo(() => computeStats(trades, settings.startingBalance, cashflows), [trades, settings.startingBalance, cashflows])
   const equity = accountEquity(settings.startingBalance, trades, cashflows)

@@ -126,7 +126,7 @@ export function Journal() {
         subtitle={notes.length ? (notes.length === 1 ? t('journal.entry1') : t('journal.entriesN', { n: notes.length })) : t('journal.empty')}
       />
 
-      <div className="page-stage animate-fade-in">
+      <div className="page-stage">
         <div className="flex-1 min-h-0 grid grid-cols-[minmax(260px,320px)_1fr] gap-5">
         {/* Lista */}
         <div className="card flex flex-col min-h-0 overflow-hidden">

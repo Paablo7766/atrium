@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
 import {
   BrowserRouter,
   HashRouter,
@@ -14,6 +14,8 @@ import { readCloudSyncPref } from '@/lib/cloudSyncPref'
 import { AuthGuard, AuthLoadingScreen, GuestOnly } from '@/auth/AuthGuard'
 import { useStore, flushPersist, type Page } from '@/store'
 import { pathForPage, pageFromPath } from '@/lib/routes'
+import { useActivePage } from '@/lib/useActivePage'
+import { useGoToPage } from '@/lib/useGoToPage'
 import { Sidebar } from '@/components/Sidebar'
 import { Toasts } from '@/components/Toasts'
 import { Onboarding } from '@/components/Onboarding'
@@ -38,6 +40,19 @@ function ChunkFallback() {
   return (
     <div className="flex-1 flex items-center justify-center min-h-[240px]">
       <Loader2 size={22} className="animate-spin text-accent" />
+    </div>
+  )
+}
+
+/** Mantiene las secciones montadas: al cambiar de menú no hay unmount ni flash vacío. */
+function StagePage({ active, children }: { active: boolean; children: ReactNode }) {
+  return (
+    <div
+      hidden={!active}
+      className={active ? 'flex-1 min-h-0 min-w-0 flex flex-col h-full' : undefined}
+      aria-hidden={!active}
+    >
+      {children}
     </div>
   )
 }
@@ -79,7 +94,8 @@ function ProtectedApp() {
   const syncRequired = cloudEnabled && readCloudSyncPref()
   const loaded = useStore((s) => s.loaded)
   const init = useStore((s) => s.init)
-  const page = useStore((s) => s.page)
+  const activePage = useActivePage()
+  const goToPage = useGoToPage()
   const loadError = useStore((s) => s.loadError)
   const dbLocked = useStore((s) => s.dbLocked)
   const onboardingCompleted = useStore((s) => s.settings.onboardingCompleted)
@@ -91,12 +107,11 @@ function ProtectedApp() {
   const toggleSidebar = useStore((s) => s.toggleSidebar)
   const location = useLocation()
   const navigate = useNavigate()
-  const syncingFromUrl = useRef(false)
   const [legacyMigrationPending, setLegacyMigrationPending] = useState(
     () => !isDesktop() && hasLegacyBrowserJournal(),
   )
 
-  // URL ↔ store.page (la URL manda en deep-links; setPage actualiza la URL)
+  // URL → store.page (solo cuando cambia la ruta; no depender de `page` para evitar parpadeo al navegar)
   useEffect(() => {
     const fromUrl = pageFromPath(location.pathname)
     if (location.pathname === '/' || location.pathname === '') {
@@ -107,21 +122,9 @@ function ProtectedApp() {
       navigate('/dashboard', { replace: true })
       return
     }
-    if (fromUrl === page) return
-    syncingFromUrl.current = true
+    if (fromUrl === useStore.getState().page) return
     setPage(fromUrl)
-    queueMicrotask(() => {
-      syncingFromUrl.current = false
-    })
-  }, [location.pathname, page, setPage, navigate])
-
-  useEffect(() => {
-    if (syncingFromUrl.current) return
-    const expected = pathForPage(page)
-    if (location.pathname !== expected) {
-      navigate(expected, { replace: true })
-    }
-  }, [page, location.pathname, navigate])
+  }, [location.pathname, setPage, navigate])
 
   useEffect(() => {
     if (syncRequired && !session) return
@@ -151,10 +154,7 @@ function ProtectedApp() {
 
   useEffect(() => {
     if (!onboardingCompleted || tutorialActive || loadError) return
-    const go = (p: Page) => {
-      setPage(p)
-      navigate(pathForPage(p))
-    }
+    const go = (p: Page) => goToPage(p)
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
       const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable
@@ -181,7 +181,7 @@ function ProtectedApp() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onboardingCompleted, tutorialActive, loadError, openTradeModal, setPage, toggleSidebar, navigate])
+  }, [onboardingCompleted, tutorialActive, loadError, openTradeModal, goToPage, toggleSidebar])
 
   if ((syncRequired && session && !loaded) || (!syncRequired && !loaded)) {
     return <AuthLoadingScreen />
@@ -228,19 +228,29 @@ function ProtectedApp() {
 
   return (
     <TradesProvider>
-      <div className="h-full flex bg-bg animate-fade-in">
+      <div className="h-full flex bg-bg">
         <Sidebar />
         <main data-tour="stage" className="flex-1 min-w-0 flex flex-col h-full stage-ambient">
-          {page === 'dashboard' && <Dashboard />}
-          {page === 'trades' && <Trades />}
-          {page === 'calendar' && <Calendar />}
-          {page === 'analytics' && <Analytics />}
-          {page === 'journal' && <Journal />}
-          {page === 'settings' && (
+          <StagePage active={activePage === 'dashboard'}>
+            <Dashboard />
+          </StagePage>
+          <StagePage active={activePage === 'trades'}>
+            <Trades />
+          </StagePage>
+          <StagePage active={activePage === 'calendar'}>
+            <Calendar />
+          </StagePage>
+          <StagePage active={activePage === 'analytics'}>
+            <Analytics />
+          </StagePage>
+          <StagePage active={activePage === 'journal'}>
+            <Journal />
+          </StagePage>
+          <StagePage active={activePage === 'settings'}>
             <Suspense fallback={<ChunkFallback />}>
               <SettingsPage />
             </Suspense>
-          )}
+          </StagePage>
         </main>
         {tradeModalOpen && (
           <Suspense fallback={null}>

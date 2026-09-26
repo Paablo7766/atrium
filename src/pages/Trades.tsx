@@ -152,7 +152,7 @@ export function Trades() {
         }
       />
 
-      <div className="page-stage animate-fade-in">
+      <div className="page-stage">
         <div className="card flex-1 min-h-0 overflow-hidden flex flex-col">
           <div className="px-5 py-4 flex flex-col gap-3.5 border-b border-border shrink-0">
             <div className="flex items-center gap-3 flex-wrap">

@@ -18,6 +18,7 @@ import { dateFnsLocale, getAppLocale, weekdayShort } from '@/lib/i18n'
 import { useT, useLocale } from '@/lib/useI18n'
 import { CalendarDays, ChevronLeft, ChevronRight, NotebookPen, PanelRightClose, PanelRightOpen, Plus, Share2 } from 'lucide-react'
 import { useStore } from '@/store'
+import { useGoToPage } from '@/lib/useGoToPage'
 import { Topbar } from '@/components/Topbar'
 import { AssetLogo } from '@/components/AssetLogo'
 import { Button, DirectionGlyph, Empty, Pnl, Segmented, Stat } from '@/components/ui'
@@ -34,7 +35,7 @@ export function Calendar() {
   const openTradeModal = useStore((s) => s.openTradeModal)
   const openShareCard = useStore((s) => s.openShareCard)
   const toast = useStore((s) => s.toast)
-  const setPage = useStore((s) => s.setPage)
+  const goToPage = useGoToPage()
 
   const [month, setMonth] = useState(() => startOfMonth(new Date()))
   const [tab, setTab] = useState<'pnl' | 'events'>('pnl')
@@ -169,7 +170,7 @@ export function Calendar() {
     <>
       <Topbar title={t('cal.title')} subtitle={tab === 'pnl' ? 'P&L' : t('nav.journal')} />
 
-      <div className="page-stage animate-fade-in">
+      <div className="page-stage">
         <div className="flex flex-col xl:flex-row gap-4 flex-1 min-h-0">
           <section className="relative card flex flex-col min-h-0 overflow-hidden flex-1 min-w-0 shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset,0_16px_40px_-28px_rgba(0,0,0,0.55)]">
             <header className="shrink-0 px-5 pt-5 pb-4">
@@ -433,7 +434,7 @@ export function Calendar() {
                       {selectedNotes.map((n) => (
                         <button
                           key={n.id}
-                          onClick={() => setPage('journal')}
+                          onClick={() => goToPage('journal')}
                           className="text-left rounded-xl border border-border/70 bg-transparent px-3 py-2.5 hover:border-violet/35 hover:bg-violet/[0.05] transition-colors"
                         >
                           <div className="text-[12px] font-medium truncate">{n.title || t('cal.untitled')}</div>

@@ -1,6 +1,6 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import { readCloudSyncPref } from '@/lib/cloudSyncPref'
 
@@ -30,8 +30,13 @@ export function AuthLoadingScreen() {
 export function AuthGuard() {
   const { session, isLoading, cloudEnabled } = useAuth()
   const syncRequired = cloudEnabled && readCloudSyncPref()
+  const [settled, setSettled] = useState(!isLoading)
+  useEffect(() => {
+    if (!isLoading) setSettled(true)
+  }, [isLoading])
 
-  if (isLoading) return <AuthLoadingScreen />
+  // En web (Supabase) no desmontar el journal si auth revalida: eso vacía la ventana.
+  if (isLoading && !settled) return <AuthLoadingScreen />
 
   if (syncRequired && !session) {
     return <Navigate to="/login" replace />
