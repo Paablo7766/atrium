@@ -33,7 +33,7 @@
 <br/>
 
 <p align="center">
-  <img src="docs/assets/dashboard.png" alt="Atrium dashboard — equity, KPIs and P&amp;L" width="920" />
+  <img src="docs/assets/ui-overview.png" alt="Atrium — resumen con la UI actual" width="920" />
 </p>
 
 <p align="center"><sub>Overview — equity, risk and P&amp;L in one desk.</sub></p>
@@ -67,21 +67,21 @@ Atrium es un diario de escritorio: varias cuentas, importación de bróker y ana
 
 **Analytics** — win rate, profit factor, expectancy, R and process leaks.
 
-<img src="docs/assets/analytics.png" alt="Atrium analytics" />
+<img src="docs/assets/ui-analytics.png" alt="Atrium — analítica" />
 
 </td>
 <td width="50%" valign="top">
 
 **Trades** — the book, with search, filters and broker import.
 
-<img src="docs/assets/trades.png" alt="Atrium trades" />
+<img src="docs/assets/ui-trades.png" alt="Atrium — operaciones" />
 
 </td>
 </tr>
 </table>
 
 <p align="center">
-  <img src="docs/assets/calendar.png" alt="Atrium calendar — monthly heatmap and day panel" width="920" />
+  <img src="docs/assets/ui-calendar.png" alt="Atrium — calendario" width="920" />
 </p>
 
 <p align="center"><sub>Calendar — the month as a heatmap. Open a day, see the session.</sub></p>

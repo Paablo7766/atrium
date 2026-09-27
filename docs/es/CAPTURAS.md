@@ -1,29 +1,29 @@
 # Capturas
 
-Las cuatro capturas del producto que usa el README de GitHub (`npm run shots`).
+Las cuatro capturas del producto que usa el README de GitHub (`npm run shots`). UI actual.
 
 | Pantalla | Archivo | Qué muestra |
 |----------|---------|-------------|
-| **Resumen** | [dashboard.png](../assets/dashboard.png) | Equity, KPIs, P&L |
-| **Analítica** | [analytics.png](../assets/analytics.png) | Lectura de la ventaja |
-| **Operaciones** | [trades.png](../assets/trades.png) | El libro de trades |
-| **Calendario** | [calendar.png](../assets/calendar.png) | Mapa de calor + panel del día |
+| **Resumen** | [ui-overview.png](../assets/ui-overview.png) | Saludo, equity, KPIs, P&L |
+| **Analítica** | [ui-analytics.png](../assets/ui-analytics.png) | Lectura de la ventaja |
+| **Operaciones** | [ui-trades.png](../assets/ui-trades.png) | El libro de trades |
+| **Calendario** | [ui-calendar.png](../assets/ui-calendar.png) | Mapa de calor + panel del día |
 
 ### Resumen
 
-![Resumen](../assets/dashboard.png)
+![Resumen](../assets/ui-overview.png)
 
 ### Analítica
 
-![Analítica](../assets/analytics.png)
+![Analítica](../assets/ui-analytics.png)
 
 ### Operaciones
 
-![Operaciones](../assets/trades.png)
+![Operaciones](../assets/ui-trades.png)
 
 ### Calendario
 
-![Calendario](../assets/calendar.png)
+![Calendario](../assets/ui-calendar.png)
 
 Regenerar con `npm run dev:web` y luego `npm run shots`.
 

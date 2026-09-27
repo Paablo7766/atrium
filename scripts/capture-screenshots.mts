@@ -13,8 +13,12 @@ const OUT = path.join(ROOT, 'docs', 'assets')
 const BASE = 'http://localhost:5179'
 const VIEWPORT = { width: 1440, height: 900 }
 const APP_VERSION = '1.2.0-beta.3'
-const README_SHOTS = ['dashboard.png', 'analytics.png', 'trades.png', 'calendar.png'] as const
+const README_SHOTS = ['ui-overview.png', 'ui-analytics.png', 'ui-trades.png', 'ui-calendar.png'] as const
 const RETIRED_SHOTS = [
+  'dashboard.png',
+  'analytics.png',
+  'trades.png',
+  'calendar.png',
   'analytics-time.png',
   'analytics-risk.png',
   'analytics-process.png',
@@ -37,43 +41,7 @@ async (version) => {
     if (Date.now() - started > 20000) return { ok: false, error: 'store did not load' }
     await new Promise((r) => setTimeout(r, 50))
   }
-  const STRATEGY_EN = {
-    Breakout: 'Breakout',
-    Pullback: 'Pullback',
-    'Reversión a la media': 'Mean reversion',
-    ORB: 'ORB',
-    'Supply & Demand': 'Supply & Demand',
-    Tendencia: 'Trend',
-  }
-  const TAG_EN = {
-    'A+': 'A+',
-    Apertura: 'Open',
-    Noticias: 'News',
-    'Contra tendencia': 'Counter-trend',
-    'Sesión NY': 'NY session',
-    'Sesión Londres': 'London session',
-    Sobreoperado: 'Overtrading',
-    'Plan seguido': 'Plan followed',
-  }
-  const EMOTION_EN = {
-    Disciplinado: 'Disciplined',
-    Ansioso: 'Anxious',
-    FOMO: 'FOMO',
-    Venganza: 'Revenge',
-    Confianza: 'Confident',
-    Frustración: 'Frustrated',
-    Calma: 'Calm',
-    Euforia: 'Euphoric',
-  }
-  const trades = demoMod.generateDemoTrades(90, 120, 42).map((trade) => ({
-    ...trade,
-    strategy: trade.strategy ? (STRATEGY_EN[trade.strategy] || trade.strategy) : trade.strategy,
-    tags: (trade.tags || []).map((tag) => TAG_EN[tag] || tag),
-    emotion: trade.emotion ? (EMOTION_EN[trade.emotion] || trade.emotion) : trade.emotion,
-    notes: trade.notes === 'Posición abierta. Gestionar según plan.'
-      ? 'Open position. Manage according to the plan.'
-      : trade.notes,
-  }))
+  const trades = demoMod.generateDemoTrades(90, 120, 42)
   const now = new Date()
   const iso = now.toISOString()
   const day = (offset) => {
@@ -82,9 +50,9 @@ async (version) => {
     return d.toISOString().slice(0, 10)
   }
   const notes = [
-    { id: 'n1', date: day(1), mood: 4, title: 'Clean session', content: 'Stuck to the plan. Three valid setups only. Rule for the week: no trades in the first five minutes.', updatedAt: iso },
-    { id: 'n2', date: day(4), mood: 2, title: 'Afternoon tilt', content: 'Tried to win it back after two losses. New rule: platform off at -2R.', updatedAt: iso },
-    { id: 'n3', date: day(8), mood: 5, title: 'Best week of the quarter', content: 'Pullback on NQ is paying. Size stayed constant. Review whether 1.25% risk is earned.', updatedAt: iso },
+    { id: 'n1', date: day(1), mood: 4, title: 'Sesión limpia', content: 'Respeté el plan. Solo tres setups válidos. Regla de la semana: no operar los primeros cinco minutos.', updatedAt: iso },
+    { id: 'n2', date: day(4), mood: 2, title: 'Tilt de tarde', content: 'Intenté recuperar tras dos pérdidas. Nueva regla: plataforma off a -2R.', updatedAt: iso },
+    { id: 'n3', date: day(8), mood: 5, title: 'Mejor racha del trimestre', content: 'El pullback en NQ está pagando. Tamaño constante. Revisar si el 1.25% está ganado.', updatedAt: iso },
   ]
   const seed = {
     version: 2,
@@ -92,7 +60,7 @@ async (version) => {
       traderName: 'Alex',
       tradeFormMode: 'premium',
       activeAccountId: 'default',
-      accountName: 'Live account',
+      accountName: 'Cuenta en vivo',
       currency: 'USD',
       startingBalance: 25000,
       riskPerTrade: 1,
@@ -104,16 +72,16 @@ async (version) => {
       onboardingCompleted: true,
       tutorialCompleted: true,
       playbook: [
-        { id: 'pb1', name: 'ORB', checklist: ['Range marked', 'Volume OK', '1% risk'] },
-        { id: 'pb2', name: 'Pullback', checklist: ['Clear trend', 'Retest', 'Confirmation'] },
+        { id: 'pb1', name: 'ORB', checklist: ['Rango marcado', 'Volumen OK', 'Riesgo 1%'] },
+        { id: 'pb2', name: 'Pullback', checklist: ['Tendencia clara', 'Retest', 'Confirmación'] },
       ],
-      locale: 'en',
+      locale: 'es',
       demoData: false,
       lastSeenAppVersion: version,
     },
     accounts: [{
       id: 'default',
-      name: 'Live account',
+      name: 'Cuenta en vivo',
       broker: 'XTB',
       type: 'live',
       color: 'green',
@@ -133,16 +101,15 @@ async (version) => {
   if (!imported || imported.ok === false) {
     return { ok: false, error: imported && imported.error ? String(imported.error) : 'import failed' }
   }
-  await i18nMod.ensureLocale('en')
-  i18nMod.setAppLocale('en')
+  i18nMod.setAppLocale('es')
   store.getState().updateSettings({
-    locale: 'en',
+    locale: 'es',
     onboardingCompleted: true,
     tutorialCompleted: true,
     demoData: false,
     lastSeenAppVersion: version,
     traderName: 'Alex',
-    accountName: 'Live account',
+    accountName: 'Cuenta en vivo',
   })
   return { ok: true }
 }
@@ -156,7 +123,7 @@ async function seedApp(page: Page) {
 
 async function waitAppReady(page: Page) {
   await page.waitForSelector('[data-page="dashboard"]', { timeout: 60000 })
-  await page.getByText('Sample data.').waitFor({ state: 'hidden', timeout: 2000 }).catch(() => undefined)
+  await page.getByText(/Datos de ejemplo|Sample data/).waitFor({ state: 'hidden', timeout: 2000 }).catch(() => undefined)
   await page.waitForTimeout(700)
 }
 
@@ -215,18 +182,18 @@ async function main() {
   await seedApp(page)
   await waitAppReady(page)
 
-  await shot(page, 'dashboard.png')
+  await shot(page, 'ui-overview.png')
 
   await goPage(page, 'analytics')
   await page.waitForTimeout(1200)
-  await shot(page, 'analytics.png')
+  await shot(page, 'ui-analytics.png')
 
   await goPage(page, 'trades')
-  await shot(page, 'trades.png')
+  await shot(page, 'ui-trades.png')
 
   await goPage(page, 'calendar')
   await pickCalendarDay(page)
-  await shot(page, 'calendar.png')
+  await shot(page, 'ui-calendar.png')
 
   await browser.close()
   await removeRetiredShots()

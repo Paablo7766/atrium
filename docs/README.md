@@ -57,9 +57,9 @@ The four product shots used on the GitHub page.
 
 | Screen | EN | ES | File |
 |--------|----|----|------|
-| Overview | [View](en/SCREENSHOTS.md#overview) | [Ver](es/CAPTURAS.md#resumen) | `assets/dashboard.png` |
-| Analytics | [View](en/SCREENSHOTS.md#analytics) | [Ver](es/CAPTURAS.md#analítica) | `assets/analytics.png` |
-| Trades | [View](en/SCREENSHOTS.md#trades) | [Ver](es/CAPTURAS.md#operaciones) | `assets/trades.png` |
-| Calendar | [View](en/SCREENSHOTS.md#calendar) | [Ver](es/CAPTURAS.md#calendario) | `assets/calendar.png` |
+| Overview | [View](en/SCREENSHOTS.md#overview) | [Ver](es/CAPTURAS.md#resumen) | `assets/ui-overview.png` |
+| Analytics | [View](en/SCREENSHOTS.md#analytics) | [Ver](es/CAPTURAS.md#analítica) | `assets/ui-analytics.png` |
+| Trades | [View](en/SCREENSHOTS.md#trades) | [Ver](es/CAPTURAS.md#operaciones) | `assets/ui-trades.png` |
+| Calendar | [View](en/SCREENSHOTS.md#calendar) | [Ver](es/CAPTURAS.md#calendario) | `assets/ui-calendar.png` |
 
 > Regenerate: `npm run dev:web`, then `npm run shots`.
