@@ -1,334 +1,133 @@
 <p align="center">
-  <img src="docs/assets/logo.png" width="88" height="88" alt="Atrium" style="border-radius:22%" />
+  <img src="docs/assets/logo.png" width="72" height="72" alt="Atrium" />
 </p>
 
 <h1 align="center">Atrium</h1>
 
 <p align="center">
-  <em>The trading journal built for process — not just P&amp;L.</em><br/>
-  <em>El diario de trading pensado para el proceso — no solo para el resultado.</em>
+  <strong>The desktop trading journal that stays on your machine.</strong><br/>
+  <em>El diario de trading que se queda en tu equipo.</em>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Windows-Desktop-0e0e10?style=flat-square&logo=windows&logoColor=white" alt="Windows" />
-  <img src="https://img.shields.io/badge/Electron-44-47848F?style=flat-square&logo=electron&logoColor=white" alt="Electron" />
-  <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React" />
-  <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/i18n-EN%20%2F%20ES-4ade80?style=flat-square&labelColor=0e0e10" alt="i18n" />
+  Encrypted by default · Local-first · No account required · English / Español
+</p>
+
+<p align="center">
+  <a href="https://github.com/Paablo7766/atrium/releases"><img src="https://img.shields.io/github/v/release/Paablo7766/atrium?include_prerelease&label=Release&color=111113" alt="Release" /></a>
+  <img src="https://img.shields.io/badge/Windows-Desktop-111113?logo=windows&logoColor=white" alt="Windows" />
+  <img src="https://img.shields.io/badge/Storage-SQLCipher%20AES--256-111113" alt="SQLCipher" />
+  <img src="https://img.shields.io/badge/Sync-Optional%20E2E-111113" alt="E2E sync" />
+</p>
+
+<p align="center">
+  <a href="https://github.com/Paablo7766/atrium/releases">Download for Windows</a>
+  ·
+  <a href="docs/en/GETTING_STARTED.md">Get started</a>
+  ·
+  <a href="docs/es/PRIMEROS_PASOS.md">Empezar</a>
+  ·
+  <a href="docs/README.md">Docs</a>
 </p>
 
 <br/>
 
 <p align="center">
-  <img src="docs/assets/dashboard.png" alt="Atrium — Dashboard / Resumen" width="920" />
+  <img src="docs/assets/dashboard.png" alt="Atrium dashboard — equity, KPIs and P&amp;L" width="920" />
 </p>
 
-<p align="center">
-  <sub>
-    <strong>Dashboard</strong> — equity, KPIs and P&amp;L flow at a glance<br/>
-    <strong>Resumen</strong> — equity, KPIs y flujo de P&amp;L de un vistazo
-  </sub>
-</p>
-
-<p align="center">
-  <a href="#product-tour--recorrido-del-producto">Product tour</a>
-  ·
-  <a href="#english">English docs</a>
-  ·
-  <a href="#español">Docs en español</a>
-  ·
-  <a href="docs/README.md">Full documentation</a>
-</p>
+<p align="center"><sub>Overview — equity, risk and P&amp;L in one desk.</sub></p>
 
 ---
 
-## Why Atrium · Por qué Atrium
+## Why Atrium
+
+Atrium is a **Windows desktop** journal for traders who measure process, not just the last result. Several accounts, broker import, edge analytics and a psychology log — all in an encrypted SQLite file on your disk.
+
+Nothing is uploaded unless you turn that on. There is no Atrium cloud account holding your book.
+
+Atrium es un diario de escritorio: varias cuentas, importación de bróker y analítica, en SQLite cifrado. Nada se sube si tú no lo activas. Atrium no custodia tu libro.
+
+| | What you get |
+|:--:|:--|
+| **Local-first** | Works offline. No sign-in to journal. |
+| **Encrypted at rest** | `journal.db` is SQLCipher (AES-256). A forgotten master password cannot be recovered. |
+| **Zero custody** | Atrium never stores or can read your trades. |
+| **Optional backup** | Litestream replica to a folder you choose — still encrypted. |
+| **Optional sync** | End-to-end AES-GCM snapshots. The server sees blobs, not a journal. |
+| **Private by design** | Product analytics, if enabled, send platform and version only. Never trades or notes. |
+
+---
+
+## Product
 
 <table>
 <tr>
 <td width="50%" valign="top">
 
-**English**
+**Analytics** — win rate, profit factor, expectancy, R and process leaks.
 
-Atrium is a desktop trading journal for serious process work: multi-account books, broker import, deep analytics, psychology notes and shareable recap cards — encrypted SQLite on disk, with optional Litestream backup and optional E2E cloud sync.
+<img src="docs/assets/analytics.png" alt="Atrium analytics" />
 
 </td>
 <td width="50%" valign="top">
 
-**Español**
+**Trades** — the book, with search, filters and broker import.
 
-Atrium es un diario de trading de escritorio para el proceso en serio: varias cuentas, importación de bróker, analítica profunda, notas psicológicas y tarjetas de recap — SQLite cifrado en disco, con copia Litestream opcional y sync E2E opcional en la nube.
+<img src="docs/assets/trades.png" alt="Atrium trades" />
 
 </td>
 </tr>
 </table>
 
-| | Capability · Capacidad |
-|:--:|:--|
-| **01** | Multi-account books — live, demo, prop, paper |
-| **02** | Broker CSV / XLSX — XTB, IBKR, DEGIRO + auto-detect |
-| **03** | Analytics — win rate, PF, expectancy, R, drawdown, emotions |
-| **04** | Calendar heatmap + psychology journal |
-| **05** | Share cards 1600×900 — Orbit, Editorial, Signal, Folio |
-| **06** | Encrypted local SQLite · optional Litestream backup · optional E2E sync (Supabase blobs) · EN / ES |
+<p align="center">
+  <img src="docs/assets/calendar.png" alt="Atrium calendar — monthly heatmap and day panel" width="920" />
+</p>
+
+<p align="center"><sub>Calendar — the month as a heatmap. Open a day, see the session.</sub></p>
+
+Also included: live / demo / prop / paper accounts, psychology notes on trading days, and recap cards (1600×900) when you want to share a week.
+
+Full catalogue: [Features](docs/en/FEATURES.md) · [Funciones](docs/es/FUNCIONES.md)
 
 ---
 
-## Product tour · Recorrido del producto
-
-Capturas reales de la app en ejecución.  
-*Real screenshots from the running application.*
-
-<br/>
-
-### Analytics · Analítica
-
-Deep edge measurement across the whole book — not a single KPI strip.  
-*Medición profunda de la ventaja en todo el libro — no solo una franja de KPIs.*
-
-| Block · Bloque | What you see · Qué ves |
-|----------------|------------------------|
-| **Overview** | Net P&L, win rate, profit factor, expectancy, avg R, payoff |
-| **Insights** | Auto highlights — process leaks, best weekday, leading strategy |
-| **P&L origin** | Long vs short contribution |
-| **By category** | Strategy · symbol · market · tag · setup |
-| **Time** | Weekday, hour-of-day, monthly seasonality |
-| **Risk** | R-distribution, drawdown curve, streaks, Sharpe, recovery |
-| **Process** | Emotions, perceived quality, mistake tags |
-
-<p align="center">
-  <img src="docs/assets/analytics.png" alt="Atrium Analytics — overview, insights, P&amp;L origin" width="920" />
-</p>
-
-<p align="center">
-  <sub>
-    <strong>EN</strong> — hero KPIs, smart insights, long/short origin and category table<br/>
-    <strong>ES</strong> — KPIs, insights, origen long/short y tabla por categoría
-  </sub>
-</p>
-
-<p align="center">
-  <img src="docs/assets/analytics-time.png" alt="Atrium Analytics — time breakdown" width="920" />
-</p>
-
-<p align="center">
-  <sub>
-    <strong>EN</strong> — when the edge shows up (weekday · hour · month)<br/>
-    <strong>ES</strong> — cuándo aparece la ventaja (día · hora · mes)
-  </sub>
-</p>
-
-<p align="center">
-  <img src="docs/assets/analytics-risk.png" alt="Atrium Analytics — risk and R distribution" width="920" />
-</p>
-
-<p align="center">
-  <sub>
-    <strong>EN</strong> — R histogram, drawdown, streak quality and risk metrics<br/>
-    <strong>ES</strong> — histograma en R, drawdown, calidad de rachas y métricas de riesgo
-  </sub>
-</p>
-
-<p align="center">
-  <img src="docs/assets/analytics-process.png" alt="Atrium Analytics — psychology / process" width="920" />
-</p>
-
-<p align="center">
-  <sub>
-    <strong>EN</strong> — emotions, star ratings and mistake tags vs P&amp;L<br/>
-    <strong>ES</strong> — emociones, estrellas y etiquetas de error frente al P&amp;L
-  </sub>
-</p>
-
-Full write-up: [Features → Analytics](docs/en/FEATURES.md#4-analytics) · [Funciones → Analítica](docs/es/FUNCIONES.md#4-analítica)
-
-<br/>
-
-### Calendar · Calendario
-
-Month heatmap by P&amp;L, with day detail and journal context.  
-*Mapa de calor mensual por P&amp;L, con detalle del día y contexto del diario.*
-
-<p align="center">
-  <img src="docs/assets/calendar.png" alt="Atrium Calendar" width="920" />
-</p>
-
-<br/>
-
-### Trades · Operaciones
-
-Searchable trade book — filters, strategies, tags, expand-to-edit.  
-*Libro de operaciones con búsqueda, filtros, estrategias, tags y edición.*
-
-<p align="center">
-  <img src="docs/assets/trades.png" alt="Atrium Trades" width="920" />
-</p>
-
-<br/>
-
-### Journal · Diario
-
-Mood-tagged session notes linked to trading days.  
-*Notas de sesión con estado de ánimo, vinculadas a cada día de trading.*
-
-<p align="center">
-  <img src="docs/assets/journal.png" alt="Atrium — Diario" width="920" />
-</p>
-
-<br/>
-
-### Import · Importación
-
-JSON backups and broker CSV/XLSX — XTB, Interactive Brokers, DEGIRO, Fomo, Axiom, auto-detect.  
-*Copias JSON y CSV/XLSX de bróker — XTB, Interactive Brokers, DEGIRO, Fomo, Axiom, auto-detección.*
-
-<p align="center">
-  <img src="docs/assets/import.png" alt="Atrium Import" width="920" />
-</p>
-
-<br/>
-
-### Share cards · Tarjetas
-
-Week, month or single-trade recaps ready to download as PNG 1600×900.  
-*Recaps de semana, mes u operación listos para descargar en PNG 1600×900.*
-
-<p align="center">
-  <img src="docs/assets/share-card.png" alt="Atrium Share Card" width="920" />
-</p>
-
----
-
-<a id="english"></a>
-
-## English
-
-**Guides:** [Features](docs/en/FEATURES.md) · [Getting started](docs/en/GETTING_STARTED.md) · [Import](docs/en/IMPORT.md) · [Architecture](docs/en/ARCHITECTURE.md) · [Backup](docs/BACKUP_ARCHITECTURE.md) · [Screenshots](docs/en/SCREENSHOTS.md)
-
-### Quick start
+## Get started
 
 ```bash
 npm install
-npm run dev            # Vite + Electron — no .env needed (local encrypted SQLite)
-# optional: cp .env.example .env   # FMP logos; Supabase only for opt-in E2E cloud sync
+npm run dev
 ```
 
-Windows shortcut: double-click **`Abrir Atrium.bat`**.
+No `.env` is required. The journal is local and encrypted. Double-click `Abrir Atrium.bat` on Windows if you prefer.
 
-| Command | What it does |
-|---------|----------------|
-| `npm run dev` | Development (Vite + Electron) |
-| `npm run build` | Production web bundle |
+| Command | |
+|---------|---|
+| `npm run dev` | Desktop development |
 | `npm run dist` | Windows installer → `release/` |
-| `npm run typecheck` | TypeScript check |
-| `npm run test` | Vitest unit tests (crypto, repository, sync) |
-| `npm run test:import` | Import engine tests |
-| `npm run shots` | Regenerate real README screenshots |
+| `npm run test` | Unit tests (crypto, repository, sync) |
 
-### Environment
-
-| Variable | Required | Purpose |
-|----------|:--------:|---------|
-| `VITE_SUPABASE_URL` | — | Optional — enable Settings › Multi-device sync (E2E encrypted) |
-| `VITE_SUPABASE_ANON_KEY` | — | Supabase anon key (never `service_role`) |
-| `VITE_FMP_API_KEY` | — | Ticker logos (Financial Modeling Prep) |
-| `VITE_POSTHOG_KEY` | — | Optional — anonymous product usage (PostHog EU); one `app_session_start` per session (platform + version), no journal data |
-| `VITE_POSTHOG_HOST` | `https://eu.i.posthog.com` | PostHog ingest host (EU cloud) |
-
-**Privacy · Privacidad:** When configured, web and desktop builds send a single anonymous usage event per session (platform and app version) to PostHog EU. No trades, notes, or journal content leave your device for analytics.
-
-### Stack
-
-`React 19` · `TypeScript` · `Vite 8` · `Tailwind CSS 4` · `Zustand` · `Electron 44` · `Recharts` · `xlsx` · `Supabase` (optional)
-
-### Shortcuts
-
-| Key | Action |
-|-----|--------|
-| `1`–`6` | Switch pages |
-| `Ctrl/Cmd + N` | New trade |
-| `Ctrl/Cmd + B` | Toggle sidebar |
+Optional `.env` is only for ticker logos, opt-in E2E sync, or anonymous usage. See [Getting started](docs/en/GETTING_STARTED.md) · [Primeros pasos](docs/es/PRIMEROS_PASOS.md).
 
 ---
 
-<a id="español"></a>
+## Documentation
 
-## Español
-
-**Guías:** [Funciones](docs/es/FUNCIONES.md) · [Primeros pasos](docs/es/PRIMEROS_PASOS.md) · [Importación](docs/es/IMPORTACION.md) · [Arquitectura](docs/es/ARQUITECTURA.md) · [Copias](docs/BACKUP_ARCHITECTURE.md) · [Capturas](docs/es/CAPTURAS.md)
-
-### Inicio rápido
-
-```bash
-npm install
-npm run dev            # Vite + Electron — sin .env (SQLite cifrado local)
-# opcional: cp .env.example .env   # logos FMP; Supabase solo para sync E2E opt-in
-```
-
-Atajo Windows: doble clic en **`Abrir Atrium.bat`**.
-
-| Comando | Qué hace |
-|---------|----------|
-| `npm run dev` | Desarrollo (Vite + Electron) |
-| `npm run build` | Bundle web de producción |
-| `npm run dist` | Instalador Windows → `release/` |
-| `npm run typecheck` | Comprobación TypeScript |
-| `npm run test` | Tests unitarios Vitest (cifrado, repository, sync) |
-| `npm run test:import` | Tests del motor de importación |
-| `npm run shots` | Regenerar capturas reales del README |
-
-### Variables de entorno
-
-| Variable | Obligatoria | Propósito |
-|----------|:-----------:|-----------|
-| `VITE_SUPABASE_URL` | — | Opcional — activar Ajustes › Sync multi-dispositivo (cifrado E2E) |
-| `VITE_SUPABASE_ANON_KEY` | — | Clave anon de Supabase (nunca `service_role`) |
-| `VITE_FMP_API_KEY` | — | Logos de tickers (Financial Modeling Prep) |
-| `VITE_POSTHOG_KEY` | — | Opcional — uso anónimo de la app (PostHog EU); un `app_session_start` por sesión (plataforma + versión), sin datos del diario |
-| `VITE_POSTHOG_HOST` | `https://eu.i.posthog.com` | Host de ingestión PostHog (nube EU) |
-
-**Privacidad:** Con estas variables, web y escritorio envían un evento anónimo de uso por sesión (plataforma y versión) a PostHog EU. No se envían operaciones, notas ni contenido del diario con fines de analítica.
-
-### Stack
-
-`React 19` · `TypeScript` · `Vite 8` · `Tailwind CSS 4` · `Zustand` · `Electron 44` · `Recharts` · `xlsx` · `Supabase` (opcional)
-
-### Atajos
-
-| Tecla | Acción |
-|-------|--------|
-| `1`–`6` | Cambiar de página |
-| `Ctrl/Cmd + N` | Nueva operación |
-| `Ctrl/Cmd + B` | Mostrar / ocultar barra lateral |
-
----
-
-## Repository layout · Estructura
-
-```text
-atrium/
-├── electron/           Desktop shell · encrypted SQLite IPC · Litestream
-├── src/
-│   ├── pages/          Dashboard · Trades · Calendar · Analytics · Journal · Settings
-│   ├── components/     Design system · charts · ShareCard · Tour
-│   ├── lib/db/         SQLite schema · repositories · JSON migration
-│   ├── lib/import/     Broker adapters · CSV / XLSX pipeline
-│   ├── auth/           Optional login only if cloud sync is enabled
-│   └── assets/         Brand mark
-├── prisma/             Legacy / optional cloud schema reference
-├── supabase/           Optional migrations + RLS (004 = encrypted_sync_snapshots)
-├── docs/               Bilingual docs + screenshot gallery
-├── scripts/            Launcher · verification · capture-screenshots
-└── public/             App icons
-```
+| English | Español |
+|---------|---------|
+| [Features](docs/en/FEATURES.md) | [Funciones](docs/es/FUNCIONES.md) |
+| [Getting started](docs/en/GETTING_STARTED.md) | [Primeros pasos](docs/es/PRIMEROS_PASOS.md) |
+| [Import](docs/en/IMPORT.md) | [Importación](docs/es/IMPORTACION.md) |
+| [Architecture](docs/en/ARCHITECTURE.md) | [Arquitectura](docs/es/ARQUITECTURA.md) |
+| [Backup & encryption](docs/BACKUP_ARCHITECTURE.md) | [Copias y cifrado](docs/BACKUP_ARCHITECTURE.md) |
 
 ---
 
 <p align="center">
-  <img src="docs/assets/logo.png" width="40" height="40" alt="Atrium" style="border-radius:22%" />
+  <img src="docs/assets/logo.png" width="36" height="36" alt="Atrium" />
 </p>
 
 <p align="center">
-  <strong>Pablo Sanz</strong> · Atrium <code>v1.0.0</code><br/>
-  <sub>Built for serious traders · Hecho para traders serios</sub>
+  <strong>Atrium</strong> · Pablo Sanz<br/>
+  <sub>Your process. Your machine. Your keys.</sub>
 </p>

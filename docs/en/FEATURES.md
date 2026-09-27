@@ -60,7 +60,7 @@ Deep edge measurement (`src/lib/stats.ts` + Recharts). Filter by period (7D · 3
 | Risk | R histogram, drawdown curve, streaks, Sharpe, recovery |
 | Process | Emotions, perceived star ratings, mistake tags |
 
-Screenshots: [overview](../assets/analytics.png) · [time](../assets/analytics-time.png) · [risk](../assets/analytics-risk.png) · [process](../assets/analytics-process.png) — see also [SCREENSHOTS.md](./SCREENSHOTS.md).
+Screenshot: [analytics.png](../assets/analytics.png) — see also [SCREENSHOTS.md](./SCREENSHOTS.md).
 
 ---
 

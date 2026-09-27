@@ -1,67 +1,31 @@
 # Screenshots
 
-Real captures from the running Atrium app (`npm run shots`).
+The four product shots used on the GitHub README (`npm run shots`).
 
 | Screen | File | What it shows |
 |--------|------|----------------|
-| **Dashboard** | [dashboard.png](../assets/dashboard.png) | Equity, KPIs, P&L flow |
-| **Analytics · overview** | [analytics.png](../assets/analytics.png) | KPIs, insights, long/short origin, categories |
-| **Analytics · time** | [analytics-time.png](../assets/analytics-time.png) | Weekday, hour, month seasonality |
-| **Analytics · risk** | [analytics-risk.png](../assets/analytics-risk.png) | R distribution, drawdown, streaks |
-| **Analytics · process** | [analytics-process.png](../assets/analytics-process.png) | Emotions, stars, mistake tags |
-| **Calendar** | [calendar.png](../assets/calendar.png) | Monthly P&L heatmap + day panel |
-| **Trades** | [trades.png](../assets/trades.png) | Trade book, filters, strategies |
-| **Journal** | [journal.png](../assets/journal.png) | Mood-tagged session notes |
-| **Import** | [import.png](../assets/import.png) | Backups + broker CSV import |
-| **Share card** | [share-card.png](../assets/share-card.png) | Recap card export (PNG 1600×900) |
+| **Overview** | [dashboard.png](../assets/dashboard.png) | Equity, KPIs, P&L |
+| **Analytics** | [analytics.png](../assets/analytics.png) | Edge reading of the book |
+| **Trades** | [trades.png](../assets/trades.png) | The trade book |
+| **Calendar** | [calendar.png](../assets/calendar.png) | Monthly heatmap + day panel |
 
-### Dashboard
+### Overview
 
-![Dashboard](../assets/dashboard.png)
+![Overview](../assets/dashboard.png)
 
-### Analytics — overview
+### Analytics
 
-Edge KPIs, automatic insights, long/short origin and category table.
-
-![Analytics overview](../assets/analytics.png)
-
-### Analytics — time
-
-When the edge shows up: weekday, hour and monthly seasonality.
-
-![Analytics time](../assets/analytics-time.png)
-
-### Analytics — risk
-
-R histogram, drawdown curve, streak quality and risk metrics.
-
-![Analytics risk](../assets/analytics-risk.png)
-
-### Analytics — process
-
-Emotions, perceived ratings and mistake tags vs P&L.
-
-![Analytics process](../assets/analytics-process.png)
-
-### Calendar
-
-![Calendar](../assets/calendar.png)
+![Analytics](../assets/analytics.png)
 
 ### Trades
 
 ![Trades](../assets/trades.png)
 
-### Journal
+### Calendar
 
-![Journal](../assets/journal.png)
+![Calendar](../assets/calendar.png)
 
-### Import
-
-![Import](../assets/import.png)
-
-### Share card
-
-![Share card](../assets/share-card.png)
+Regenerate with `npm run dev:web`, then `npm run shots`.
 
 ---
 

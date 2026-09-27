@@ -60,7 +60,7 @@ Medición profunda de la ventaja (`src/lib/stats.ts` + Recharts). Filtra por per
 | Riesgo | Histograma en R, curva de drawdown, rachas, Sharpe, recuperación |
 | Proceso | Emociones, estrellas percibidas, etiquetas de error |
 
-Capturas: [overview](../assets/analytics.png) · [tiempo](../assets/analytics-time.png) · [riesgo](../assets/analytics-risk.png) · [proceso](../assets/analytics-process.png) — ver también [CAPTURAS.md](./CAPTURAS.md).
+Captura: [analytics.png](../assets/analytics.png) — ver también [CAPTURAS.md](./CAPTURAS.md).
 
 ---
 

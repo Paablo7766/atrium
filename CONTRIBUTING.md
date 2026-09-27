@@ -8,7 +8,7 @@
 4. If you change UI that appears in the README, regenerate shots:
 
 ```bash
-npx vite --config vite.web.mts
+npm run dev:web
 # other terminal
 npm run shots
 ```
@@ -23,7 +23,7 @@ npm run shots
 4. Si cambias UI del README, regenera las capturas:
 
 ```bash
-npx vite --config vite.web.mts
+npm run dev:web
 # otra terminal
 npm run shots
 ```

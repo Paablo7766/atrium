@@ -53,17 +53,13 @@
 
 ## Screenshot set · Set de capturas
 
+The four product shots used on the GitHub page.
+
 | Screen | EN | ES | File |
 |--------|----|----|------|
-| Dashboard | [View](en/SCREENSHOTS.md#dashboard) | [Ver](es/CAPTURAS.md#resumen) | `assets/dashboard.png` |
-| Analytics overview | [View](en/SCREENSHOTS.md#analytics--overview) | [Ver](es/CAPTURAS.md#analítica--overview) | `assets/analytics.png` |
-| Analytics time | [View](en/SCREENSHOTS.md#analytics--time) | [Ver](es/CAPTURAS.md#analítica--tiempo) | `assets/analytics-time.png` |
-| Analytics risk | [View](en/SCREENSHOTS.md#analytics--risk) | [Ver](es/CAPTURAS.md#analítica--riesgo) | `assets/analytics-risk.png` |
-| Analytics process | [View](en/SCREENSHOTS.md#analytics--process) | [Ver](es/CAPTURAS.md#analítica--proceso) | `assets/analytics-process.png` |
-| Calendar | [View](en/SCREENSHOTS.md#calendar) | [Ver](es/CAPTURAS.md#calendario) | `assets/calendar.png` |
+| Overview | [View](en/SCREENSHOTS.md#overview) | [Ver](es/CAPTURAS.md#resumen) | `assets/dashboard.png` |
+| Analytics | [View](en/SCREENSHOTS.md#analytics) | [Ver](es/CAPTURAS.md#analítica) | `assets/analytics.png` |
 | Trades | [View](en/SCREENSHOTS.md#trades) | [Ver](es/CAPTURAS.md#operaciones) | `assets/trades.png` |
-| Journal | [View](en/SCREENSHOTS.md#journal) | [Ver](es/CAPTURAS.md#diario) | `assets/journal.png` |
-| Import | [View](en/SCREENSHOTS.md#import) | [Ver](es/CAPTURAS.md#importación) | `assets/import.png` |
-| Share card | [View](en/SCREENSHOTS.md#share-card) | [Ver](es/CAPTURAS.md#tarjeta) | `assets/share-card.png` |
+| Calendar | [View](en/SCREENSHOTS.md#calendar) | [Ver](es/CAPTURAS.md#calendario) | `assets/calendar.png` |
 
-> Regenerate: `npx vite --config vite.web.mts` then `npm run shots`.
+> Regenerate: `npm run dev:web`, then `npm run shots`.
