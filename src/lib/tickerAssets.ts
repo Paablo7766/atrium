@@ -1,101 +1,121 @@
 import { cleanTicker } from '@/lib/ticker'
 
 const CRYPTO = 'https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color'
+const FMP_IMAGE = 'https://financialmodelingprep.com/image-stock'
 
-/** Compact SVG badge used for indices / commodities without a CDN logo. */
-function badge(label: string, bg: string, fg = '#ffffff'): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <rect width="64" height="64" rx="32" fill="${bg}"/>
-  <text x="32" y="38" text-anchor="middle" font-family="system-ui,Segoe UI,sans-serif" font-size="18" font-weight="700" fill="${fg}">${label}</text>
-</svg>`
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+export type TickerBadge = { label: string; bg: string; fg?: string }
+
+export type LocalTickerAsset =
+  | { type: 'url'; url: string }
+  | { type: 'badge'; badge: TickerBadge }
+
+/** Public FMP image CDN — no API key. Used for equities and ETF stand-ins. */
+export function fmpImageUrl(symbol: string): string {
+  const clean = cleanTicker(symbol)
+  return `${FMP_IMAGE}/${clean}.png`
+}
+
+function img(symbol: string): LocalTickerAsset {
+  return { type: 'url', url: fmpImageUrl(symbol) }
+}
+
+function crypto(file: string): LocalTickerAsset {
+  return { type: 'url', url: `${CRYPTO}/${file}` }
+}
+
+function badge(label: string, bg: string, fg = '#ffffff'): LocalTickerAsset {
+  return { type: 'badge', badge: { label, bg, fg } }
 }
 
 /**
- * Local / CDN logos for symbols FMP does not cover (crypto, FX, index CFDs, futures).
- * Used only for these uncovered tickers — never as a consolation when /api/logo fails auth.
+ * Local logos for symbols that must not hit FMP as themselves
+ * (futures roots collide with equities, e.g. ES = Eversource).
+ * Crypto uses jsdelivr; indices/commodities use ETF/index stand-ins.
  */
-export const LOCAL_TICKER_LOGOS: Record<string, string> = {
+export const LOCAL_TICKER_ASSETS: Record<string, LocalTickerAsset> = {
   // Crypto
-  BTC: `${CRYPTO}/btc.png`,
-  BTCUSD: `${CRYPTO}/btc.png`,
-  BTCUSDT: `${CRYPTO}/btc.png`,
-  XBTUSD: `${CRYPTO}/btc.png`,
-  ETH: `${CRYPTO}/eth.png`,
-  ETHUSD: `${CRYPTO}/eth.png`,
-  ETHUSDT: `${CRYPTO}/eth.png`,
-  SOL: `${CRYPTO}/sol.png`,
-  SOLUSD: `${CRYPTO}/sol.png`,
-  SOLUSDT: `${CRYPTO}/sol.png`,
-  XRP: `${CRYPTO}/xrp.png`,
-  XRPUSD: `${CRYPTO}/xrp.png`,
-  ADA: `${CRYPTO}/ada.png`,
-  ADAUSD: `${CRYPTO}/ada.png`,
-  DOGE: `${CRYPTO}/doge.png`,
-  DOGEUSD: `${CRYPTO}/doge.png`,
-  AVAX: `${CRYPTO}/avax.png`,
-  AVAXUSD: `${CRYPTO}/avax.png`,
-  DOT: `${CRYPTO}/dot.png`,
-  LINK: `${CRYPTO}/link.png`,
-  LINKUSD: `${CRYPTO}/link.png`,
-  LTC: `${CRYPTO}/ltc.png`,
-  LTCUSD: `${CRYPTO}/ltc.png`,
-  BNB: `${CRYPTO}/bnb.png`,
-  BNBUSD: `${CRYPTO}/bnb.png`,
-  MATIC: `${CRYPTO}/matic.png`,
-  ATOM: `${CRYPTO}/atom.png`,
-  UNI: `${CRYPTO}/uni.png`,
+  BTC: crypto('btc.png'),
+  BTCUSD: crypto('btc.png'),
+  BTCUSDT: crypto('btc.png'),
+  BTCUSDC: crypto('btc.png'),
+  XBTUSD: crypto('btc.png'),
+  ETH: crypto('eth.png'),
+  ETHUSD: crypto('eth.png'),
+  ETHUSDT: crypto('eth.png'),
+  ETHUSDC: crypto('eth.png'),
+  SOL: crypto('sol.png'),
+  SOLUSD: crypto('sol.png'),
+  SOLUSDT: crypto('sol.png'),
+  SOLUSDC: crypto('sol.png'),
+  XRP: crypto('xrp.png'),
+  XRPUSD: crypto('xrp.png'),
+  ADA: crypto('ada.png'),
+  ADAUSD: crypto('ada.png'),
+  DOGE: crypto('doge.png'),
+  DOGEUSD: crypto('doge.png'),
+  AVAX: crypto('avax.png'),
+  AVAXUSD: crypto('avax.png'),
+  DOT: crypto('dot.png'),
+  LINK: crypto('link.png'),
+  LINKUSD: crypto('link.png'),
+  LTC: crypto('ltc.png'),
+  LTCUSD: crypto('ltc.png'),
+  BNB: crypto('bnb.png'),
+  BNBUSD: crypto('bnb.png'),
+  MATIC: crypto('matic.png'),
+  ATOM: crypto('atom.png'),
+  UNI: crypto('uni.png'),
 
-  // Equity index CFDs / futures roots
-  US500: badge('S&P', '#0d3b2e'),
-  SPX: badge('S&P', '#0d3b2e'),
-  SPY: badge('S&P', '#0d3b2e'),
-  ES: badge('ES', '#0d3b2e'),
-  MES: badge('MES', '#0d3b2e'),
+  // Equity index CFDs / futures → ETF or index logo (never the colliding equity ticker)
+  US500: img('SPY'),
+  SPX: img('SPY'),
+  SPY: img('SPY'),
+  ES: img('SPY'),
+  MES: img('SPY'),
 
-  US100: badge('NDX', '#1a2744'),
-  NAS100: badge('NDX', '#1a2744'),
-  NDX: badge('NDX', '#1a2744'),
-  NQ: badge('NQ', '#1a2744'),
-  MNQ: badge('MNQ', '#1a2744'),
-  QQQ: badge('QQQ', '#1a2744'),
+  US100: img('QQQ'),
+  NAS100: img('QQQ'),
+  NDX: img('QQQ'),
+  NQ: img('QQQ'),
+  MNQ: img('QQQ'),
+  QQQ: img('QQQ'),
 
-  US30: badge('DJI', '#3b1d0d'),
-  DJI: badge('DJI', '#3b1d0d'),
-  DJ30: badge('DJI', '#3b1d0d'),
-  YM: badge('YM', '#3b1d0d'),
-  MYM: badge('MYM', '#3b1d0d'),
+  US30: img('DIA'),
+  DJI: img('DIA'),
+  DJ30: img('DIA'),
+  YM: img('DIA'),
+  MYM: img('DIA'),
 
-  GER40: badge('DAX', '#1a2030'),
-  DE40: badge('DAX', '#1a2030'),
-  DAX: badge('DAX', '#1a2030'),
+  GER40: img('DAX'),
+  DE40: img('DAX'),
+  DAX: img('DAX'),
 
-  UK100: badge('FTSE', '#1e2a1e'),
-  FTSE: badge('FTSE', '#1e2a1e'),
+  UK100: img('EWU'),
+  FTSE: img('EWU'),
 
-  FRA40: badge('CAC', '#1a2230'),
-  CAC40: badge('CAC', '#1a2230'),
-  CAC: badge('CAC', '#1a2230'),
+  FRA40: img('EWQ'),
+  CAC40: img('EWQ'),
+  CAC: img('EWQ'),
 
-  EU50: badge('EU50', '#1a2030'),
-  STOXX50: badge('SX5E', '#1a2030'),
+  EU50: img('FEZ'),
+  STOXX50: img('FEZ'),
 
-  JP225: badge('NK', '#2a1a30'),
-  NI225: badge('NK', '#2a1a30'),
-  NKD: badge('NK', '#2a1a30'),
+  JP225: img('EWJ'),
+  NI225: img('EWJ'),
+  NKD: img('EWJ'),
 
-  RTY: badge('RTY', '#1a2a2e'),
-  RUT: badge('RUT', '#1a2a2e'),
-  US2000: badge('RUT', '#1a2a2e'),
+  RTY: img('IWM'),
+  RUT: img('IWM'),
+  US2000: img('IWM'),
 
-  // Commodities
+  // Commodities — metal / energy marks (ETF issuer logos look wrong here)
   XAUUSD: badge('Au', '#8a6a12', '#1a1408'),
   GOLD: badge('Au', '#8a6a12', '#1a1408'),
-  GC: badge('GC', '#8a6a12', '#1a1408'),
+  GC: badge('Au', '#8a6a12', '#1a1408'),
   XAGUSD: badge('Ag', '#6a7078', '#0e1014'),
   SILVER: badge('Ag', '#6a7078', '#0e1014'),
-  SI: badge('SI', '#6a7078', '#0e1014'),
-  CL: badge('CL', '#2a2010'),
+  SI: badge('Ag', '#6a7078', '#0e1014'),
+  CL: badge('WTI', '#2a2010'),
   WTICOUSD: badge('WTI', '#2a2010'),
   USOIL: badge('WTI', '#2a2010'),
   BRENT: badge('BRT', '#2a2010'),
@@ -103,20 +123,30 @@ export const LOCAL_TICKER_LOGOS: Record<string, string> = {
   NG: badge('NG', '#1a3030'),
   NATGAS: badge('NG', '#1a3030'),
 
-  // Majors FX — generic pair badges (no FMP equity profile)
-  EURUSD: badge('€$', '#1a2744'),
-  GBPUSD: badge('£$', '#1e2a1e'),
-  USDJPY: badge('$¥', '#2a1a30'),
+  // Majors FX — one mark, optically centered in the circle
+  EURUSD: badge('€', '#1a2744'),
+  GBPUSD: badge('£', '#1e2a1e'),
+  USDJPY: badge('¥', '#2a1a30'),
   AUDUSD: badge('A$', '#1a2a2e'),
-  USDCAD: badge('$C', '#1a2030'),
-  USDCHF: badge('$₣', '#1a2030'),
+  USDCAD: badge('C$', '#1a2030'),
+  USDCHF: badge('₣', '#1a2030'),
   NZDUSD: badge('N$', '#1a2a2e'),
-  EURGBP: badge('€£', '#1a2744'),
+  EURGBP: badge('€', '#1a2744'),
 }
 
-/** Resolve a local/CDN logo URL for a raw or cleaned ticker, if any. */
-export function localTickerLogo(rawTicker: string): string | undefined {
+export function localTickerAsset(rawTicker: string): LocalTickerAsset | undefined {
   const clean = cleanTicker(rawTicker)
   if (!clean) return undefined
-  return LOCAL_TICKER_LOGOS[clean]
+  return LOCAL_TICKER_ASSETS[clean]
+}
+
+/** URL-only local logos (crypto + index/commodity stand-ins). Badges are not URLs. */
+export function localTickerLogo(rawTicker: string): string | undefined {
+  const asset = localTickerAsset(rawTicker)
+  return asset?.type === 'url' ? asset.url : undefined
+}
+
+export function localTickerBadge(rawTicker: string): TickerBadge | undefined {
+  const asset = localTickerAsset(rawTicker)
+  return asset?.type === 'badge' ? asset.badge : undefined
 }

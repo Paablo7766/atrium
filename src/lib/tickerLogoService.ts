@@ -1,8 +1,12 @@
 import { cleanTicker } from '@/lib/ticker'
-import { localTickerLogo } from '@/lib/tickerAssets'
+import {
+  fmpImageUrl,
+  localTickerAsset,
+  type TickerBadge,
+} from '@/lib/tickerAssets'
 
-// v3: credential / network failures must not persist as 7-day "no logo" negatives
-const STORAGE_KEY = 'atrium.tickerLogoCache.v3'
+// v4: CDN fallback for equities; do not persist auth failures as "no logo"
+const STORAGE_KEY = 'atrium.tickerLogoCache.v4'
 const NEGATIVE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 const ERROR_TTL_MS = 60 * 1000
 
@@ -14,8 +18,9 @@ export type TickerLogoResult = {
   url: string | null
   status: TickerLogoStatus
   /** Where a real URL came from. Null when there is no logo (or a transient error). */
-  source: 'local' | 'fmp' | 'cache' | null
+  source: 'local' | 'fmp' | 'cache' | 'cdn' | null
   error?: string
+  badge?: TickerBadge
 }
 
 type FmpLogoFetch =
@@ -105,6 +110,22 @@ function logLogoError(message: string, details: Record<string, unknown>) {
   console.error(`[tickerLogo] ${message}`, details)
 }
 
+function localResult(symbol: string): TickerLogoResult | undefined {
+  const local = localTickerAsset(symbol)
+  if (!local) return undefined
+  if (local.type === 'url') {
+    setCached(symbol, local.url)
+    return { url: local.url, status: 'ok', source: 'local' }
+  }
+  return { url: null, status: 'ok', source: 'local', badge: local.badge }
+}
+
+function cdnResult(symbol: string, persist = false): TickerLogoResult {
+  const url = fmpImageUrl(symbol)
+  if (persist) setCached(symbol, url)
+  return { url, status: 'ok', source: 'cdn' }
+}
+
 /**
  * Network boundary: FMP must only ever see a cleaned symbol (no broker suffixes).
  * The API key stays on the server (`FMP_API_KEY` / `VITE_FMP_API_KEY` via `/api/logo`).
@@ -171,25 +192,25 @@ async function fetchFmpLogo(rawOrClean: string): Promise<FmpLogoFetch> {
 
 /**
  * Resolve a logo URL for a ticker.
- * Order: local map (FMP-uncovered: NQ/ES/FX/crypto) → cache → FMP via `/api/logo`.
- * Credential / network failures are logged and are NOT stored as "no logo".
+ * Order: local map (crypto / index stand-ins / FX badges) → cache → FMP `/api/logo`
+ * → public FMP image CDN (no API key).
+ * Credential / network failures are logged and fall back to the CDN — never stored as "no logo".
  */
 export async function resolveTickerLogo(rawTicker: string): Promise<TickerLogoResult> {
   const symbol = cleanTicker(rawTicker)
   if (!symbol) return { url: null, status: 'unavailable', source: null }
 
-  const local = localTickerLogo(symbol)
-  if (local) {
-    setCached(symbol, local)
-    return { url: local, status: 'ok', source: 'local' }
-  }
+  const local = localResult(symbol)
+  if (local) return local
 
   const cached = getCached(symbol)
   if (cached?.url) return { url: cached.url, status: 'ok', source: 'cache' }
-  if (cached && isFreshNegative(cached)) return { url: null, status: 'unavailable', source: 'cache' }
 
   const recent = getRecentError(symbol)
-  if (recent) return { url: null, status: 'error', source: null, error: recent.message }
+  if (recent) return cdnResult(symbol)
+
+  // Stale "no logo" from an older path — show the public CDN instead of staying blank
+  if (cached && isFreshNegative(cached)) return cdnResult(symbol)
 
   const pending = inflight.get(symbol)
   if (pending) return pending
@@ -204,16 +225,15 @@ export async function resolveTickerLogo(rawTicker: string): Promise<TickerLogoRe
       }
       if (fetched.kind === 'unavailable') {
         recentErrors.delete(symbol)
-        setCached(symbol, null)
-        return { url: null, status: 'unavailable', source: null }
+        return cdnResult(symbol, true)
       }
       recentErrors.set(symbol, { at: Date.now(), message: fetched.message })
-      return { url: null, status: 'error', source: null, error: fetched.message }
+      return { ...cdnResult(symbol), error: fetched.message }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Logo lookup failed'
       logLogoError('unexpected error', { symbol, err })
       recentErrors.set(symbol, { at: Date.now(), message })
-      return { url: null, status: 'error', source: null, error: message }
+      return { ...cdnResult(symbol), error: message }
     } finally {
       inflight.delete(symbol)
     }
@@ -225,17 +245,22 @@ export async function resolveTickerLogo(rawTicker: string): Promise<TickerLogoRe
 
 /** Synchronous peek used for instant paint when already known. */
 export function peekTickerLogo(rawTicker: string): string | null | undefined {
-  const symbol = cleanTicker(rawTicker)
-  if (!symbol) return null
+  return peekTickerLogoState(rawTicker).url ?? undefined
+}
 
-  const local = localTickerLogo(symbol)
-  if (local) return local
+/** Full synchronous snapshot: local URL/badge, cache, or public CDN for equities. */
+export function peekTickerLogoState(rawTicker: string): TickerLogoResult {
+  const symbol = cleanTicker(rawTicker)
+  if (!symbol) return { url: null, status: 'unavailable', source: null }
+
+  const local = localTickerAsset(symbol)
+  if (local?.type === 'url') return { url: local.url, status: 'ok', source: 'local' }
+  if (local?.type === 'badge') return { url: null, status: 'ok', source: 'local', badge: local.badge }
 
   const cached = getCached(symbol)
-  if (!cached) return undefined
-  if (cached.url) return cached.url
-  if (isFreshNegative(cached)) return null
-  return undefined
+  if (cached?.url) return { url: cached.url, status: 'ok', source: 'cache' }
+
+  return { url: fmpImageUrl(symbol), status: 'ok', source: 'cdn' }
 }
 
 /** Test helper — clears memory, inflight, error TTL and persisted cache. */
@@ -245,6 +270,7 @@ export function resetTickerLogoCaches() {
   recentErrors.clear()
   try {
     localStorage.removeItem(STORAGE_KEY)
+    localStorage.removeItem('atrium.tickerLogoCache.v3')
   } catch {
     // ignore
   }

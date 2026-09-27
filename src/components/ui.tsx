@@ -444,6 +444,7 @@ export function Modal({
   width = 'max-w-3xl',
   glow,
   className,
+  closable = true,
 }: {
   open: boolean
   onClose: () => void
@@ -455,20 +456,21 @@ export function Modal({
   width?: string
   glow?: 'gain' | 'loss' | 'neutral'
   className?: string
+  closable?: boolean
 }) {
   const t = useT()
   useEffect(() => {
-    if (!open) return
+    if (!open || !closable) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+  }, [open, onClose, closable])
 
   if (!open) return null
   const glowColor = glow === 'gain' ? 'rgba(74,222,128,0.55)' : glow === 'loss' ? 'rgba(248,113,113,0.5)' : 'rgba(255,255,255,0.16)'
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-5 sm:p-8" role="dialog" aria-modal>
-      <div className="absolute inset-0 bg-[#050506]/80 backdrop-blur-md animate-modal-veil" onClick={onClose} />
+      <div className="absolute inset-0 bg-[#050506]/80 backdrop-blur-md animate-modal-veil" onClick={closable ? onClose : undefined} />
       <div
         className="absolute inset-0 pointer-events-none animate-modal-veil"
         style={{ background: 'radial-gradient(720px 380px at 50% 108%, rgba(228,228,235,0.06), transparent 62%)' }}
@@ -490,12 +492,16 @@ export function Modal({
             <h2 className="text-[22px] font-semibold tracking-normal leading-tight">{title}</h2>
             {subtitle && <p className="text-[13px] text-muted mt-1.5 leading-relaxed text-pretty">{subtitle}</p>}
           </div>
-          <div className="flex items-center gap-2 shrink-0 pt-0.5">
-            {action}
-            <Button variant="ghost" size="icon" onClick={onClose} aria-label={t('common.close')} className="rounded-full">
-              <X size={16} />
-            </Button>
-          </div>
+          {(action || closable) && (
+            <div className="flex items-center gap-2 shrink-0 pt-0.5">
+              {action}
+              {closable && (
+                <Button variant="ghost" size="icon" onClick={onClose} aria-label={t('common.close')} className="rounded-full">
+                  <X size={16} />
+                </Button>
+              )}
+            </div>
+          )}
         </header>
         <div className="h-px bg-gradient-to-r from-transparent via-border-2 to-transparent" />
         <div className="px-7 py-6 overflow-y-auto flex-1 min-h-0 scroll-smooth">{children}</div>

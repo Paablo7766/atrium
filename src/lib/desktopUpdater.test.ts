@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { compareSemver } from './changelog'
 import {
+  canDismissUpdateModal,
   computeUpdateOffer,
   emptyUpdaterStatus,
   isPrereleaseVersion,
+  nsisUpdateInstallOptions,
   shouldNotifyForVersion,
   shouldShowUpdateModal,
   summarizeReleaseNotes,
@@ -50,6 +52,31 @@ describe('computeUpdateOffer', () => {
     expect(
       computeUpdateOffer({ state: 'downloaded', availableVersion: '1.2.0', dismissedVersion: null }),
     ).toBe(true)
+    expect(
+      computeUpdateOffer({ state: 'restarting', availableVersion: '1.2.0', dismissedVersion: '1.2.0' }),
+    ).toBe(true)
+  })
+
+  it('no deja posponer una vez descargada: se instala y se reabre sola', () => {
+    expect(
+      computeUpdateOffer({ state: 'downloaded', availableVersion: '1.2.0-beta.1', dismissedVersion: '1.2.0-beta.1' }),
+    ).toBe(true)
+  })
+})
+
+describe('canDismissUpdateModal', () => {
+  it('solo se puede cerrar antes de empezar a aplicar la actualización', () => {
+    expect(canDismissUpdateModal('available')).toBe(true)
+    expect(canDismissUpdateModal('error')).toBe(true)
+    expect(canDismissUpdateModal('downloading')).toBe(false)
+    expect(canDismissUpdateModal('downloaded')).toBe(false)
+    expect(canDismissUpdateModal('restarting')).toBe(false)
+  })
+})
+
+describe('nsisUpdateInstallOptions', () => {
+  it('instala en silencio y relanza para no mostrar el asistente NSIS', () => {
+    expect(nsisUpdateInstallOptions()).toEqual({ isSilent: true, isForceRunAfter: true })
   })
 })
 
@@ -94,6 +121,7 @@ describe('shouldShowUpdateModal', () => {
     expect(shouldShowUpdateModal({ ...base, tradeModalOpen: true })).toBe(false)
     expect(shouldShowUpdateModal({ ...base, state: 'idle' })).toBe(false)
     expect(shouldShowUpdateModal({ ...base, state: 'downloaded' })).toBe(true)
+    expect(shouldShowUpdateModal({ ...base, state: 'restarting' })).toBe(true)
   })
 })
 

@@ -86,6 +86,7 @@ export interface DesktopApi {
     getStatus: () => Promise<DesktopUpdaterStatus>
     setAllowPrerelease: (enabled: boolean) => Promise<DesktopUpdaterStatus>
     download: () => Promise<{ ok: true } | { ok: false; error: string }>
+    installAndRestart: () => Promise<{ ok: true } | { ok: false; error: string }>
     dismiss: () => Promise<DesktopUpdaterStatus>
     onStatus: (cb: (status: DesktopUpdaterStatus) => void) => () => void
   }

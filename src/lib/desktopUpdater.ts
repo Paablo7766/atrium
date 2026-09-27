@@ -7,6 +7,7 @@ export type DesktopUpdaterState =
   | 'not-available'
   | 'downloading'
   | 'downloaded'
+  | 'restarting'
   | 'error'
 
 export type DesktopUpdaterStatus = {
@@ -56,9 +57,23 @@ export function computeUpdateOffer(opts: {
   availableVersion: string | null
   dismissedVersion: string | null
 }): boolean {
-  if (opts.state === 'downloading' || opts.state === 'downloaded') return true
-  if (opts.state !== 'available' || !opts.availableVersion) return false
+  if (opts.state === 'downloading' || opts.state === 'downloaded' || opts.state === 'restarting') return true
+  if (opts.state !== 'available') return false
+  if (!opts.availableVersion) return false
   return opts.availableVersion !== opts.dismissedVersion
+}
+
+/** After Update now, the in-app notice stays up until the process is replaced. */
+export function canDismissUpdateModal(state: DesktopUpdaterState): boolean {
+  return state === 'available' || state === 'error'
+}
+
+/**
+ * NSIS with `oneClick: false` shows a wizard (and a “Continue” card if Atrium
+ * is still running). Silent + force-relaunch skips that and reopens updated.
+ */
+export function nsisUpdateInstallOptions(): { isSilent: true; isForceRunAfter: true } {
+  return { isSilent: true, isForceRunAfter: true }
 }
 
 function decodeHtmlEntities(value: string): string {
@@ -125,7 +140,12 @@ export function shouldShowUpdateModal(opts: {
 }): boolean {
   if (!opts.supported || !opts.offer) return false
   if (opts.tutorialActive || opts.feedbackOpen || opts.whatsNewVisible || opts.tradeModalOpen) return false
-  return opts.state === 'available' || opts.state === 'downloading' || opts.state === 'downloaded'
+  return (
+    opts.state === 'available' ||
+    opts.state === 'downloading' ||
+    opts.state === 'downloaded' ||
+    opts.state === 'restarting'
+  )
 }
 
 export function useDesktopUpdaterStatus(): DesktopUpdaterStatus {

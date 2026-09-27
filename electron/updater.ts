@@ -5,6 +5,7 @@ import electronUpdater from 'electron-updater'
 import {
   computeUpdateOffer,
   emptyUpdaterStatus,
+  nsisUpdateInstallOptions,
   type DesktopUpdaterState,
   type DesktopUpdaterStatus,
 } from '@/lib/desktopUpdater'
@@ -12,7 +13,14 @@ import { parseUpdaterPrefs, serializeUpdaterPrefs, type UpdaterPrefs } from './u
 
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000
 const FIRST_CHECK_DELAY_MS = 4_000
+const RESTART_AFTER_DOWNLOAD_MS = 800
 const PREFS_FILE = 'updater-prefs.json'
+
+let quittingForUpdate = false
+
+export function isQuittingForUpdate(): boolean {
+  return quittingForUpdate
+}
 
 type Trusted = (event: IpcMainInvokeEvent | IpcMainEvent) => boolean
 
@@ -39,6 +47,7 @@ export function initDesktopUpdater(opts: {
   userDataDir: string
   isTrustedSender: Trusted
   getWindow: () => BrowserWindow | null
+  prepareToQuit?: () => Promise<void>
 }): void {
   const canUpdate = opts.isPackaged && !isPortableBuild()
   const prefsPath = path.join(opts.userDataDir, PREFS_FILE)
@@ -58,6 +67,9 @@ export function initDesktopUpdater(opts: {
   let dismissedVersion: string | null = null
   let lastProgress = -1
   let checking = false
+  let installing = false
+  let userRequestedDownload = false
+  let restartTimer: ReturnType<typeof setTimeout> | null = null
 
   const snapshot = (): DesktopUpdaterStatus => ({
     supported: canUpdate,
@@ -82,8 +94,43 @@ export function initDesktopUpdater(opts: {
     fs.writeFileSync(prefsPath, serializeUpdaterPrefs(prefs), { encoding: 'utf8', mode: 0o600 })
   }
 
+  const installAndRelaunch = async (): Promise<{ ok: true } | { ok: false; error: string }> => {
+    if (!canUpdate) return { ok: false as const, error: 'Solo el instalador NSIS puede actualizarse' }
+    if (state !== 'downloaded' && state !== 'restarting') {
+      return { ok: false as const, error: 'La actualización aún no está lista para instalar' }
+    }
+    if (installing) return { ok: true as const }
+    installing = true
+    quittingForUpdate = true
+    state = 'restarting'
+    error = null
+    sendStatus()
+    if (restartTimer) {
+      clearTimeout(restartTimer)
+      restartTimer = null
+    }
+    try {
+      await opts.prepareToQuit?.()
+    } catch (err) {
+      console.warn('[updater] prepareToQuit', err)
+    }
+    try {
+      const { isSilent, isForceRunAfter } = nsisUpdateInstallOptions()
+      getAutoUpdater().quitAndInstall(isSilent, isForceRunAfter)
+      return { ok: true as const }
+    } catch (err) {
+      installing = false
+      quittingForUpdate = false
+      state = 'error'
+      error = err instanceof Error ? err.message : 'No se pudo instalar la actualización'
+      sendStatus()
+      return { ok: false as const, error }
+    }
+  }
+
   const check = async () => {
-    if (!canUpdate || checking) return
+    if (!canUpdate || checking || installing) return
+    if (state === 'downloading' || state === 'downloaded' || state === 'restarting') return
     checking = true
     state = 'checking'
     error = null
@@ -103,6 +150,7 @@ export function initDesktopUpdater(opts: {
     const updater = getAutoUpdater()
     updater.autoDownload = false
     updater.autoInstallOnAppQuit = true
+    updater.autoRunAppAfterInstall = true
     updater.allowPrerelease = prefs.allowPrerelease
     updater.logger = {
       info: (...args: unknown[]) => console.log('[updater]', ...args),
@@ -112,11 +160,13 @@ export function initDesktopUpdater(opts: {
     }
 
     updater.on('checking-for-update', () => {
+      if (installing || state === 'downloading' || state === 'downloaded' || state === 'restarting') return
       state = 'checking'
       error = null
       sendStatus()
     })
     updater.on('update-available', (info) => {
+      if (installing || state === 'downloading' || state === 'downloaded' || state === 'restarting') return
       state = 'available'
       availableVersion = info.version
       releaseNotes = notesFromInfo(info)
@@ -124,6 +174,7 @@ export function initDesktopUpdater(opts: {
       sendStatus()
     })
     updater.on('update-not-available', () => {
+      if (installing || state === 'downloading' || state === 'downloaded' || state === 'restarting') return
       state = 'not-available'
       availableVersion = null
       releaseNotes = null
@@ -146,8 +197,14 @@ export function initDesktopUpdater(opts: {
       downloadPercent = 100
       error = null
       sendStatus()
+      if (!userRequestedDownload || installing) return
+      restartTimer = setTimeout(() => {
+        restartTimer = null
+        void installAndRelaunch()
+      }, RESTART_AFTER_DOWNLOAD_MS)
     })
     updater.on('error', (err) => {
+      if (installing) return
       state = 'error'
       error = err instanceof Error ? err.message : String(err)
       sendStatus()
@@ -185,6 +242,7 @@ export function initDesktopUpdater(opts: {
       return { ok: false as const, error: 'No hay una actualización lista para descargar' }
     }
     dismissedVersion = null
+    userRequestedDownload = true
     state = 'downloading'
     downloadPercent = 0
     error = null
@@ -200,8 +258,14 @@ export function initDesktopUpdater(opts: {
     }
   })
 
+  ipcMain.handle('updater:installAndRestart', async (event) => {
+    if (!opts.isTrustedSender(event)) return { ok: false as const, error: 'IPC no autorizado' }
+    return installAndRelaunch()
+  })
+
   ipcMain.handle('updater:dismiss', (event) => {
     if (!opts.isTrustedSender(event)) return emptyUpdaterStatus(app.getVersion())
+    if (state === 'downloading' || state === 'downloaded' || state === 'restarting') return snapshot()
     dismissedVersion = availableVersion
     sendStatus()
     return snapshot()

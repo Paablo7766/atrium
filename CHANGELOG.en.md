@@ -2,35 +2,34 @@
 
 Versions follow `package.json`. Newest first.
 
+## 1.2.0-beta.2 — 2026-09-27
+
+- [New] When you update, Atrium quits, installs on its own, and reopens
+- [Improvement] What's new matches the history card: only this version, in plain language, with pictures
+
 ## 1.2.0-beta.1 — 2026-09-27
 
-- [New] Master password unlock lives on the welcome hero instead of a lock screen
-- [Fix] Ticker logos: an API key failure is no longer cached as “no logo” and is logged to the console
-- [Improvement] What's new shows only the current version; a stale localStorage entry cannot hide the card
-- [Improvement] Dashboard: recent table and strategy ranking stretch to the same height
+- [New] You open the journal in one step: the password is asked on welcome
+- [Improvement] Asset logos stay sharp and no longer go blank
+- [Improvement] On the overview, the recent table and strategy ranking share the same height
 
 ## 1.1.3 — 2026-09-27
 
-- [Fix] Windows installer finds `better_sqlite3.node` in `app.asar.unpacked` even if `isPackaged` is wrong
+- [Fix] After installing on Windows, Atrium opens as usual
 
 ## 1.1.2 — 2026-09-27
 
-- [Fix] Update notes render as plain text instead of raw GitHub HTML
-- [Fix] Onboarding no longer skips the password step when `journal.db` is missing (avoids «Invalid password» while assembling)
-- [Fix] Leftover `.crypto-meta` or a half-written `journal.db` no longer blocks Continue with a cipher init error
+- [Fix] Creating the journal is more reliable if setup was interrupted
 
 ## 1.1.1 — 2026-09-27
 
-- [Fix] Reliable encrypted `journal.db` creation after master password setup on fresh installs
-- [Fix] Password verification via HMAC in `.crypto-meta` (no longer confused with database errors)
-- [Fix] Update notice shown while the journal is locked or during onboarding
+- [Fix] The first time, the journal is created cleanly when you set a password
 
 ## 1.1.0 — 2026-09-26
 
-- [New] Send suggestions and bug reports with an optional screenshot
-- [New] Web/PWA version with encrypted data in the browser
-- [Improvement] Cleaner calendar: monthly P&L, cells, and day panel
-- [Improvement] Dashboard: recent table and strategy ranking aligned
+- [New] Send an idea or a bug from Atrium, with a screenshot if you want
+- [New] You can also use the journal in the browser
+- [Improvement] A clearer calendar: month P&L and the detail of each day
 
 ## 1.0.0 — 2026-09-20
 

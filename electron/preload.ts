@@ -72,6 +72,7 @@ contextBridge.exposeInMainWorld('api', {
     getStatus: () => ipcRenderer.invoke('updater:getStatus'),
     setAllowPrerelease: (enabled: boolean) => ipcRenderer.invoke('updater:setAllowPrerelease', enabled),
     download: () => ipcRenderer.invoke('updater:download'),
+    installAndRestart: () => ipcRenderer.invoke('updater:installAndRestart'),
     dismiss: () => ipcRenderer.invoke('updater:dismiss'),
     onStatus: (cb: (status: unknown) => void) => {
       const listener = (_event: unknown, status: unknown) => cb(status)

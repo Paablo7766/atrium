@@ -62,7 +62,7 @@ import {
 } from '@/lib/db/service'
 
 import { resolveNativeBindingPath, setNativeBindingPath } from '@/lib/db/connection'
-import { initDesktopUpdater } from './updater'
+import { initDesktopUpdater, isQuittingForUpdate } from './updater'
 
 import { deriveSyncKeyHexFromPassword, getExportKeyMaterial, getSyncKeyHex } from '@/lib/crypto/keyManagerMain'
 
@@ -921,6 +921,11 @@ if (!gotLock) {
       userDataDir: dataDir,
       isTrustedSender,
       getWindow: () => win,
+      prepareToQuit: async () => {
+        await flushFolderBackup().catch(() => undefined)
+        await stopLitestream()
+        shutdownJournalDb()
+      },
     })
 
   })
@@ -930,6 +935,10 @@ if (!gotLock) {
 
 
 app.on('window-all-closed', () => {
+  if (isQuittingForUpdate()) {
+    shutdownJournalDb()
+    return
+  }
 
   void flushFolderBackup()
     .catch(() => undefined)
