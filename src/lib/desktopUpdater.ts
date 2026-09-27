@@ -57,15 +57,15 @@ export function computeUpdateOffer(opts: {
   availableVersion: string | null
   dismissedVersion: string | null
 }): boolean {
-  if (opts.state === 'downloading' || opts.state === 'downloaded' || opts.state === 'restarting') return true
-  if (opts.state !== 'available') return false
+  if (opts.state === 'downloading' || opts.state === 'restarting') return true
+  if (opts.state !== 'available' && opts.state !== 'downloaded') return false
   if (!opts.availableVersion) return false
   return opts.availableVersion !== opts.dismissedVersion
 }
 
-/** After Update now, the in-app notice stays up until the process is replaced. */
+/** The notice can close unless a download or restart is in progress. */
 export function canDismissUpdateModal(state: DesktopUpdaterState): boolean {
-  return state === 'available' || state === 'error'
+  return state === 'available' || state === 'downloaded' || state === 'error'
 }
 
 /**

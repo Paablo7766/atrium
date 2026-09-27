@@ -2,6 +2,11 @@
 
 Las versiones siguen `package.json`. Más reciente arriba.
 
+## 1.2.0-beta.3 — 2026-09-27
+
+- [Mejora] El aviso de actualización es más claro y se puede cerrar con Entendido
+- [Corrección] Tras descargar, ya no te bloquea el diario: instalas al cerrar o reinicias cuando quieras
+
 ## 1.2.0-beta.2 — 2026-09-27
 
 - [Nuevo] Al actualizar, Atrium se cierra, se instala sola y se vuelve a abrir

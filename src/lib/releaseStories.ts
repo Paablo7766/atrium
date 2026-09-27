@@ -13,6 +13,24 @@ export type ReleaseStory = {
 type StoriesByLocale = Record<AppLocale, ReleaseStory[]>
 
 const STORIES: Record<string, StoriesByLocale> = {
+  '1.2.0-beta.3': {
+    es: [
+      {
+        kind: 'improve',
+        title: 'El aviso de actualización se cierra bien',
+        body: 'Pulsa Entendido y sigues en el diario. La versión nueva se instala al cerrar Atrium, o reinicia cuando quieras.',
+        visual: 'update',
+      },
+    ],
+    en: [
+      {
+        kind: 'improve',
+        title: 'The update notice closes properly',
+        body: 'Tap Got it and keep using the journal. The new version installs when you quit Atrium, or restart whenever you like.',
+        visual: 'update',
+      },
+    ],
+  },
   '1.2.0-beta.2': {
     es: [
       {

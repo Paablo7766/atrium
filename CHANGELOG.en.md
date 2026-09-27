@@ -2,6 +2,11 @@
 
 Versions follow `package.json`. Newest first.
 
+## 1.2.0-beta.3 — 2026-09-27
+
+- [Improvement] The update notice is clearer and dismisses with Got it
+- [Fix] After download, the journal is no longer blocked: install on quit or restart when you like
+
 ## 1.2.0-beta.2 — 2026-09-27
 
 - [New] When you update, Atrium quits, installs on its own, and reopens

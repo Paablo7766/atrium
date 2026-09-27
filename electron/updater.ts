@@ -13,7 +13,6 @@ import { parseUpdaterPrefs, serializeUpdaterPrefs, type UpdaterPrefs } from './u
 
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000
 const FIRST_CHECK_DELAY_MS = 4_000
-const RESTART_AFTER_DOWNLOAD_MS = 800
 const PREFS_FILE = 'updater-prefs.json'
 
 let quittingForUpdate = false
@@ -68,8 +67,6 @@ export function initDesktopUpdater(opts: {
   let lastProgress = -1
   let checking = false
   let installing = false
-  let userRequestedDownload = false
-  let restartTimer: ReturnType<typeof setTimeout> | null = null
 
   const snapshot = (): DesktopUpdaterStatus => ({
     supported: canUpdate,
@@ -105,10 +102,6 @@ export function initDesktopUpdater(opts: {
     state = 'restarting'
     error = null
     sendStatus()
-    if (restartTimer) {
-      clearTimeout(restartTimer)
-      restartTimer = null
-    }
     try {
       await opts.prepareToQuit?.()
     } catch (err) {
@@ -197,11 +190,6 @@ export function initDesktopUpdater(opts: {
       downloadPercent = 100
       error = null
       sendStatus()
-      if (!userRequestedDownload || installing) return
-      restartTimer = setTimeout(() => {
-        restartTimer = null
-        void installAndRelaunch()
-      }, RESTART_AFTER_DOWNLOAD_MS)
     })
     updater.on('error', (err) => {
       if (installing) return
@@ -242,7 +230,6 @@ export function initDesktopUpdater(opts: {
       return { ok: false as const, error: 'No hay una actualización lista para descargar' }
     }
     dismissedVersion = null
-    userRequestedDownload = true
     state = 'downloading'
     downloadPercent = 0
     error = null
@@ -265,7 +252,7 @@ export function initDesktopUpdater(opts: {
 
   ipcMain.handle('updater:dismiss', (event) => {
     if (!opts.isTrustedSender(event)) return emptyUpdaterStatus(app.getVersion())
-    if (state === 'downloading' || state === 'downloaded' || state === 'restarting') return snapshot()
+    if (state === 'downloading' || state === 'restarting') return snapshot()
     dismissedVersion = availableVersion
     sendStatus()
     return snapshot()

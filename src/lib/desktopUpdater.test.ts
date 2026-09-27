@@ -57,19 +57,19 @@ describe('computeUpdateOffer', () => {
     ).toBe(true)
   })
 
-  it('no deja posponer una vez descargada: se instala y se reabre sola', () => {
+  it('tras Entendido, oculta el aviso aunque la versión ya esté descargada', () => {
     expect(
       computeUpdateOffer({ state: 'downloaded', availableVersion: '1.2.0-beta.1', dismissedVersion: '1.2.0-beta.1' }),
-    ).toBe(true)
+    ).toBe(false)
   })
 })
 
 describe('canDismissUpdateModal', () => {
-  it('solo se puede cerrar antes de empezar a aplicar la actualización', () => {
+  it('se puede cerrar salvo mientras descarga o reinicia', () => {
     expect(canDismissUpdateModal('available')).toBe(true)
     expect(canDismissUpdateModal('error')).toBe(true)
+    expect(canDismissUpdateModal('downloaded')).toBe(true)
     expect(canDismissUpdateModal('downloading')).toBe(false)
-    expect(canDismissUpdateModal('downloaded')).toBe(false)
     expect(canDismissUpdateModal('restarting')).toBe(false)
   })
 })
