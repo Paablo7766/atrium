@@ -201,14 +201,19 @@ export function openDatabase(): Database.Database {
   const dbPath = getDbPath()
   fs.mkdirSync(path.dirname(dbPath), { recursive: true })
 
-  const db = openSqlite(dbPath)
+  let db: Database.Database | null = null
   try {
+    db = openSqlite(dbPath)
     applyCipherPragmas(db, encryptionKey)
     applySecurityPragmas(db)
     runMigrations(db)
   } catch (err) {
     rememberCipherError(err)
-    db.close()
+    try {
+      db?.close()
+    } catch {
+      /* ignore */
+    }
     throw err
   }
   dbInstance = db

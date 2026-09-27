@@ -2,6 +2,12 @@
 
 Las versiones siguen `package.json`. Más reciente arriba.
 
+## 1.1.2 — 2026-09-27
+
+- [Corrección] Notas de actualización: se muestran como texto, no como HTML de GitHub
+- [Corrección] El onboarding no salta la contraseña si falta `journal.db` (evita «Contraseña inválida» al ensamblar)
+- [Corrección] Un `.crypto-meta` o `journal.db` a medias ya no bloquea «Continuar» con «No se pudo inicializar la base de datos cifrada»
+
 ## 1.1.1 — 2026-09-27
 
 - [Corrección] Creación fiable de `journal.db` cifrado tras configurar la contraseña maestra en instalaciones nuevas

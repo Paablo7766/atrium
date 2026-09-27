@@ -487,8 +487,8 @@ export function Modal({
         />
         <header className="flex items-start justify-between gap-4 px-7 pt-6 pb-4">
           <div className="min-w-0">
-            <h2 className="text-[22px] font-semibold tracking-[-0.035em] leading-tight">{title}</h2>
-            {subtitle && <p className="text-[13px] text-muted mt-1.5 leading-relaxed truncate">{subtitle}</p>}
+            <h2 className="text-[22px] font-semibold tracking-normal leading-tight">{title}</h2>
+            {subtitle && <p className="text-[13px] text-muted mt-1.5 leading-relaxed text-pretty">{subtitle}</p>}
           </div>
           <div className="flex items-center gap-2 shrink-0 pt-0.5">
             {action}

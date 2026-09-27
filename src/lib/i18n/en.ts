@@ -518,6 +518,8 @@ export const enDict: Record<MessageKey, string> = {
   'crypto.passwordMin': 'At least 8 characters.',
   'crypto.journalDbMissing':
     'Could not create the encrypted journal file (journal.db). Check data folder permissions or try again.',
+  'crypto.assembleNeedsPassword':
+    'Enter your master password to create the journal. You cannot continue without it.',
   'crypto.passwordMismatch': 'Passwords do not match.',
   'crypto.noRecovery': 'If you lose the master password and do not have the key in the system secure vault, encrypted data cannot be recovered. Atrium cannot reset it for you.',
   'crypto.settingUp': 'Setting up encryption…',

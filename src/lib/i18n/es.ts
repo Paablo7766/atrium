@@ -516,6 +516,8 @@ export const esDict = {
   'crypto.passwordMin': 'Mínimo 8 caracteres.',
   'crypto.journalDbMissing':
     'No se pudo crear el archivo cifrado del diario (journal.db). Revisa permisos en la carpeta de datos o vuelve a intentarlo.',
+  'crypto.assembleNeedsPassword':
+    'Introduce tu contraseña maestra para crear el diario. No se puede continuar sin ella.',
   'crypto.passwordMismatch': 'Las contraseñas no coinciden.',
   'crypto.noRecovery': 'Si pierdes la contraseña maestra y no tienes la clave en el almacén seguro del sistema, los datos cifrados no son recuperables. Atrium no puede restablecerla por ti.',
   'crypto.settingUp': 'Configurando cifrado…',

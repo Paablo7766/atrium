@@ -135,6 +135,25 @@ function removeDbFiles(): void {
   }
 }
 
+/** Sin diario real (o solo un cascarón vacío de un setup fallido) no hay nada que recuperar. */
+function dbLooksDisposable(): boolean {
+  if (!dbFileExists()) return true
+  try {
+    return fs.statSync(dbFile()).size <= ORPHAN_DB_MAX_BYTES
+  } catch {
+    return true
+  }
+}
+
+function discardUnusableJournal(dir: string): void {
+  closeDatabase()
+  clearEncryptionKey()
+  clearSessionDbKey()
+  removeDbFiles()
+  removeCryptoMeta(dir)
+  deleteSecureKeyFile(dir)
+}
+
 function initError(): string {
   const detail = getLastCipherError()
   return detail
@@ -192,9 +211,7 @@ function openWithKey(key: string): boolean {
   if (!fs.existsSync(dbFile())) return false
 
   try {
-    const size = fs.statSync(dbFile()).size
-    const status = getCryptoStatus(getUserDataDir(), true)
-    if (status.mode === 'secure-storage' && size <= ORPHAN_DB_MAX_BYTES) {
+    if (fs.statSync(dbFile()).size <= ORPHAN_DB_MAX_BYTES) {
       removeDbFiles()
       if (tryOpen()) {
         pinSessionDbKey(key)
@@ -293,13 +310,16 @@ export function journalCryptoStatus() {
 export function journalSetupPassword(password: string): { ok: true } | { ok: false; error: string } {
   const dir = getUserDataDir()
   const existing = readCryptoMeta(dir)
-  if (existing?.mode === 'password') {
+  if (existing?.mode === 'password' && !dbLooksDisposable()) {
     if (isDatabaseOpen() && dbFileExists()) return { ok: true }
     const unlocked = journalUnlockPassword(password)
     if (!unlocked.ok) return unlocked
     return journalMaterializeOnDisk()
   }
-  if (existing) {
+  if (existing && dbLooksDisposable()) {
+    // Meta o cascarón de un onboarding a medias: la contraseña nueva debe poder crear el diario.
+    discardUnusableJournal(dir)
+  } else if (existing) {
     return { ok: false, error: 'El cifrado ya está configurado.' }
   }
 

@@ -89,4 +89,17 @@ describe('persistencia de la contraseña maestra', () => {
     prepareJournalDb(dir)
     expect(journalUnlockPassword('ClaveLarga1')).toEqual({ ok: true })
   })
+
+  it('con meta huérfana o journal.db vacío permite crear el diario con una contraseña nueva', () => {
+    const dir = tempDir()
+    expect(journalSetupPassword('ClaveLarga1')).toEqual({ ok: true })
+    shutdownJournalDb()
+    fs.writeFileSync(getDbPath(), 'xxxx')
+    prepareJournalDb(dir)
+    expect(journalSetupPassword('OtraClave22')).toEqual({ ok: true })
+    expect(fs.statSync(getDbPath()).size).toBeGreaterThan(4)
+    shutdownJournalDb()
+    prepareJournalDb(dir)
+    expect(journalUnlockPassword('OtraClave22')).toEqual({ ok: true })
+  })
 })

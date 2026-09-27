@@ -2,6 +2,12 @@
 
 Versions follow `package.json`. Newest first.
 
+## 1.1.2 — 2026-09-27
+
+- [Fix] Update notes render as plain text instead of raw GitHub HTML
+- [Fix] Onboarding no longer skips the password step when `journal.db` is missing (avoids «Invalid password» while assembling)
+- [Fix] Leftover `.crypto-meta` or a half-written `journal.db` no longer blocks Continue with a cipher init error
+
 ## 1.1.1 — 2026-09-27
 
 - [Fix] Reliable encrypted `journal.db` creation after master password setup on fresh installs

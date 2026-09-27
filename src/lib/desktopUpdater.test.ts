@@ -64,6 +64,14 @@ describe('summarizeReleaseNotes', () => {
     expect(summarizeReleaseNotes('Primera línea\nSegunda línea')).toEqual(['Primera línea', 'Segunda línea'])
     expect(summarizeReleaseNotes('   ')).toEqual([])
   })
+
+  it('convierte notas HTML de GitHub en texto plano', () => {
+    expect(
+      summarizeReleaseNotes(
+        '<h2>Correcciones críticas</h2><ul><li>Creación fiable de <code>journal.db</code> cifrado</li><li>Aviso de actualización visible</li></ul>',
+      ),
+    ).toEqual(['Creación fiable de journal.db cifrado', 'Aviso de actualización visible'])
+  })
 })
 
 describe('shouldShowUpdateModal', () => {

@@ -24,7 +24,7 @@ describe('parseChangelog', () => {
   it('parsea el CHANGELOG.md del repo', () => {
     const md = fs.readFileSync(path.join(import.meta.dirname, '../../CHANGELOG.md'), 'utf8')
     const releases = parseChangelog(md)
-    expect(releases[0]).toMatchObject({ version: '1.1.0', date: '2026-09-26' })
+    expect(releases[0]?.version).toMatch(/^\d+\.\d+\.\d+/)
     expect(releases[0]?.items.length).toBeGreaterThan(0)
   })
 

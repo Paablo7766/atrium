@@ -171,6 +171,10 @@ export function Onboarding({
   const [cryptoAlreadyReady, setCryptoAlreadyReady] = useState(false)
   const [assembleTick, setAssembleTick] = useState(0)
   const [returningDevice, setReturningDevice] = useState(false)
+  const masterPasswordRef = useRef(masterPassword)
+  const cryptoChoiceRef = useRef(cryptoChoice)
+  masterPasswordRef.current = masterPassword
+  cryptoChoiceRef.current = cryptoChoice
   const FLOW = flowSteps(cryptoAlreadyReady && !legacyMigrationOnly)
   const nameRef = useRef<HTMLInputElement>(null)
   const committed = useRef(false)
@@ -207,8 +211,10 @@ export function Onboarding({
       setSecureStorageAvailable(isDesktop() && status.secureStorageAvailable)
       if (status.configured && status.mode === 'password') setCryptoChoice('password')
       else if (!status.secureStorageAvailable || !isDesktop()) setCryptoChoice('password')
-      setReturningDevice(staged)
-      setCryptoAlreadyReady(status.configured && !staged)
+      const dbReady = status.hasDatabase === true
+      setReturningDevice(staged || (status.configured && !dbReady && status.mode === 'password'))
+      // Sin journal.db no se puede saltar la contraseña: un .crypto-meta huérfano no cuenta como listo.
+      setCryptoAlreadyReady(status.configured && dbReady && !staged)
     })()
   }, [])
 
@@ -246,11 +252,12 @@ export function Onboarding({
   }, [step])
 
   useEffect(() => {
-    if (step !== 'security') {
-      setReturningDevice(false)
-      return
-    }
-    void hasStagedSaltOnly().then(setReturningDevice)
+    if (step !== 'security') return
+    void (async () => {
+      const staged = await hasStagedSaltOnly()
+      const status = await getCryptoStatus()
+      setReturningDevice(staged || (status.configured && status.hasDatabase !== true && status.mode === 'password'))
+    })()
   }, [step])
 
   useEffect(() => {
@@ -265,6 +272,12 @@ export function Onboarding({
         const needsCryptoSetup =
           !status.configured || (isDesktop() && status.configured && status.hasDatabase === false)
         if (needsCryptoSetup) {
+          if (cryptoChoiceRef.current === 'password' && masterPasswordRef.current.trim().length < 8) {
+            setCryptoAlreadyReady(false)
+            setStep('security')
+            toast(t('crypto.assembleNeedsPassword'), 'error')
+            return
+          }
           const ok = await setupCrypto()
           if (!ok) return
         }
@@ -324,8 +337,8 @@ export function Onboarding({
         : undefined
 
       const result =
-        cryptoChoice === 'password'
-          ? await setupMasterPassword(masterPassword, {
+        cryptoChoiceRef.current === 'password'
+          ? await setupMasterPassword(masterPasswordRef.current, {
               saltHex: stagedSalt,
               verifyWithCloud: syncVerify,
             })
@@ -343,7 +356,7 @@ export function Onboarding({
         }
       }
 
-      if (cryptoChoice === 'password' && isCloudSyncActive()) {
+      if (cryptoChoiceRef.current === 'password' && isCloudSyncActive()) {
         const meta = getWebCryptoMeta()
         if (meta?.salt) {
           const pushed = await pushRemoteSalt(meta.salt, meta.iterations)

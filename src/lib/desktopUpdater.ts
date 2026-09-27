@@ -61,27 +61,57 @@ export function computeUpdateOffer(opts: {
   return opts.availableVersion !== opts.dismissedVersion
 }
 
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+}
+
+function stripHtmlToText(value: string): string {
+  return decodeHtmlEntities(
+    value
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(?:p|div|h[1-6]|li|ul|ol|tr)>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/[ \t\f\v]+/g, ' ')
+      .replace(/\n[ \t]+/g, '\n')
+      .trim(),
+  )
+}
+
+function cleanNoteLine(line: string): string {
+  return line
+    .replace(/^[-*]\s+/, '')
+    .replace(/^\d+\.\s+/, '')
+    .replace(/\[[^\]]*\]\(([^)]+)\)/g, '$1')
+    .replace(/^\[.*?\]\s*/, '')
+    .trim()
+}
+
 export function summarizeReleaseNotes(raw: string | null | undefined, max = 6): string[] {
   if (!raw?.trim()) return []
-  const lines = raw
+
+  const htmlItems = [...raw.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)]
+    .map((match) => stripHtmlToText(match[1]))
+    .map(cleanNoteLine)
+    .filter(Boolean)
+  if (htmlItems.length) return htmlItems.slice(0, max)
+
+  const source = /<\/?[a-z][\s\S]*>/i.test(raw) ? stripHtmlToText(raw) : raw
+  const lines = source
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
     .filter((line) => !/^#{1,6}\s/.test(line))
 
-  const bullets = lines
-    .filter((line) => /^[-*]\s+/.test(line) || /^\d+\.\s+/.test(line))
-    .map((line) =>
-      line
-        .replace(/^[-*]\s+/, '')
-        .replace(/^\d+\.\s+/, '')
-        .replace(/\[[^\]]*\]\(([^)]+)\)/g, '$1')
-        .trim(),
-    )
-    .filter(Boolean)
-
-  const picked = (bullets.length ? bullets : lines).slice(0, max)
-  return picked.map((line) => line.replace(/^\[.*?\]\s*/, '').trim()).filter(Boolean)
+  const bullets = lines.filter((line) => /^[-*]\s+/.test(line) || /^\d+\.\s+/.test(line)).map(cleanNoteLine).filter(Boolean)
+  const picked = (bullets.length ? bullets : lines.map(cleanNoteLine).filter(Boolean)).slice(0, max)
+  return picked
 }
 
 export function shouldShowUpdateModal(opts: {

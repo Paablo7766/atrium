@@ -105,7 +105,7 @@ export function UpdateAvailableModal() {
           {notes.map((item) => (
             <li key={item} className="flex items-start gap-3 px-1 py-1">
               <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-accent shrink-0" />
-              <p className="text-[14px] leading-relaxed text-text-2">{item}</p>
+              <p className="text-[14px] leading-relaxed tracking-normal text-text-2">{item}</p>
             </li>
           ))}
         </ul>
