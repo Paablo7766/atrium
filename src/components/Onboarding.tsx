@@ -27,7 +27,7 @@ import {
 } from 'lucide-react'
 import { useStore, getBackup } from '@/store'
 import { hasLegacyBrowserJournal, isDesktop, migrateLegacyBrowserToEncrypted } from '@/lib/db/client'
-import { getCryptoStatus, setupMasterPassword, setupSecureStorageKey, unlockWithPassword } from '@/lib/crypto/keyManager'
+import { getCryptoStatus, setupMasterPassword, unlockWithPassword } from '@/lib/crypto/keyManager'
 import { getWebCryptoMeta, hasStagedSaltOnly } from '@/lib/crypto/keyManagerWeb'
 import { ensureCryptoSaltSynced, pushRemoteSalt } from '@/lib/syncSalt'
 import { isCloudSyncActive, verifyMasterPasswordAgainstCloud } from '@/lib/tradeSync'
@@ -55,7 +55,6 @@ import {
 type Step = 'welcome' | 'profile' | 'markets' | 'desk' | 'risk' | 'security' | 'start' | 'assemble'
 
 type StartPath = 'keep' | 'blank' | 'demo'
-type CryptoChoice = 'password' | 'secure-storage'
 const FLOW_DESKTOP = ['profile', 'markets', 'desk', 'risk', 'security', 'start'] as const
 type FlowStep = (typeof FLOW_DESKTOP)[number]
 
@@ -163,18 +162,14 @@ export function Onboarding({
   })
   const [weekStartsOn] = useState<WeekStart>(settings.weekStartsOn)
   const [path, setPath] = useState<StartPath>(() => (hasHistory && !demoDesk ? 'keep' : 'blank'))
-  const [cryptoChoice, setCryptoChoice] = useState<CryptoChoice>(isDesktop() ? 'secure-storage' : 'password')
   const [masterPassword, setMasterPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [secureStorageAvailable, setSecureStorageAvailable] = useState(false)
   const [cryptoBusy, setCryptoBusy] = useState(false)
   const [cryptoAlreadyReady, setCryptoAlreadyReady] = useState(false)
   const [assembleTick, setAssembleTick] = useState(0)
   const [returningDevice, setReturningDevice] = useState(false)
   const masterPasswordRef = useRef(masterPassword)
-  const cryptoChoiceRef = useRef(cryptoChoice)
   masterPasswordRef.current = masterPassword
-  cryptoChoiceRef.current = cryptoChoice
   const FLOW = flowSteps(cryptoAlreadyReady && !legacyMigrationOnly)
   const nameRef = useRef<HTMLInputElement>(null)
   const committed = useRef(false)
@@ -196,21 +191,15 @@ export function Onboarding({
     if (step === 'desk') return startingBalance > 0
     if (step === 'risk') return riskPerTrade > 0 && (!dailyLimitOn || parseAmt(dailyPct) > 0)
     if (step === 'security') {
-      if (cryptoChoice === 'password') {
-        return masterPassword.length >= 8 && masterPassword === confirmPassword
-      }
-      return secureStorageAvailable
+      return masterPassword.length >= 8 && masterPassword === confirmPassword
     }
     return true
-  }, [step, traderName, markets, startingBalance, riskPerTrade, dailyLimitOn, dailyPct, cryptoChoice, masterPassword, confirmPassword, secureStorageAvailable])
+  }, [step, traderName, markets, startingBalance, riskPerTrade, dailyLimitOn, dailyPct, masterPassword, confirmPassword])
 
   useEffect(() => {
     void (async () => {
       const status = await getCryptoStatus()
       const staged = await hasStagedSaltOnly()
-      setSecureStorageAvailable(isDesktop() && status.secureStorageAvailable)
-      if (status.configured && status.mode === 'password') setCryptoChoice('password')
-      else if (!status.secureStorageAvailable || !isDesktop()) setCryptoChoice('password')
       const dbReady = status.hasDatabase === true
       setReturningDevice(staged || (status.configured && !dbReady && status.mode === 'password'))
       // Sin journal.db no se puede saltar la contraseña: un .crypto-meta huérfano no cuenta como listo.
@@ -272,7 +261,7 @@ export function Onboarding({
         const needsCryptoSetup =
           !status.configured || (isDesktop() && status.configured && status.hasDatabase === false)
         if (needsCryptoSetup) {
-          if (cryptoChoiceRef.current === 'password' && masterPasswordRef.current.trim().length < 8) {
+          if (masterPasswordRef.current.trim().length < 8) {
             setCryptoAlreadyReady(false)
             setStep('security')
             toast(t('crypto.assembleNeedsPassword'), 'error')
@@ -336,13 +325,10 @@ export function Onboarding({
         ? (dbKeyHex: string) => verifyMasterPasswordAgainstCloud(dbKeyHex)
         : undefined
 
-      const result =
-        cryptoChoiceRef.current === 'password'
-          ? await setupMasterPassword(masterPasswordRef.current, {
-              saltHex: stagedSalt,
-              verifyWithCloud: syncVerify,
-            })
-          : await setupSecureStorageKey()
+      const result = await setupMasterPassword(masterPasswordRef.current, {
+        saltHex: stagedSalt,
+        verifyWithCloud: syncVerify,
+      })
       if (!result.ok) {
         toast(result.error, 'error')
         return false
@@ -356,7 +342,7 @@ export function Onboarding({
         }
       }
 
-      if (cryptoChoiceRef.current === 'password' && isCloudSyncActive()) {
+      if (isCloudSyncActive()) {
         const meta = getWebCryptoMeta()
         if (meta?.salt) {
           const pushed = await pushRemoteSalt(meta.salt, meta.iterations)
@@ -418,23 +404,9 @@ export function Onboarding({
     setBalance('25000')
     const status = await getCryptoStatus()
     if (!status.configured) {
-      if (isDesktop() && status.secureStorageAvailable) {
-        setCryptoBusy(true)
-        try {
-          const result = await setupSecureStorageKey()
-          if (!result.ok) {
-            toast(result.error, 'error')
-            return
-          }
-        } finally {
-          setCryptoBusy(false)
-        }
-      } else {
-        toast(t('crypto.demoNeedsPassword'), 'info')
-        setCryptoChoice('password')
-        setStep('security')
-        return
-      }
+      toast(t('crypto.demoNeedsPassword'), 'info')
+      setStep('security')
+      return
     }
     setStep('assemble')
   }
@@ -488,7 +460,7 @@ export function Onboarding({
     { step: 'risk', label: t('on.row.risk'), value: `${pct(riskPerTrade)} · ${fmtMoney(riskMoney, currency)}` },
     { step: 'risk', label: t('on.row.daily'), value: dailyLimitOn ? fmtMoney(dailyLossLimit, currency) : t('on.inactive') },
     { step: 'desk', label: t('on.fees'), value: feesLater ? t('on.feesLaterShort') : fmtMoney(defaultFees, currency) },
-    { step: 'security', label: t('on.sheet.security'), value: cryptoChoice === 'password' ? t('on.sec.password') : t('on.sec.system') },
+    { step: 'security', label: t('on.sheet.security'), value: t('on.sec.password') },
     { step: 'start', label: t('on.sheet.start'), value: pathLabel },
   ]
   const lossesToCap = dailyLimitOn && riskMoney > 0 ? Math.floor(dailyLossLimit / riskMoney) : null
@@ -823,41 +795,13 @@ export function Onboarding({
               title={returningDevice ? t('crypto.returningTitle') : t('crypto.onTitle')}
               copy={returningDevice ? t('crypto.returningCopy') : t('crypto.onCopy')}
             >
-              <div className="flex flex-col gap-2">
-                {isDesktop() && (
-                  <ChoiceCard
-                    active={cryptoChoice === 'secure-storage'}
-                    onClick={() => secureStorageAvailable && setCryptoChoice('secure-storage')}
-                    disabled={!secureStorageAvailable}
-                    icon={Shield}
-                    title={t('crypto.systemKeyTitle')}
-                    body={t('crypto.systemKeyBody')}
-                    mark={secureStorageAvailable ? t('on.recommended') : undefined}
-                  />
-                )}
-                <ChoiceCard
-                  active={cryptoChoice === 'password'}
-                  onClick={() => setCryptoChoice('password')}
-                  icon={KeyRound}
-                  title={t('crypto.passwordTitle')}
-                  body={t('crypto.passwordBody')}
-                />
+              <div className="flex gap-3 rounded-[12px] border border-white/[0.06] bg-white/[0.02] px-4 py-3.5">
+                <KeyRound size={14} className="text-muted shrink-0 mt-[3px]" />
+                <p className="text-[12.5px] text-muted leading-relaxed">{t('crypto.passwordBody')}</p>
               </div>
 
-              <div
-                className={clsx(
-                  'grid transition-[grid-template-rows,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
-                  cryptoChoice === 'password' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
-                )}
-              >
-                <div className="overflow-hidden">
-                  <div className="pt-7 short:pt-5">{passwordBlock}</div>
-                </div>
-              </div>
+              <div className="pt-7 short:pt-5">{passwordBlock}</div>
 
-              {isDesktop() && !secureStorageAvailable && (
-                <p className="mt-6 text-[12px] text-amber/90 leading-relaxed">{t('crypto.secureStorageUnavailable')}</p>
-              )}
               {recoveryNote}
             </StepHead>
           )}

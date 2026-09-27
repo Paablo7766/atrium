@@ -12,7 +12,7 @@ import { AlertTriangle, FolderOpen, History, Loader2 } from 'lucide-react'
 import { useAuth } from '@/auth/AuthProvider'
 import { readCloudSyncPref } from '@/lib/cloudSyncPref'
 import { AuthGuard, AuthLoadingScreen, GuestOnly } from '@/auth/AuthGuard'
-import { useStore, flushPersist, type Page } from '@/store'
+import { useStore, flushPersist, flushPersistAsync, type Page } from '@/store'
 import { pathForPage, pageFromPath } from '@/lib/routes'
 import { useActivePage } from '@/lib/useActivePage'
 import { useGoToPage } from '@/lib/useGoToPage'
@@ -158,7 +158,7 @@ function ProtectedApp() {
     window.addEventListener('pagehide', flush)
     window.addEventListener('beforeunload', flush)
     const onVis = () => {
-      if (document.visibilityState === 'hidden') flush()
+      if (document.visibilityState === 'hidden') void flushPersistAsync()
     }
     document.addEventListener('visibilitychange', onVis)
     return () => {

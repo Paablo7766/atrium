@@ -2,6 +2,12 @@
 
 Versions follow `package.json`. Newest first.
 
+## 1.2.0-beta.4 — 2026-09-27
+
+- [Fix] Trades persist immediately and when you hide or close the tab (web)
+- [Fix] After onboarding, the journal is saved in the browser too
+- [Improvement] Initial setup only uses a master password
+
 ## 1.2.0-beta.3 — 2026-09-27
 
 - [Improvement] The update notice is clearer and dismisses with Got it

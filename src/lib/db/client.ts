@@ -4,6 +4,7 @@ import type { DiskLoad, DiskLoadRaw, Filter, FolderBackupStatus, JournalBackup, 
 import {
   deriveKeyFromPassword,
   getCryptoStatus as getWebCryptoStatus,
+  getWebCryptoMeta,
   getWebKeyHex,
   wipeWebCryptoMeta,
 } from '@/lib/crypto/keyManagerWeb'
@@ -205,6 +206,9 @@ export function saveDataSync(data: PersistedData): void {
   if (getWebKeyHex()) {
     void saveWebJournal(data).then(() => clearLegacyBrowser())
     return
+  }
+  if (getWebCryptoMeta()) {
+    throw new Error('El diario está bloqueado. Introduce tu contraseña maestra.')
   }
   writeBrowser(data)
 }

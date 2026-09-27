@@ -2,6 +2,12 @@
 
 Las versiones siguen `package.json`. Más reciente arriba.
 
+## 1.2.0-beta.4 — 2026-09-27
+
+- [Corrección] Las operaciones se guardan al momento y al cerrar la pestaña (web)
+- [Corrección] Tras la bienvenida, el diario queda guardado también en el navegador
+- [Mejora] En la configuración inicial solo se usa contraseña maestra
+
 ## 1.2.0-beta.3 — 2026-09-27
 
 - [Mejora] El aviso de actualización es más claro y se puede cerrar con Entendido

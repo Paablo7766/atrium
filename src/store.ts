@@ -156,43 +156,62 @@ interface State {
 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let persistFailNotified = false
+let persistChain: Promise<boolean> = Promise.resolve(true)
+
+function buildPersistPayload(get: () => State): PersistedData | null {
+  if (get().loadError) return null
+  const { settings, accounts } = snapshot(get())
+  return { version: 2 as const, settings, accounts, trades: [] as Trade[], notes: [] as JournalEntry[] }
+}
+
+function notifyPersistFail(get: () => State, e: unknown) {
+  if (persistFailNotified) return
+  persistFailNotified = true
+  get().toast(e instanceof Error ? e.message : t(getAppLocale(), 'err.saveFail'), 'error')
+}
+
+function afterPersistOk(get: () => State, payload: PersistedData) {
+  persistFailNotified = false
+  bumpLocalMutationClock(computeJournalMutationAt(payload))
+  if (isCloudSyncActive()) {
+    void pushLocalJournalToCloud(payload).catch((e) => {
+      console.warn('[store] cloud push:', e instanceof Error ? e.message : e)
+    })
+  }
+}
+
+async function persistNowAsync(get: () => State): Promise<boolean> {
+  const payload = buildPersistPayload(get)
+  if (!payload) return false
+  try {
+    if (isDesktop()) saveDataSync(payload)
+    else await saveData(payload)
+    afterPersistOk(get, payload)
+    return true
+  } catch (e) {
+    notifyPersistFail(get, e)
+    return false
+  }
+}
+
+function enqueuePersist(get: () => State) {
+  persistChain = persistChain.then(() => persistNowAsync(get), () => persistNowAsync(get))
+}
 
 function persistNow(get: () => State, sync = false): boolean {
-  if (get().loadError) return false
-  const { settings, accounts } = snapshot(get())
-  const payload = { version: 2 as const, settings, accounts, trades: [] as Trade[], notes: [] as JournalEntry[] }
-  const fail = (e: unknown) => {
-    if (persistFailNotified) return
-    persistFailNotified = true
-    get().toast(e instanceof Error ? e.message : t(getAppLocale(), 'err.saveFail'), 'error')
-  }
+  const payload = buildPersistPayload(get)
+  if (!payload) return false
   if (sync && isDesktop()) {
     try {
       saveDataSync(payload)
-      persistFailNotified = false
-      bumpLocalMutationClock(computeJournalMutationAt(payload))
-      if (isCloudSyncActive()) {
-        void pushLocalJournalToCloud(payload).catch((e) => {
-          console.warn('[store] cloud push:', e instanceof Error ? e.message : e)
-        })
-      }
+      afterPersistOk(get, payload)
       return true
     } catch (e) {
-      fail(e)
+      notifyPersistFail(get, e)
       return false
     }
   }
-  void saveData(payload)
-    .then(() => {
-      persistFailNotified = false
-      bumpLocalMutationClock(computeJournalMutationAt(payload))
-      if (isCloudSyncActive()) {
-        void pushLocalJournalToCloud(payload).catch((e) => {
-          console.warn('[store] cloud push:', e instanceof Error ? e.message : e)
-        })
-      }
-    })
-    .catch(fail)
+  enqueuePersist(get)
   return true
 }
 
@@ -202,6 +221,21 @@ export function flushPersist() {
     saveTimer = null
   }
   persistNow(() => useStore.getState(), true)
+}
+
+/** Espera a que el guardado en navegador (IndexedDB) termine — p. ej. al ocultar la pestaña. */
+export function flushPersistAsync(): Promise<void> {
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
+  }
+  const get = () => useStore.getState()
+  if (isDesktop()) {
+    persistNow(get, true)
+    return persistChain.then(() => {})
+  }
+  persistChain = persistChain.then(() => persistNowAsync(get), () => persistNowAsync(get))
+  return persistChain.then(() => {})
 }
 
 function normalizeTrade(t: Trade): Trade {
@@ -316,7 +350,20 @@ function snapshot(s: Pick<State, 'trades' | 'notes' | 'settings' | 'accounts' | 
 function schedulePersist(get: () => State) {
   if (get().loadError) return
   if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => persistNow(get), 250)
+  saveTimer = setTimeout(() => {
+    saveTimer = null
+    enqueuePersist(get)
+  }, 250)
+}
+
+/** Operaciones y journal: guardar en cuanto cambian (evita perder datos al cerrar la pestaña). */
+function schedulePersistCritical(get: () => State) {
+  if (get().loadError) return
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
+  }
+  enqueuePersist(get)
 }
 
 const ACCOUNT_FIELDS: (keyof Settings)[] = ['accountName', 'currency', 'startingBalance', 'riskPerTrade', 'dailyLossLimit']
@@ -535,7 +582,7 @@ export const useStore = create<State>((set, get) => ({
     const now = new Date().toISOString()
     const trade: Trade = { ...t, id: uid(), createdAt: now, updatedAt: now }
     set((s) => ({ trades: [trade, ...s.trades] }))
-    schedulePersist(get)
+    schedulePersistCritical(get)
     return trade
   },
 
@@ -543,12 +590,12 @@ export const useStore = create<State>((set, get) => ({
     set((s) => ({
       trades: s.trades.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: new Date().toISOString() } : t)),
     }))
-    schedulePersist(get)
+    schedulePersistCritical(get)
   },
 
   deleteTrade: (id) => {
     set((s) => ({ trades: s.trades.filter((t) => t.id !== id) }))
-    schedulePersist(get)
+    schedulePersistCritical(get)
   },
 
   duplicateTrade: (id) => {
@@ -556,7 +603,7 @@ export const useStore = create<State>((set, get) => ({
     if (!src) return
     const now = new Date().toISOString()
     set((s) => ({ trades: [{ ...src, id: uid(), createdAt: now, updatedAt: now, entryDate: now, exitDate: src.status === 'CLOSED' ? now : undefined }, ...s.trades] }))
-    schedulePersist(get)
+    schedulePersistCritical(get)
   },
 
   upsertNote: (n) => {
@@ -572,13 +619,13 @@ export const useStore = create<State>((set, get) => ({
       saved = { ...n, id: n.id ?? uid(), updatedAt: now }
       return { notes: [saved, ...s.notes] }
     })
-    schedulePersist(get)
+    schedulePersistCritical(get)
     return saved!
   },
 
   deleteNote: (id) => {
     set((s) => ({ notes: s.notes.filter((n) => n.id !== id) }))
-    schedulePersist(get)
+    schedulePersistCritical(get)
   },
 
   updateSettings: (patch) => {
@@ -714,12 +761,12 @@ export const useStore = create<State>((set, get) => ({
     if (!(amt > 0) || !date) return
     const flow: Cashflow = { id: uid(), kind, amount: amt, date, note: (note ?? '').trim() }
     set((s) => ({ cashflows: [flow, ...s.cashflows] }))
-    schedulePersist(get)
+    schedulePersistCritical(get)
   },
 
   deleteCashflow: (id) => {
     set((s) => ({ cashflows: s.cashflows.filter((c) => c.id !== id) }))
-    schedulePersist(get)
+    schedulePersistCritical(get)
   },
 
   upsertSetup: ({ id, name, notes, checklist }) => {
@@ -812,7 +859,7 @@ export const useStore = create<State>((set, get) => ({
         settings: settingsFromAccount(mergedSettings, active),
       }
     })
-    schedulePersist(get)
+    schedulePersistCritical(get)
     return { ok: true, skippedTrades: parsed.skippedTrades, skippedNotes: parsed.skippedNotes }
   },
 
@@ -823,7 +870,7 @@ export const useStore = create<State>((set, get) => ({
       cashflows: [],
       settings: { ...s.settings, startingBalance: s.settings.startingBalance || 25000, demoData: true },
     }))
-    schedulePersist(get)
+    schedulePersistCritical(get)
   },
 
   completeOnboarding: (payload) => {
@@ -890,10 +937,17 @@ export const useStore = create<State>((set, get) => ({
     const others = flushed.filter((a) => a.id !== account.id)
     writePref('atrium.page', 'dashboard')
     set({ accounts: [account, ...others], trades, notes, cashflows, settings, page: 'dashboard', tutorialActive: false, loadError: null })
-    if (isDesktop() && !persistNow(get, true)) {
+    const rollbackOnboarding = () => {
       set({
         settings: { ...settings, onboardingCompleted: false },
         page: s.page,
+      })
+    }
+    if (isDesktop()) {
+      if (!persistNow(get, true)) rollbackOnboarding()
+    } else {
+      void persistNowAsync(get).then((ok) => {
+        if (!ok) rollbackOnboarding()
       })
     }
   },
