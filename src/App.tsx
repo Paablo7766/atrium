@@ -36,6 +36,7 @@ import { SHARE_RESTORE_BOOTSTRAP_ENABLED } from '@/lib/featureFlags'
 import { FeedbackModal } from '@/components/FeedbackModal'
 import { WhatsNewModal } from '@/components/WhatsNewModal'
 import { UpdateAvailableModal } from '@/components/UpdateAvailableModal'
+import { initProductAnalytics, trackAppSessionStart } from '@/lib/productAnalytics'
 
 const SettingsPage = lazy(() => import('@/pages/Settings').then((m) => ({ default: m.SettingsPage })))
 const TradeModal = lazy(() => import('@/components/TradeModal').then((m) => ({ default: m.TradeModal })))
@@ -84,6 +85,11 @@ function AppRoutes() {
 }
 
 export default function App() {
+  useEffect(() => {
+    initProductAnalytics()
+    trackAppSessionStart()
+  }, [])
+
   // Electron usa file:// → HashRouter; web usa BrowserRouter (mejor con OAuth).
   const Router = isDesktop() ? HashRouter : BrowserRouter
   return (

@@ -55,6 +55,21 @@ Then turn on **Settings › Multi-device sync**. Until you do, the app stays loc
 
 ## Build a Windows installer
 
+Vite bakes `VITE_*` into the bundle at **build time**. Before each release build, set PostHog (optional anonymous usage telemetry) in the same shell or in `.env.production`:
+
+```env
+VITE_POSTHOG_KEY=phc_your_project_key
+VITE_POSTHOG_HOST=https://eu.i.posthog.com
+```
+
+PowerShell example:
+
+```powershell
+$env:VITE_POSTHOG_KEY = "phc_..."
+$env:VITE_POSTHOG_HOST = "https://eu.i.posthog.com"
+npm run dist
+```
+
 ```bash
 npm run dist
 ```

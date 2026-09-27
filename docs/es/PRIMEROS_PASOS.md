@@ -55,6 +55,21 @@ Después activa **Ajustes › Sync multi-dispositivo**. Hasta entonces la app si
 
 ## Crear instalador Windows
 
+Vite incluye las `VITE_*` en el bundle **al compilar**. Antes de cada `npm run dist`, define PostHog (telemetría anónima de uso, opcional) en la misma terminal o en `.env.production`:
+
+```env
+VITE_POSTHOG_KEY=phc_tu_clave_de_proyecto
+VITE_POSTHOG_HOST=https://eu.i.posthog.com
+```
+
+Ejemplo en PowerShell:
+
+```powershell
+$env:VITE_POSTHOG_KEY = "phc_..."
+$env:VITE_POSTHOG_HOST = "https://eu.i.posthog.com"
+npm run dist
+```
+
 ```bash
 npm run dist
 ```

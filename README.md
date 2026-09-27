@@ -232,6 +232,10 @@ Windows shortcut: double-click **`Abrir Atrium.bat`**.
 | `VITE_SUPABASE_URL` | — | Optional — enable Settings › Multi-device sync (E2E encrypted) |
 | `VITE_SUPABASE_ANON_KEY` | — | Supabase anon key (never `service_role`) |
 | `VITE_FMP_API_KEY` | — | Ticker logos (Financial Modeling Prep) |
+| `VITE_POSTHOG_KEY` | — | Optional — anonymous product usage (PostHog EU); one `app_session_start` per session (platform + version), no journal data |
+| `VITE_POSTHOG_HOST` | `https://eu.i.posthog.com` | PostHog ingest host (EU cloud) |
+
+**Privacy · Privacidad:** When configured, web and desktop builds send a single anonymous usage event per session (platform and app version) to PostHog EU. No trades, notes, or journal content leave your device for analytics.
 
 ### Stack
 
@@ -280,6 +284,10 @@ Atajo Windows: doble clic en **`Abrir Atrium.bat`**.
 | `VITE_SUPABASE_URL` | — | Opcional — activar Ajustes › Sync multi-dispositivo (cifrado E2E) |
 | `VITE_SUPABASE_ANON_KEY` | — | Clave anon de Supabase (nunca `service_role`) |
 | `VITE_FMP_API_KEY` | — | Logos de tickers (Financial Modeling Prep) |
+| `VITE_POSTHOG_KEY` | — | Opcional — uso anónimo de la app (PostHog EU); un `app_session_start` por sesión (plataforma + versión), sin datos del diario |
+| `VITE_POSTHOG_HOST` | `https://eu.i.posthog.com` | Host de ingestión PostHog (nube EU) |
+
+**Privacidad:** Con estas variables, web y escritorio envían un evento anónimo de uso por sesión (plataforma y versión) a PostHog EU. No se envían operaciones, notas ni contenido del diario con fines de analítica.
 
 ### Stack
 
