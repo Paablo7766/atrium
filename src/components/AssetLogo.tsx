@@ -23,11 +23,14 @@ export function AssetLogo({
   className?: string
 }) {
   // Hook cleans for FMP / cache; UI keeps the original `ticker` string.
-  const { url, symbol } = useTickerLogo(ticker)
+  // Real logos: tickerAssets (NQ/ES/FX/crypto — FMP does not cover them) or /api/logo.
+  // Credential/network errors leave `url` null and must not look like a resolved miss.
+  const { url, symbol, error, status } = useTickerLogo(ticker)
   const [broken, setBroken] = useState(false)
   const dim = SIZES[size]
   const initials = tickerInitials(symbol || ticker)
-  const showImg = !!url && !broken
+  const hasResolvedLogo = !!url && status === 'ok' && !broken
+  const showImg = hasResolvedLogo
 
   useEffect(() => {
     setBroken(false)
@@ -42,7 +45,8 @@ export function AssetLogo({
         className,
       )}
       style={{ width: dim.box, height: dim.box, fontSize: dim.text }}
-      title={ticker}
+      title={error ? `${ticker} — ${error}` : ticker}
+      data-logo-status={status}
       aria-hidden
     >
       <span className={clsx('leading-none tracking-tight', showImg && 'invisible')}>{initials}</span>

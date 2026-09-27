@@ -34,6 +34,7 @@ export function cleanSymbolsCsv(raw: string): string {
   return out.join(',')
 }
 
+/** Server-only. Prefer `FMP_API_KEY` on Vercel; `VITE_FMP_API_KEY` is a Vite-dev fallback. Never bundle this into the client. */
 export function fmpKey(): string | undefined {
   return (process.env.FMP_API_KEY || process.env.VITE_FMP_API_KEY)?.trim() || undefined
 }

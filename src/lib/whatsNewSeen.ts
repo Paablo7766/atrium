@@ -1,3 +1,5 @@
+import { compareSemver } from '@/lib/changelog'
+
 const STORAGE_KEY = 'atrium.lastSeenAppVersion'
 
 export function readLastSeenAppVersion(): string | null {
@@ -19,6 +21,11 @@ export function markAppVersionSeen(version: string): void {
   }
 }
 
+/** Prefer the oldest recorded “seen” version so a stale localStorage entry cannot skip the card. */
 export function resolveLastSeenAppVersion(fromSettings?: string): string | null {
-  return readLastSeenAppVersion() ?? (fromSettings?.trim() || null)
+  const fromDb = fromSettings?.trim() || null
+  const fromLs = readLastSeenAppVersion()
+  if (!fromDb) return fromLs
+  if (!fromLs) return fromDb
+  return compareSemver(fromDb, fromLs) <= 0 ? fromDb : fromLs
 }

@@ -12,8 +12,8 @@ function badge(label: string, bg: string, fg = '#ffffff'): string {
 }
 
 /**
- * Fast local / CDN fallbacks for symbols FMP does not cover well
- * (crypto pairs, index CFDs, futures roots).
+ * Local / CDN logos for symbols FMP does not cover (crypto, FX, index CFDs, futures).
+ * Used only for these uncovered tickers — never as a consolation when /api/logo fails auth.
  */
 export const LOCAL_TICKER_LOGOS: Record<string, string> = {
   // Crypto

@@ -38,8 +38,6 @@ import { ensureLocale, getAppLocale, setAppLocale, t } from '@/lib/i18n'
 import { RANGE_OPTIONS, type Range } from '@/lib/range'
 import type { ShareTarget } from '@/lib/shareCard'
 import type { FeedbackDiagnostics, FeedbackOpenFrom } from '../lib/discordFeedback'
-import { version as appVersion } from '../package.json'
-import { markAppVersionSeen } from '@/lib/whatsNewSeen'
 import { captureFeedbackContext } from '@/lib/feedbackContext'
 
 export type Page = 'dashboard' | 'trades' | 'calendar' | 'analytics' | 'journal' | 'settings'
@@ -887,9 +885,8 @@ export const useStore = create<State>((set, get) => ({
       avatar: s.settings.avatar,
       demoData,
       locale: s.settings.locale ?? 'es',
-      lastSeenAppVersion: appVersion,
+      lastSeenAppVersion: s.settings.lastSeenAppVersion,
     }
-    markAppVersionSeen(appVersion)
     const others = flushed.filter((a) => a.id !== account.id)
     writePref('atrium.page', 'dashboard')
     set({ accounts: [account, ...others], trades, notes, cashflows, settings, page: 'dashboard', tutorialActive: false, loadError: null })

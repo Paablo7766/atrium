@@ -27,7 +27,7 @@ import {
 } from 'lucide-react'
 import { useStore, getBackup } from '@/store'
 import { hasLegacyBrowserJournal, isDesktop, migrateLegacyBrowserToEncrypted } from '@/lib/db/client'
-import { getCryptoStatus, setupMasterPassword, setupSecureStorageKey } from '@/lib/crypto/keyManager'
+import { getCryptoStatus, setupMasterPassword, setupSecureStorageKey, unlockWithPassword } from '@/lib/crypto/keyManager'
 import { getWebCryptoMeta, hasStagedSaltOnly } from '@/lib/crypto/keyManagerWeb'
 import { ensureCryptoSaltSynced, pushRemoteSalt } from '@/lib/syncSalt'
 import { isCloudSyncActive, verifyMasterPasswordAgainstCloud } from '@/lib/tradeSync'
@@ -528,6 +528,7 @@ export function Onboarding({
         </FlowShell>
       ) : step === 'welcome' ? (
         <Welcome
+          mode="setup"
           onStart={() => setStep('profile')}
           onExistingAccount={() => {
             writeCloudSyncPref(true)
@@ -903,22 +904,31 @@ export function Onboarding({
   )
 }
 
-function Welcome({
+export function Welcome({
+  mode = 'setup',
   onStart,
   onExistingAccount,
-  cloudAvailable,
+  cloudAvailable = false,
   onDemo,
   locale,
   onLocale,
 }: {
-  onStart: () => void
-  onExistingAccount: () => void
-  cloudAvailable: boolean
-  onDemo: () => void
+  mode?: 'setup' | 'unlock'
+  onStart?: () => void
+  onExistingAccount?: () => void
+  cloudAvailable?: boolean
+  onDemo?: () => void
   locale: 'es' | 'en'
   onLocale: (locale: 'es' | 'en') => void
 }) {
   const t = useT()
+  const unlockDatabase = useStore((s) => s.unlockDatabase)
+  const toast = useStore((s) => s.toast)
+  const isUnlock = mode === 'unlock'
+  const [password, setPassword] = useState('')
+  const [showPw, setShowPw] = useState(false)
+  const [unlockBusy, setUnlockBusy] = useState(false)
+  const passwordRef = useRef<HTMLInputElement>(null)
   const reduced = useMemo(
     () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
     [],
@@ -928,12 +938,34 @@ function Welcome({
   const cardRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    if (!isUnlock) return
+    const timer = window.setTimeout(() => passwordRef.current?.focus(), 240)
+    return () => window.clearTimeout(timer)
+  }, [isUnlock])
+
+  const submitUnlock = async () => {
+    if (unlockBusy || !password.trim()) return
+    setUnlockBusy(true)
+    try {
+      const result = await unlockWithPassword(password)
+      if (!result.ok) {
+        toast(result.error, 'error')
+        return
+      }
+      await unlockDatabase()
+    } finally {
+      setUnlockBusy(false)
+    }
+  }
+
+  useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return
       if (e.key === 'Escape') {
         setSkip(true)
         return
       }
+      if (isUnlock || !onStart) return
       if (e.key !== 'Enter') return
       const tag = (e.target as HTMLElement)?.tagName
       if (tag === 'TEXTAREA' || tag === 'BUTTON' || tag === 'INPUT') return
@@ -943,7 +975,7 @@ function Welcome({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onStart])
+  }, [isUnlock, onStart])
 
   const motion = (name: string) => (skip ? undefined : name)
   const at = (ms: number) => (skip ? undefined : { animationDelay: `${ms}ms` })
@@ -1034,9 +1066,9 @@ function Welcome({
               style={at(520)}
             >
               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-white/[0.08] text-text">
-                <Sparkles size={11} strokeWidth={2.2} />
+                {isUnlock ? <Lock size={11} strokeWidth={2.2} /> : <Sparkles size={11} strokeWidth={2.2} />}
               </span>
-              {t('on.eyebrow')}
+              {t(isUnlock ? 'on.unlockEyebrow' : 'on.eyebrow')}
               {!reduced && (
                 <span
                   aria-hidden
@@ -1078,43 +1110,106 @@ function Welcome({
               className={clsx('relative mt-[clamp(10px,2.2vh,24px)] max-w-[500px] text-[15.5px] short:text-[14px] leading-[1.6] text-muted', motion('animate-fade-up'))}
               style={at(980)}
             >
-              {t('on.lede')}
+              {t(isUnlock ? 'on.unlockLede' : 'on.lede')}
             </p>
 
-            <div
-              className={clsx('relative mt-[clamp(18px,3.6vh,36px)] flex flex-wrap items-center justify-center gap-3', motion('animate-fade-up'))}
-              style={at(1100)}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                type="button"
-                onClick={onStart}
-                className={clsx(
-                  'group relative inline-flex items-center gap-2.5 h-11 px-5 rounded-[11px] overflow-hidden text-[13.5px] font-semibold text-bg no-drag',
-                  'bg-[linear-gradient(180deg,#ffffff_0%,#d4d4d8_100%)]',
-                  'shadow-[inset_0_1px_0_#fff,inset_0_-1px_0_rgba(0,0,0,0.14),0_0_0_1px_rgba(255,255,255,0.14),0_12px_40px_-12px_rgba(255,255,255,0.45)]',
-                  'transition-[box-shadow,transform,filter] duration-300 hover:brightness-[1.04] hover:shadow-[inset_0_1px_0_#fff,inset_0_-1px_0_rgba(0,0,0,0.14),0_0_0_1px_rgba(255,255,255,0.22),0_16px_56px_-10px_rgba(255,255,255,0.6)] active:scale-[0.985]',
-                )}
+            {isUnlock ? (
+              <form
+                className={clsx('relative mt-[clamp(18px,3.6vh,36px)] w-full max-w-[400px] flex flex-col gap-3', motion('animate-fade-up'))}
+                style={at(1100)}
+                onClick={(e) => e.stopPropagation()}
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  void submitUnlock()
+                }}
               >
-                {cloudAvailable ? t('on.newDevice') : t('on.start')}
-                <ArrowRight size={15} strokeWidth={2.2} className="transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-0.5" />
-              </button>
-              <button
-                type="button"
-                onClick={onDemo}
-                className={clsx(
-                  'group inline-flex items-center gap-2 h-11 px-5 rounded-[11px] text-[13.5px] font-medium text-text no-drag',
-                  'border border-white/[0.12] bg-white/[0.03] backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]',
-                  'transition-[background-color,border-color] duration-300 hover:bg-white/[0.06] hover:border-white/[0.2]',
-                )}
+                <label htmlFor="hero-master-password" className="sr-only">
+                  {t('crypto.passwordLabel')}
+                </label>
+                <div
+                  className={clsx(
+                    'flex items-center h-12 rounded-[12px] border border-white/[0.1] bg-white/[0.03] backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]',
+                    'transition-[border-color,background-color,box-shadow] duration-300',
+                    'hover:border-white/[0.16] focus-within:border-white/[0.3] focus-within:bg-white/[0.05] focus-within:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_0_4px_rgba(255,255,255,0.04)]',
+                  )}
+                >
+                  <input
+                    id="hero-master-password"
+                    ref={passwordRef}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={t('crypto.passwordLabel')}
+                    type={showPw ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    className="flex-1 min-w-0 h-full bg-transparent pl-4 text-[14px] text-left outline-none placeholder:text-dim no-drag"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPw((v) => !v)}
+                    className="h-full px-3.5 text-dim hover:text-text transition-colors no-drag"
+                    aria-label={showPw ? t('on.pw.hide') : t('on.pw.show')}
+                  >
+                    {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+                <button
+                  type="submit"
+                  disabled={unlockBusy || !password.trim()}
+                  className={clsx(
+                    'group relative inline-flex items-center justify-center gap-2.5 h-12 w-full rounded-[12px] overflow-hidden text-[13.5px] font-semibold text-bg no-drag',
+                    'bg-[linear-gradient(180deg,#ffffff_0%,#d4d4d8_100%)]',
+                    'shadow-[inset_0_1px_0_#fff,inset_0_-1px_0_rgba(0,0,0,0.14),0_0_0_1px_rgba(255,255,255,0.14),0_12px_40px_-12px_rgba(255,255,255,0.45)]',
+                    'transition-[box-shadow,transform,filter,opacity] duration-300 enabled:hover:brightness-[1.04] enabled:hover:shadow-[inset_0_1px_0_#fff,inset_0_-1px_0_rgba(0,0,0,0.14),0_0_0_1px_rgba(255,255,255,0.22),0_16px_56px_-10px_rgba(255,255,255,0.6)] enabled:active:scale-[0.985]',
+                    'disabled:opacity-40 disabled:shadow-none',
+                  )}
+                >
+                  {unlockBusy ? t('crypto.unlocking') : t('crypto.unlock')}
+                  <ArrowRight size={15} strokeWidth={2.2} className="transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-enabled:group-hover:translate-x-0.5" />
+                </button>
+              </form>
+            ) : (
+              <div
+                className={clsx('relative mt-[clamp(18px,3.6vh,36px)] flex flex-wrap items-center justify-center gap-3', motion('animate-fade-up'))}
+                style={at(1100)}
+                onClick={(e) => e.stopPropagation()}
               >
-                <Play size={12} className="fill-current opacity-70 transition-opacity duration-300 group-hover:opacity-100" />
-                {t('on.demo')}
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={onStart}
+                  className={clsx(
+                    'group relative inline-flex items-center gap-2.5 h-11 px-5 rounded-[11px] overflow-hidden text-[13.5px] font-semibold text-bg no-drag',
+                    'bg-[linear-gradient(180deg,#ffffff_0%,#d4d4d8_100%)]',
+                    'shadow-[inset_0_1px_0_#fff,inset_0_-1px_0_rgba(0,0,0,0.14),0_0_0_1px_rgba(255,255,255,0.14),0_12px_40px_-12px_rgba(255,255,255,0.45)]',
+                    'transition-[box-shadow,transform,filter] duration-300 hover:brightness-[1.04] hover:shadow-[inset_0_1px_0_#fff,inset_0_-1px_0_rgba(0,0,0,0.14),0_0_0_1px_rgba(255,255,255,0.22),0_16px_56px_-10px_rgba(255,255,255,0.6)] active:scale-[0.985]',
+                  )}
+                >
+                  {cloudAvailable ? t('on.newDevice') : t('on.start')}
+                  <ArrowRight size={15} strokeWidth={2.2} className="transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:translate-x-0.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={onDemo}
+                  className={clsx(
+                    'group inline-flex items-center gap-2 h-11 px-5 rounded-[11px] text-[13.5px] font-medium text-text no-drag',
+                    'border border-white/[0.12] bg-white/[0.03] backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]',
+                    'transition-[background-color,border-color] duration-300 hover:bg-white/[0.06] hover:border-white/[0.2]',
+                  )}
+                >
+                  <Play size={12} className="fill-current opacity-70 transition-opacity duration-300 group-hover:opacity-100" />
+                  {t('on.demo')}
+                </button>
+              </div>
+            )}
 
             <div className={clsx('relative mt-[clamp(10px,2vh,20px)] [@media(max-height:620px)]:hidden', motion('animate-fade-up'))} style={at(1200)} onClick={(e) => e.stopPropagation()}>
-              {cloudAvailable ? (
+              {isUnlock ? (
+                <p className="flex items-center justify-center gap-2 text-[12px] text-dim">
+                  {t('on.unlockHint')}
+                  <kbd className="inline-flex items-center h-5 px-1.5 rounded border border-border-2 bg-surface-2 text-[10px] font-sans text-muted">
+                    ↵ Enter
+                  </kbd>
+                </p>
+              ) : cloudAvailable ? (
                 <button
                   type="button"
                   onClick={onExistingAccount}

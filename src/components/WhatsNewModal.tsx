@@ -5,7 +5,7 @@ import {
   formatReleaseDate,
   parseChangelogItem,
   parseLocalizedChangelog,
-  unseenReleases,
+  compareSemver,
   type ChangelogItemKind,
   type ChangelogRelease,
 } from '@/lib/changelog'
@@ -42,6 +42,7 @@ function groupReleaseItems(release: ChangelogRelease) {
 export function WhatsNewModal() {
   const t = useT()
   const locale = useStore((s) => s.settings.locale ?? 'es')
+  const loaded = useStore((s) => s.loaded)
   const lastSeenSetting = useStore((s) => s.settings.lastSeenAppVersion)
   const tutorialActive = useStore((s) => s.tutorialActive)
   const feedbackOpen = useStore((s) => s.feedbackOpen)
@@ -56,18 +57,18 @@ export function WhatsNewModal() {
   const allReleases = useMemo(() => parseLocalizedChangelog(locale).filter((r) => r.items.length), [locale])
 
   useEffect(() => {
-    if (tutorialActive || feedbackOpen) return
+    if (!loaded || tutorialActive || feedbackOpen) return
     const lastSeen = resolveLastSeenAppVersion(lastSeenSetting)
-    if (lastSeen === appVersion) return
-    const next = unseenReleases(allReleases, lastSeen, appVersion)
-    if (!next.length) {
+    if (lastSeen && compareSemver(appVersion, lastSeen) <= 0) return
+    const currentRelease = allReleases.find((r) => r.version === appVersion)
+    if (!currentRelease?.items.length) {
       markAppVersionSeen(appVersion)
       if (lastSeenSetting !== appVersion) updateSettings({ lastSeenAppVersion: appVersion })
       return
     }
-    setUnseen(next)
+    setUnseen([currentRelease])
     setAutoOpen(true)
-  }, [tutorialActive, feedbackOpen, lastSeenSetting, updateSettings, allReleases])
+  }, [loaded, tutorialActive, feedbackOpen, lastSeenSetting, updateSettings, allReleases])
 
   useEffect(() => {
     if (manualOpen) setShowHistory(true)
@@ -77,7 +78,7 @@ export function WhatsNewModal() {
   const browsingHistory = manualOpen || showHistory
   const releases = browsingHistory ? allReleases : unseen
   const latest = releases[0]
-  const canShowHistory = !browsingHistory && allReleases.length > unseen.length
+  const canShowHistory = !browsingHistory && allReleases.length > 1
 
   useEffect(() => {
     const visible = open && Boolean(latest)
@@ -198,7 +199,7 @@ export function WhatsNewModal() {
             )}
           </header>
 
-          <div className="mt-5 overflow-y-auto min-h-0 flex-1 scroll-smooth space-y-5 pr-0.5">
+          <div className="mt-5 overflow-y-auto min-h-0 flex-1 scroll-smooth space-y-5 pr-0.5 pb-2">
             {releases.map((release, index) => (
               <ReleaseBlock
                 key={release.version}

@@ -2,6 +2,13 @@
 
 Las versiones siguen `package.json`. Más reciente arriba.
 
+## 1.2.0-beta.1 — 2026-09-27
+
+- [Nuevo] La contraseña maestra se pide en la hero de bienvenida, no en una pantalla de bloqueo
+- [Corrección] Logos de tickers: un fallo de API key ya no se guarda como «sin logo» y el error se ve en consola
+- [Mejora] Novedades: solo la versión actual, y un localStorage desfasado no oculta la tarjeta
+- [Mejora] Dashboard: la tabla reciente y el ranking de estrategias quedan a la misma altura
+
 ## 1.1.3 — 2026-09-27
 
 - [Corrección] El instalado de Windows encuentra `better_sqlite3.node` en `app.asar.unpacked` aunque `isPackaged` falle

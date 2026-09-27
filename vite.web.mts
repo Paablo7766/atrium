@@ -56,6 +56,7 @@ function fmpDevApiProxy(env: EnvMap): Plugin {
         }
         const key = fmpKey(env)
         if (!key) {
+          console.error(`[${pathname}] FMP API key not configured. Set FMP_API_KEY (or VITE_FMP_API_KEY) in .env`)
           sendJson(res, 503, { error: 'FMP API key not configured' })
           return
         }

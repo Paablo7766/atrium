@@ -376,7 +376,7 @@ export function Dashboard() {
           )}
         </Card>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(260px,320px)] gap-4 lg:gap-5 items-start">
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(260px,320px)] gap-4 lg:gap-5 items-stretch">
           <Card
             title={<span className="tracking-normal">{t('dash.recent')}</span>}
             subtitle={openCount ? t('dash.openCount', { n: openCount }) : undefined}
@@ -386,10 +386,10 @@ export function Dashboard() {
               </Button>
             }
             padded={false}
-            className="overflow-hidden"
+            className="overflow-hidden h-full min-h-0"
           >
             {recent.length ? (
-              <>
+              <div className="flex flex-col min-h-full">
                 <div className={clsx(RECENT_GRID, 'border-t border-border bg-surface-2/40 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-dim')}>
                   <span className="truncate">{t('dash.colDate')}</span>
                   <span className="flex items-center gap-2.5 min-w-0">
@@ -400,7 +400,7 @@ export function Dashboard() {
                   <span className="truncate">{t('dash.colStrategy')}</span>
                   <span className="text-right truncate">{t('dash.openColPnl')}</span>
                 </div>
-                <ul>
+                <ul className="flex-1">
                   {recent.map((tr) => (
                     <li key={tr.id} className="border-t border-border/70">
                       <RecentRow
@@ -411,13 +411,13 @@ export function Dashboard() {
                     </li>
                   ))}
                 </ul>
-              </>
+              </div>
             ) : (
               <Empty title={t('dash.emptyPeriod')} description={t('dash.emptyPeriodHint')} />
             )}
           </Card>
 
-          <div className="flex flex-col gap-4 lg:gap-5 min-w-0">
+          <div className="flex flex-col gap-4 lg:gap-5 min-w-0 h-full min-h-0">
             {openPositions.length > 0 && (
               <Card
                 title={
@@ -460,10 +460,10 @@ export function Dashboard() {
                 </Button>
               }
               padded={false}
-              className="overflow-hidden"
+              className="overflow-hidden flex-1 min-h-0"
             >
               {byStrategy.length ? (
-                <div className="border-t border-border">
+                <div className="border-t border-border min-h-full flex flex-col">
                   <ol>
                     {byStrategy.map((g, i) => (
                       <li key={g.key} className="px-5 sm:px-6 py-3.5 border-t border-border/70 first:border-t-0">

@@ -2,6 +2,13 @@
 
 Versions follow `package.json`. Newest first.
 
+## 1.2.0-beta.1 — 2026-09-27
+
+- [New] Master password unlock lives on the welcome hero instead of a lock screen
+- [Fix] Ticker logos: an API key failure is no longer cached as “no logo” and is logged to the console
+- [Improvement] What's new shows only the current version; a stale localStorage entry cannot hide the card
+- [Improvement] Dashboard: recent table and strategy ranking stretch to the same height
+
 ## 1.1.3 — 2026-09-27
 
 - [Fix] Windows installer finds `better_sqlite3.node` in `app.asar.unpacked` even if `isPackaged` is wrong
