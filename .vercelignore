@@ -3,7 +3,10 @@ node_modules
 dist
 dist-electron
 release
+release-beta
 release-pack
+**/*.tmp
+win-unpacked.tmp
 electron
 .git
 .vite
