@@ -5,6 +5,7 @@ import electronUpdater from 'electron-updater'
 import {
   computeUpdateOffer,
   emptyUpdaterStatus,
+  isPrereleaseVersion,
   nsisUpdateInstallOptions,
   type DesktopUpdaterState,
   type DesktopUpdaterStatus,
@@ -68,10 +69,13 @@ export function initDesktopUpdater(opts: {
   let checking = false
   let installing = false
 
+  const allowPrereleaseUpdates = (): boolean =>
+    prefs.allowPrerelease || isPrereleaseVersion(app.getVersion())
+
   const snapshot = (): DesktopUpdaterStatus => ({
     supported: canUpdate,
     currentVersion: app.getVersion(),
-    allowPrerelease: prefs.allowPrerelease,
+    allowPrerelease: allowPrereleaseUpdates(),
     state,
     availableVersion,
     releaseNotes,
@@ -144,7 +148,7 @@ export function initDesktopUpdater(opts: {
     updater.autoDownload = false
     updater.autoInstallOnAppQuit = true
     updater.autoRunAppAfterInstall = true
-    updater.allowPrerelease = prefs.allowPrerelease
+    updater.allowPrerelease = allowPrereleaseUpdates()
     updater.logger = {
       info: (...args: unknown[]) => console.log('[updater]', ...args),
       warn: (...args: unknown[]) => console.warn('[updater]', ...args),
@@ -216,7 +220,7 @@ export function initDesktopUpdater(opts: {
     prefs = { allowPrerelease: enabled === true }
     savePrefs()
     if (canUpdate) {
-      getAutoUpdater().allowPrerelease = prefs.allowPrerelease
+      getAutoUpdater().allowPrerelease = allowPrereleaseUpdates()
       void check()
     }
     sendStatus()
