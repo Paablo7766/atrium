@@ -10,12 +10,12 @@ Pipeline: `src/lib/import/` → parse → adapters → group → map → dedupe 
 
 | Broker | Status | Notes |
 |--------|--------|--------|
-| **AUTO** | Recommended | Sniffs headers and picks the best adapter |
+| **AUTO** | Recommended | Header scoring picks the best adapter |
 | **XTB** | Production | Closed Positions (xStation EN/ES headers); open+close on same row |
 | **Interactive Brokers** | Solid | Activity / Flex-style; aliases `IB`, `IBKR` |
 | **DEGIRO** | Solid | Account/transactions; day-first dates; comma decimals |
-| **Fomo** | Skeleton | Crypto-oriented — refine with a real sample |
-| **Axiom** | Skeleton | Generic Instrument/Side mapping |
+| **Fomo** | Beta | Crypto-oriented — adapter in trial |
+| **Axiom** | Beta | Generic Instrument/Side — trial |
 
 ---
 
@@ -24,8 +24,10 @@ Pipeline: `src/lib/import/` → parse → adapters → group → map → dedupe 
 1. Open **Settings → Import**  
 2. Choose broker (**AUTO** if unsure)  
 3. Drop or select `.csv` / `.xlsx`  
-4. Review imported count / skipped duplicates  
-5. Trades appear in **Trades** and feed **Dashboard / Analytics / Calendar**
+4. Check the summary under **Broker** in Settings (last import) and toasts  
+5. If 0 imported: message shows detected broker, columns, and expected export type  
+6. **Journal CSV** (Atrium export) ≠ **broker CSV** — two separate actions in Settings  
+7. Trades appear in **Trades** and feed **Dashboard / Analytics / Calendar**
 
 ---
 
@@ -52,4 +54,7 @@ Premium UI fields (strategy, emotion, checklist…) stay manual after import unl
 npm run test:import
 npm run test:mapper
 npm run test:xlsx
+npm run test -- src/lib/import/
 ```
+
+Full audit: [`docs/AUDIT_BROKER_IMPORT.md`](../AUDIT_BROKER_IMPORT.md).

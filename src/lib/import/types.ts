@@ -142,6 +142,10 @@ export interface ImportEngineResult {
   errors: string[]
   warnings: string[]
   skippedRows: number
+  /** Filas bajo la cabecera detectada (una hoja o suma multi-hoja). */
+  dataRowCount: number
+  /** Cabeceras de la primera hoja parseada (para mensajes UX). */
+  detectedHeaders: string[]
 }
 
 export interface GroupTradesOptions {

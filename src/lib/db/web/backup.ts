@@ -55,6 +55,15 @@ export async function importEncryptedBackup(
     }
     if (!keyHex) return { ok: false, error: 'Introduce tu contraseña maestra para restaurar la copia.', needsPassword: true }
 
+    let rollbackSnapshot: string | null = null
+    if (getWebKeyHex()) {
+      try {
+        rollbackSnapshot = await exportEncryptedBackup()
+      } catch {
+        rollbackSnapshot = null
+      }
+    }
+
     const data = await decryptBackupFile(parsed, keyHex)
     if (trimmed) {
       setWebKeyHex(keyHex)
@@ -73,8 +82,24 @@ export async function importEncryptedBackup(
       }
       await writeCanary(keyHex)
     }
-    await saveJournal(data)
-    return { ok: true, data }
+    try {
+      await saveJournal(data)
+      return { ok: true, data }
+    } catch (saveErr) {
+      if (rollbackSnapshot) {
+        try {
+          const rollbackParsed = parseBackupFile(rollbackSnapshot)
+          if (rollbackParsed.ok) {
+            const prev = await decryptBackupFile(rollbackParsed.file, getWebKeyHex()!)
+            await saveJournal(prev)
+          }
+        } catch {
+          /* best-effort rollback */
+        }
+      }
+      const message = saveErr instanceof Error ? saveErr.message : 'No se pudo guardar la copia restaurada.'
+      return { ok: false, error: message }
+    }
   } catch {
     return { ok: false, error: 'No se pudo descifrar la copia. Comprueba la contraseña.', needsPassword: true }
   }

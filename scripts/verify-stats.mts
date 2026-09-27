@@ -1,10 +1,10 @@
-import { generateDemoTrades } from '../src/lib/demo.ts'
-import { computeStats, dailyFlow, dailyPnl, equityCurve, sortByExit, tradePnl } from '../src/lib/stats.ts'
-import { csvToTrades, dedupeTrades, tradesToCsv } from '../src/lib/csv.ts'
-import { deltaPct, filterByRange, priorEquity } from '../src/lib/range.ts'
-import { toDateKey } from '../src/lib/format.ts'
-import { accountEquity } from '../src/lib/capital.ts'
-import type { Cashflow } from '../src/types.ts'
+import { accountEquity } from '../src/lib/capital'
+import { generateDemoTrades } from '../src/lib/demo'
+import { computeStats, dailyFlow, dailyPnl, equityCurve, sortByExit, tradePnl } from '../src/lib/stats'
+import { csvToTrades, dedupeTrades, tradesToCsv } from '../src/lib/csv'
+import { deltaPct, filterByRange, priorEquity } from '../src/lib/range'
+import { toDateKey } from '../src/lib/format'
+import type { Cashflow } from '../src/types'
 
 const near = (a: number, b: number, eps = 1e-6) => Math.abs(a - b) <= eps
 const ok = (name: string, cond: boolean) => {

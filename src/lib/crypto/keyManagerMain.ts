@@ -96,6 +96,9 @@ export function deriveSyncKeyHexFromPassword(userDataDir: string, password: stri
   const trimmed = password.trim()
   if (!trimmed) return { ok: false, error: 'Introduce tu contraseña maestra.' }
   const dbKey = deriveKeyFromPassword(trimmed, meta.salt, meta.iterations)
+  if (meta.verifier && !passwordVerifierMatches(dbKey, meta.verifier)) {
+    return { ok: false, error: 'Contraseña incorrecta.' }
+  }
   return { ok: true, keyHex: deriveSyncKeyHexFromDbKey(dbKey) }
 }
 

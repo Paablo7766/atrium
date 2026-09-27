@@ -43,6 +43,8 @@ import { migrateLegacyJsonIfNeeded } from './migrateFromJson'
 import { isDatabaseEmpty, loadJournal, saveJournal } from './repository'
 import type { DiskLoad, JournalBackup } from './types'
 import { DB_FILENAME } from './schema'
+import { buildEncryptedBackupFile, decryptBackupFile, parseBackupFile } from './backupFormat'
+import { getExportKeyMaterial } from '@/lib/crypto/keyManagerMain'
 
 const BACKUP_EVERY_MS = 10 * 60 * 1000
 const BACKUP_KEEP = 10
@@ -506,24 +508,116 @@ export function journalLoad(): DiskLoad {
   return { status: 'ok', data, skippedTrades: 0, skippedNotes: 0 }
 }
 
-export function journalSave(data: PersistedData, userDataDir: string): boolean {
-  if (isJournalLocked() || isJournalUnrecoverable() || !looksLikeJournalData(data)) return false
+export type JournalSaveResult = { ok: true } | { ok: false; error: string }
+
+export function journalSave(data: PersistedData, userDataDir: string): JournalSaveResult {
+  if (isJournalLocked() || isJournalUnrecoverable()) {
+    return { ok: false, error: 'El diario está bloqueado o no se puede acceder.' }
+  }
+  if (!looksLikeJournalData(data)) {
+    return { ok: false, error: 'Los datos no tienen forma de diario válida.' }
+  }
   try {
     if (!isDatabaseOpen()) {
       if (hasEncryptionKey()) {
         openDatabase()
       } else {
         const status = getCryptoStatus(userDataDir, dbFileExists())
-        if (!status.configured) return false
-        if (!bootstrapEncryptionKey(userDataDir)) return false
+        if (!status.configured) return { ok: false, error: 'El cifrado local no está configurado.' }
+        if (!bootstrapEncryptionKey(userDataDir)) {
+          return { ok: false, error: initError() }
+        }
       }
     }
     rotateBackups(userDataDir)
     const db = getDatabase()
     saveJournal(db, data)
-    return true
+    return { ok: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'No se pudo guardar en la base de datos.'
+    return { ok: false, error: message }
+  }
+}
+
+export async function journalExportEncryptedBackup(
+  userDataDir: string,
+  data: PersistedData | undefined,
+  masterPassword?: string,
+): Promise<{ ok: true; raw: string } | { ok: false; error: string }> {
+  const material = getExportKeyMaterial(userDataDir, masterPassword)
+  if (!material.ok) return material
+
+  let journal = data
+  if (!journal) {
+    if (isJournalLocked()) {
+      return { ok: false, error: 'Desbloquea el diario con tu contraseña maestra para exportar una copia cifrada.' }
+    }
+    try {
+      if (!isDatabaseOpen()) {
+        if (!bootstrapEncryptionKey(userDataDir)) {
+          return { ok: false, error: 'No se pudo abrir la base de datos local.' }
+        }
+      }
+      const loaded = loadJournal(getDatabase())
+      if (!loaded) return { ok: false, error: 'No hay un diario que exportar.' }
+      journal = loaded
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : 'No se pudo leer el diario.' }
+    }
+  }
+
+  try {
+    const raw = await buildEncryptedBackupFile(journal, material.keyHex, material.salt, material.iterations)
+    return { ok: true, raw }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'No se pudo crear la copia cifrada.' }
+  }
+}
+
+export async function journalImportEncryptedBackup(
+  userDataDir: string,
+  raw: string,
+  password?: string,
+): Promise<{ ok: true } | { ok: false; error: string; needsPassword?: boolean }> {
+  const parsedResult = parseBackupFile(raw)
+  if (!parsedResult.ok) return parsedResult
+  const file = parsedResult.file
+
+  const trimmed = password?.trim() ?? ''
+  let keyHex: string | null = null
+
+  if (trimmed) {
+    keyHex = deriveKeyFromPassword(trimmed, file.salt, file.iterations)
+  } else {
+    const material = getExportKeyMaterial(userDataDir)
+    if (material.ok && material.salt === file.salt) {
+      keyHex = material.keyHex
+    } else {
+      return {
+        ok: false,
+        error: 'Introduce tu contraseña maestra para restaurar la copia.',
+        needsPassword: true,
+      }
+    }
+  }
+
+  if (!keyHex) {
+    return { ok: false, error: 'Introduce tu contraseña maestra para restaurar la copia.', needsPassword: true }
+  }
+
+  try {
+    const decrypted = await decryptBackupFile(file, keyHex)
+    const checked = parseJournalFile(decrypted)
+    if (!checked.ok) return { ok: false, error: checked.error }
+    const saved = journalSave(checked.data, userDataDir)
+    if (!saved.ok) return saved
+    return { ok: true }
   } catch {
-    return false
+    return {
+      ok: false,
+      error: 'No se pudo descifrar la copia. Comprueba la contraseña.',
+      needsPassword: true,
+    }
   }
 }
 
@@ -600,8 +694,9 @@ export function restoreJournalBackup(userDataDir: string, id: string): { ok: tru
       if (!parsed.ok) return { ok: false, error: parsed.error }
       const unlocked = reunlockAfterRestore()
       if (!unlocked.ok) return unlocked
-      if (!journalSave(parsed.data, userDataDir)) {
-        return { ok: false, error: 'No se pudo importar la copia JSON' }
+      const saved = journalSave(parsed.data, userDataDir)
+      if (!saved.ok) {
+        return { ok: false, error: saved.error || 'No se pudo importar la copia JSON' }
       }
       return { ok: true }
     }
@@ -619,9 +714,9 @@ export function restoreJournalBackup(userDataDir: string, id: string): { ok: tru
   }
 }
 
-export function importJsonBackup(userDataDir: string, raw: unknown): boolean {
+export function importJsonBackup(userDataDir: string, raw: unknown): JournalSaveResult {
   const parsed = parseJournalFile(raw)
-  if (!parsed.ok) return false
+  if (!parsed.ok) return { ok: false, error: parsed.error }
   return journalSave(parsed.data, userDataDir)
 }
 

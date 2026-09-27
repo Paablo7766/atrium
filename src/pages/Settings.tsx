@@ -182,6 +182,7 @@ export function SettingsPage() {
   const [brokerImport, setBrokerImport] = useState<ImportBroker>('AUTO')
   const {
     busy: brokerImportBusy,
+    lastResult: brokerImportLast,
     fileInputRef: brokerFileRef,
     pickAndImport,
     onFileInputChange,
@@ -809,6 +810,7 @@ export function SettingsPage() {
                       />
                       <DataRow
                         title={t('set.brokerCsv')}
+                        hint={t('set.brokerCsvBody')}
                         action={
                           <div className="flex items-center gap-2">
                             <Select
@@ -820,8 +822,8 @@ export function SettingsPage() {
                                 { value: 'XTB', label: 'XTB' },
                                 { value: 'INTERACTIVE_BROKERS', label: 'Interactive Brokers' },
                                 { value: 'DEGIRO', label: 'DEGIRO' },
-                                { value: 'FOMO', label: 'Fomo' },
-                                { value: 'AXIOM', label: 'Axiom' },
+                                { value: 'FOMO', label: t('set.brokerFomoBeta') },
+                                { value: 'AXIOM', label: t('set.brokerAxiomBeta') },
                               ]}
                             />
                             <Button
@@ -842,6 +844,27 @@ export function SettingsPage() {
                           </div>
                         }
                       />
+                      {brokerImportLast && (
+                        <div className="px-4 py-3 text-[12px] text-dim space-y-1 border-t border-border">
+                          <p className="text-text font-medium">{t('set.brokerImportLast')}</p>
+                          <p>
+                            {brokerImportLast.ok
+                              ? t('set.brokerImportLastOk', {
+                                  n: brokerImportLast.imported,
+                                  broker: brokerImportLast.broker,
+                                })
+                              : t('set.brokerImportLastFail', { broker: brokerImportLast.broker })}
+                            {brokerImportLast.fileName ? ` · ${brokerImportLast.fileName}` : ''}
+                          </p>
+                          {(brokerImportLast.errors.length > 0 || brokerImportLast.warnings.length > 0) && (
+                            <ul className="list-disc pl-4 space-y-0.5 max-h-32 overflow-y-auto">
+                              {[...brokerImportLast.errors, ...brokerImportLast.warnings].slice(0, 8).map((line) => (
+                                <li key={line.slice(0, 48)}>{line}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <button
                       type="button"

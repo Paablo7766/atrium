@@ -117,8 +117,14 @@ export function mapConsolidatedTrade(ct: ConsolidatedTrade, options: TradeMapper
     const qty = ct.quantityClosed
     const entryPrice = Number.isFinite(ct.avgEntryPrice) ? ct.avgEntryPrice : 0
     const exitPrice = ct.avgExitPrice!
-    const fees = Number.isFinite(ct.feesTotal) ? Math.abs(ct.feesTotal) : 0
+    const feesTotal = Number.isFinite(ct.feesTotal) ? Math.abs(ct.feesTotal) : 0
     const netPnl = ct.netPnl
+    const openRemainder = hasOpen && splitPartials ? ct.quantity : 0
+    const totalUnits = qty + openRemainder
+    const closedShare = totalUnits > EPS ? qty / totalUnits : 1
+    const fees = hasOpen && splitPartials ? feesTotal * closedShare : feesTotal
+    const closedPnlOverride =
+      netPnl !== null && Number.isFinite(netPnl) && hasOpen && splitPartials ? netPnl * closedShare : netPnl
 
     const trade: Trade = {
       id: ct.status === 'CLOSED' || !hasOpen ? ct.id || idFactory() : `${ct.id || idFactory()}-closed`,
@@ -139,7 +145,9 @@ export function mapConsolidatedTrade(ct: ConsolidatedTrade, options: TradeMapper
       rating: 0,
       createdAt: now,
       updatedAt: now,
-      ...(netPnl !== null && Number.isFinite(netPnl) ? { pnlOverride: netPnl } : {}),
+      ...(closedPnlOverride !== null && Number.isFinite(closedPnlOverride)
+        ? { pnlOverride: closedPnlOverride }
+        : {}),
     }
     out.push(enrich(trade, ct.id, broker))
   }
@@ -147,8 +155,12 @@ export function mapConsolidatedTrade(ct: ConsolidatedTrade, options: TradeMapper
   // --- Remanente abierto ---
   if (hasOpen) {
     const entryPrice = Number.isFinite(ct.avgEntryPrice) ? ct.avgEntryPrice : 0
-    // Si ya emitimos la pierna cerrada, las fees del remanente se dejan en 0 (ya contadas).
-    const feesOnOpen = hasClosed && splitPartials ? 0 : Number.isFinite(ct.feesTotal) ? Math.abs(ct.feesTotal) : 0
+    const feesTotalOpen = Number.isFinite(ct.feesTotal) ? Math.abs(ct.feesTotal) : 0
+    const openRemainderQty = ct.quantity
+    const totalUnitsOpen = (hasClosed ? ct.quantityClosed : 0) + openRemainderQty
+    const openShare = hasClosed && splitPartials && totalUnitsOpen > EPS ? openRemainderQty / totalUnitsOpen : 1
+    const feesOnOpen =
+      hasClosed && splitPartials ? feesTotalOpen * openShare : Number.isFinite(ct.feesTotal) ? feesTotalOpen : 0
 
     const trade: Trade = {
       id: hasClosed && splitPartials ? `${ct.id || idFactory()}-open` : ct.id || idFactory(),

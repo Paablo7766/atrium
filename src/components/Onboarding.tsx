@@ -143,10 +143,7 @@ export function Onboarding({
   const [currency, setCurrency] = useState<Currency>(settings.currency)
   const [balance, setBalance] = useState(String(settings.startingBalance || 10000))
   const [risk, setRisk] = useState(String(settings.riskPerTrade || 1))
-  const [dailyLimitOn, setDailyLimitOn] = useState(() => {
-    const fresh = !settings.traderName || settings.traderName === 'Trader'
-    return fresh ? true : settings.dailyLossLimit > 0
-  })
+  const [dailyLimitOn, setDailyLimitOn] = useState(() => settings.dailyLossLimit > 0)
   const [dailyPct, setDailyPct] = useState(() => {
     if (settings.startingBalance > 0 && settings.dailyLossLimit > 0) {
       const pct = (settings.dailyLossLimit / settings.startingBalance) * 100
@@ -155,6 +152,7 @@ export function Onboarding({
     return '2'
   })
   const onboardingFresh = !settings.traderName || settings.traderName === 'Trader'
+  const [riskLater, setRiskLater] = useState(() => onboardingFresh)
   const [feesLater, setFeesLater] = useState(() => (onboardingFresh ? true : settings.defaultFees === 0))
   const [fees, setFees] = useState(() => {
     if (onboardingFresh && settings.defaultFees === 0) return '0'
@@ -189,12 +187,12 @@ export function Onboarding({
     if (step === 'profile') return traderName.trim().length >= 2
     if (step === 'markets') return markets.length >= 1
     if (step === 'desk') return startingBalance > 0
-    if (step === 'risk') return riskPerTrade > 0 && (!dailyLimitOn || parseAmt(dailyPct) > 0)
+    if (step === 'risk') return riskLater || (riskPerTrade > 0 && (!dailyLimitOn || parseAmt(dailyPct) > 0))
     if (step === 'security') {
       return masterPassword.length >= 8 && masterPassword === confirmPassword
     }
     return true
-  }, [step, traderName, markets, startingBalance, riskPerTrade, dailyLimitOn, dailyPct, masterPassword, confirmPassword])
+  }, [step, traderName, markets, startingBalance, riskLater, riskPerTrade, dailyLimitOn, dailyPct, masterPassword, confirmPassword])
 
   useEffect(() => {
     void (async () => {
@@ -286,8 +284,8 @@ export function Onboarding({
           color: COLOR_BY_ACCOUNT_TYPE[type],
           currency,
           startingBalance: startingBalance || 10000,
-          riskPerTrade: riskPerTrade || 1,
-          dailyLossLimit,
+          riskPerTrade: riskLater ? 1 : riskPerTrade || 1,
+          dailyLossLimit: riskLater ? 0 : dailyLossLimit,
           defaultMarket: primary,
           preferredMarkets: markets,
           defaultFees,
@@ -457,8 +455,16 @@ export function Onboarding({
       value: markets.length > 1 ? `${marketLabel(locale, primary)} +${markets.length - 1}` : marketLabel(locale, primary),
     },
     { step: 'desk', label: t('on.row.capital'), value: fmtMoney(startingBalance, currency) },
-    { step: 'risk', label: t('on.row.risk'), value: `${pct(riskPerTrade)} · ${fmtMoney(riskMoney, currency)}` },
-    { step: 'risk', label: t('on.row.daily'), value: dailyLimitOn ? fmtMoney(dailyLossLimit, currency) : t('on.inactive') },
+    {
+      step: 'risk',
+      label: t('on.row.risk'),
+      value: riskLater ? t('on.feesLaterShort') : `${pct(riskPerTrade)} · ${fmtMoney(riskMoney, currency)}`,
+    },
+    {
+      step: 'risk',
+      label: t('on.row.daily'),
+      value: riskLater ? t('on.feesLaterShort') : dailyLimitOn ? fmtMoney(dailyLossLimit, currency) : t('on.inactive'),
+    },
     { step: 'desk', label: t('on.fees'), value: feesLater ? t('on.feesLaterShort') : fmtMoney(defaultFees, currency) },
     { step: 'security', label: t('on.sheet.security'), value: t('on.sec.password') },
     { step: 'start', label: t('on.sheet.start'), value: pathLabel },
@@ -484,6 +490,8 @@ export function Onboarding({
     <div className="h-full relative overflow-hidden bg-bg text-text" onKeyDown={onKey}>
       {legacyMigrationOnly && step === 'security' ? (
         <FlowShell
+          locale={settings.locale ?? 'es'}
+          onLocale={(next) => updateSettings({ locale: next })}
           footer={
             <>
               <span />
@@ -520,6 +528,8 @@ export function Onboarding({
           index={flowIndex}
           stepKey={step}
           dir={dirRef.current}
+          locale={settings.locale ?? 'es'}
+          onLocale={(next) => updateSettings({ locale: next })}
           aside={
             <AccountSheet
               name={traderName.trim()}
@@ -529,7 +539,7 @@ export function Onboarding({
               current={step as FlowStep}
               flow={FLOW}
               lossesToCap={lossesToCap}
-              showStreak={flowIndex >= FLOW.indexOf('risk')}
+              showStreak={flowIndex >= FLOW.indexOf('risk') && !riskLater && dailyLimitOn}
             />
           }
           footer={
@@ -692,10 +702,10 @@ export function Onboarding({
                     </div>
                   </div>
                   <div>
-                    <FieldLabel>{t('on.fees')}</FieldLabel>
+                    <FieldLabel aside={<span className="text-dim">{t('common.optional')}</span>}>{t('on.fees')}</FieldLabel>
                     {feesLater ? (
-                      <div className="rounded-[10px] border border-white/[0.08] bg-white/[0.02] px-3.5 py-3">
-                        <p className="text-[12.5px] text-muted leading-relaxed">{t('on.feesLaterBody')}</p>
+                      <div className="flex items-center gap-3 h-11 rounded-[10px] border border-white/[0.08] bg-white/[0.02] px-3.5">
+                        <span className="flex-1 min-w-0 text-[13px] text-dim truncate">{t('on.feesLaterBody')}</span>
                         <button
                           type="button"
                           onClick={() => {
@@ -703,7 +713,7 @@ export function Onboarding({
                             feesTouched.current = false
                             setFees(String(defaultFeesForMarket(primary)))
                           }}
-                          className="mt-2.5 text-[12px] font-medium text-text underline decoration-border-3 underline-offset-4 hover:decoration-text transition-colors no-drag"
+                          className="shrink-0 text-[12px] font-medium text-muted hover:text-text transition-colors no-drag"
                         >
                           {t('on.feesSetNow')}
                         </button>
@@ -742,49 +752,75 @@ export function Onboarding({
 
           {step === 'risk' && (
             <StepHead eyebrow={t('on.step.risk')} index={flowIndex + 1} title={t('on.riskTitle')} copy={t('on.riskCopy')}>
-              <div className="flex flex-col gap-8 short:gap-6">
-                <div>
-                  <FieldLabel aside={<span key={riskMoney} className="num text-text animate-ticker inline-block">{fmtMoney(riskMoney || 0, currency)}</span>}>
-                    {t('on.riskPerTrade')}
-                  </FieldLabel>
-                  <div className="grid grid-cols-[minmax(0,1fr)_110px] gap-2">
-                    <Segmented
-                      options={RISK_PRESETS.map((n) => ({ value: n, label: `${fmtNum(n, n % 1 ? 2 : 0)}%` }))}
-                      value={riskPerTrade}
-                      onChange={(n) => setRisk(String(n))}
-                    />
-                    <TextBox mono value={risk} onChange={setRisk} placeholder="1" suffix="%" compact />
+              {riskLater ? (
+                <div className="flex flex-col gap-4">
+                  <div className="rounded-[10px] border border-white/[0.08] bg-white/[0.02] px-3.5 py-3">
+                    <p className="text-[13px] text-muted leading-snug">{t('on.riskLaterBody')}</p>
+                    <button
+                      type="button"
+                      onClick={() => setRiskLater(false)}
+                      className="mt-2.5 text-[12px] font-medium text-text underline decoration-border-3 underline-offset-4 hover:decoration-text transition-colors no-drag"
+                    >
+                      {t('on.riskSetNow')}
+                    </button>
                   </div>
-                  <p className="mt-2.5 text-[12px] text-dim">{t('on.riskHint', { amount: fmtMoney(riskMoney || 0, currency) })}</p>
                 </div>
+              ) : (
+                <div className="flex flex-col gap-8 short:gap-6">
+                  <div>
+                    <FieldLabel aside={<span key={riskMoney} className="num text-text animate-ticker inline-block">{fmtMoney(riskMoney || 0, currency)}</span>}>
+                      {t('on.riskPerTrade')}
+                    </FieldLabel>
+                    <div className="grid grid-cols-[minmax(0,1fr)_110px] gap-2">
+                      <Segmented
+                        options={RISK_PRESETS.map((n) => ({ value: n, label: `${fmtNum(n, n % 1 ? 2 : 0)}%` }))}
+                        value={riskPerTrade}
+                        onChange={(n) => setRisk(String(n))}
+                      />
+                      <TextBox mono value={risk} onChange={setRisk} placeholder="1" suffix="%" compact />
+                    </div>
+                    <p className="mt-2.5 text-[12px] text-dim">{t('on.riskHint', { amount: fmtMoney(riskMoney || 0, currency) })}</p>
+                  </div>
 
-                <div>
-                  <FieldLabel aside={<Switch on={dailyLimitOn} onChange={setDailyLimitOn} />}>{t('on.dailyLimit')}</FieldLabel>
-                  <div
-                    className={clsx(
-                      'grid transition-[grid-template-rows,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
-                      dailyLimitOn ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
-                    )}
-                  >
-                    <div className="overflow-hidden">
-                      <div className="grid grid-cols-[minmax(0,1fr)_110px] gap-2">
-                        <Segmented
-                          options={[1, 2, 3, 5].map((n) => ({ value: n, label: `${n}%` }))}
-                          value={parseAmt(dailyPct)}
-                          onChange={(n) => setDailyPct(String(n))}
-                        />
-                        <TextBox mono value={dailyPct} onChange={setDailyPct} placeholder="2" suffix="%" compact />
+                  <div>
+                    <FieldLabel aside={<Switch on={dailyLimitOn} onChange={setDailyLimitOn} />}>{t('on.dailyLimit')}</FieldLabel>
+                    <div
+                      className={clsx(
+                        'grid transition-[grid-template-rows,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
+                        dailyLimitOn ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+                      )}
+                    >
+                      <div className="overflow-hidden">
+                        <div className="grid grid-cols-[minmax(0,1fr)_110px] gap-2">
+                          <Segmented
+                            options={[1, 2, 3, 5].map((n) => ({ value: n, label: `${n}%` }))}
+                            value={parseAmt(dailyPct)}
+                            onChange={(n) => setDailyPct(String(n))}
+                          />
+                          <TextBox mono value={dailyPct} onChange={setDailyPct} placeholder="2" suffix="%" compact />
+                        </div>
+                        <p className="mt-2.5 text-[12px] text-dim">{t('on.dailyHint', { amount: fmtMoney(dailyLossLimit, currency) })}</p>
                       </div>
-                      <p className="mt-2.5 text-[12px] text-dim">{t('on.dailyHint', { amount: fmtMoney(dailyLossLimit, currency) })}</p>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex gap-3 rounded-[12px] border border-white/[0.06] bg-white/[0.02] px-4 py-3.5">
-                  <Shield size={14} className="text-muted shrink-0 mt-[3px]" />
-                  <p className="text-[12.5px] text-muted leading-relaxed">{t('on.riskNote')}</p>
+                  <div className="flex gap-3 rounded-[12px] border border-white/[0.06] bg-white/[0.02] px-4 py-3.5">
+                    <Shield size={14} className="text-muted shrink-0 mt-[3px]" />
+                    <p className="text-[12.5px] text-muted leading-relaxed">{t('on.riskNote')}</p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRiskLater(true)
+                      setDailyLimitOn(false)
+                    }}
+                    className="self-start text-[12px] text-muted hover:text-text transition-colors no-drag"
+                  >
+                    {t('on.riskSetLater')}
+                  </button>
                 </div>
-              </div>
+              )}
             </StepHead>
           )}
 
@@ -965,30 +1001,7 @@ export function Welcome({
           <BrandMark size={20} />
           <span className="text-[13.5px] font-semibold tracking-[-0.01em]">Atrium</span>
         </div>
-        <div
-          className="relative grid grid-cols-2 p-0.5 rounded-full border border-white/[0.08] bg-white/[0.02] text-[10.5px] font-semibold tracking-[0.1em] no-drag"
-          role="radiogroup"
-          aria-label="Language"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <span
-            aria-hidden
-            className="absolute top-0.5 bottom-0.5 left-0.5 w-[calc(50%-2px)] rounded-full bg-white/[0.09] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
-            style={{ transform: `translateX(${locale === 'en' ? 100 : 0}%)` }}
-          />
-          {(['es', 'en'] as const).map((l) => (
-            <button
-              key={l}
-              type="button"
-              role="radio"
-              aria-checked={locale === l}
-              onClick={() => onLocale(l)}
-              className={clsx('relative w-9 h-6 uppercase transition-colors duration-300', locale === l ? 'text-text' : 'text-dim hover:text-muted')}
-            >
-              {l}
-            </button>
-          ))}
-        </div>
+        <LocaleSwitch locale={locale} onLocale={onLocale} />
       </header>
 
       <main
@@ -1620,11 +1633,42 @@ function LedgerPreview({ live, bare }: { live: boolean; bare?: boolean }) {
 
 const EASE = 'ease-[cubic-bezier(0.22,1,0.36,1)]'
 
+function LocaleSwitch({ locale, onLocale }: { locale: 'es' | 'en'; onLocale: (locale: 'es' | 'en') => void }) {
+  return (
+    <div
+      className="relative grid grid-cols-2 p-0.5 rounded-full border border-white/[0.08] bg-white/[0.02] text-[10.5px] font-semibold tracking-[0.1em] no-drag"
+      role="radiogroup"
+      aria-label="Language"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <span
+        aria-hidden
+        className="absolute top-0.5 bottom-0.5 left-0.5 w-[calc(50%-2px)] rounded-full bg-white/[0.09] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
+        style={{ transform: `translateX(${locale === 'en' ? 100 : 0}%)` }}
+      />
+      {(['es', 'en'] as const).map((l) => (
+        <button
+          key={l}
+          type="button"
+          role="radio"
+          aria-checked={locale === l}
+          onClick={() => onLocale(l)}
+          className={clsx('relative w-9 h-6 uppercase transition-colors duration-300', locale === l ? 'text-text' : 'text-dim hover:text-muted')}
+        >
+          {l}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function FlowShell({
   steps,
   index = 0,
   stepKey,
   dir = 1,
+  locale,
+  onLocale,
   aside,
   footer,
   children,
@@ -1633,6 +1677,8 @@ function FlowShell({
   index?: number
   stepKey?: string
   dir?: 1 | -1
+  locale?: 'es' | 'en'
+  onLocale?: (locale: 'es' | 'en') => void
   aside?: ReactNode
   footer: ReactNode
   children: ReactNode
@@ -1682,6 +1728,11 @@ function FlowShell({
               style={{ width: `${((index + 1) / steps.length) * 100}%` }}
             />
           </>
+        )}
+        {locale && onLocale && (
+          <div className="ml-auto shrink-0 no-drag">
+            <LocaleSwitch locale={locale} onLocale={onLocale} />
+          </div>
         )}
       </header>
 

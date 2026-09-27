@@ -268,6 +268,10 @@ export async function deriveSyncKeyFromPassword(
   const trimmed = password.trim()
   if (!trimmed) return { ok: false, error: 'Introduce tu contraseña maestra.' }
   const dbKey = await deriveKeyFromPassword(trimmed, meta.salt, meta.iterations)
+  const gate = await verifyKeyMaterial(dbKey)
+  if (gate === 'mismatch') {
+    return { ok: false, error: 'Contraseña incorrecta.' }
+  }
   return { ok: true, keyHex: await deriveSyncKeyHexFromDbKey(dbKey) }
 }
 

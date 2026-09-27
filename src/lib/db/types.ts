@@ -46,7 +46,7 @@ export type Filter = { name: string; extensions: string[] }
 
 export interface DesktopApi {
   load: () => Promise<DiskLoadRaw | PersistedData | null>
-  save: (data: PersistedData) => Promise<boolean>
+  save: (data: PersistedData) => Promise<{ ok: true } | { ok: false; error: string }>
   saveSync?: (data: PersistedData) => boolean
   dataPath: () => Promise<string>
   openDataFolder: () => Promise<void>
@@ -78,9 +78,14 @@ export interface DesktopApi {
     tryAutoUnlock: () => Promise<CryptoResult>
     deriveSyncKey?: () => Promise<{ ok: true; keyHex: string } | { ok: false; error: string }>
     deriveSyncKeyFromPassword?: (password: string) => Promise<{ ok: true; keyHex: string } | { ok: false; error: string }>
-    getExportMaterial?: (password?: string) => Promise<
-      { ok: true; keyHex: string; salt: string; iterations: number } | { ok: false; error: string }
-    >
+    exportEncryptedBackup?: (
+      data?: PersistedData,
+      password?: string,
+    ) => Promise<{ ok: true; raw: string } | { ok: false; error: string }>
+    importEncryptedBackup?: (
+      raw: string,
+      password?: string,
+    ) => Promise<{ ok: true } | { ok: false; error: string; needsPassword?: boolean }>
   }
   updater?: {
     getStatus: () => Promise<DesktopUpdaterStatus>

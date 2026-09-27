@@ -101,6 +101,19 @@ export const xtbAdapter: BrokerAdapter = {
   id: 'XTB',
   outputMode: 'READY_POSITIONS',
   matches(headers) {
+    // Diarios genéricos (Trade #, Entry date…) no son xStation aunque tengan Ticker + Quantity
+    if (
+      headerHas(headers, ['Trade #', 'Trade#', 'Entry date', 'Entry Date']) &&
+      !headerHas(headers, [
+        'Open Time (UTC)',
+        'Open time (UTC)',
+        'Close Time (UTC)',
+        'Close time (UTC)',
+        'Position ID',
+      ])
+    ) {
+      return false
+    }
     const hasTicker = headerHas(headers, ['Ticker', 'Symbol', 'Símbolo', 'Simbolo', 'Instrument'])
     const hasType = headerHas(headers, ['Type', 'Tipo', 'Side'])
     const hasVol = headerHas(headers, ['Volume', 'Volumen', 'Lots', 'Quantity'])
@@ -317,7 +330,7 @@ export const interactiveBrokersAdapter: BrokerAdapter = {
         continue
       }
 
-      const ticker = pickField(row, ['Symbol', 'UnderlyingSymbol', 'Description'])?.toUpperCase()
+      const ticker = pickField(row, ['Symbol', 'UnderlyingSymbol', 'Description', 'Conid', 'Financial Instrument'])?.toUpperCase()
       if (!ticker || isBlank(ticker)) continue
 
       const qtyRaw = parseLocaleNumber(pickField(row, ['Quantity', 'Qty', 'Shares']), dec)
@@ -326,10 +339,19 @@ export const interactiveBrokersAdapter: BrokerAdapter = {
       const sideFromQty: 'BUY' | 'SELL' = qtyRaw > 0 ? 'BUY' : 'SELL'
       const side = parseSide(pickField(row, ['Buy/Sell', 'Side', 'Code', 'OrderType'])) ?? sideFromQty
 
-      const price = parseLocaleNumber(pickField(row, ['T. Price', 'TradePrice', 'Price', 'Trade Price']), dec)
+      const price = parseLocaleNumber(
+        pickField(row, ['T. Price', 'TradePrice', 'Price', 'Trade Price', 'Avg Price', 'Fill Price']),
+        dec,
+      )
       if (price === null || price < 0) continue
 
-      const dateTime = pickField(row, ['Date/Time', 'DateTime', 'TradeDateTime'])
+      const dateTime = pickField(row, [
+        'Date/Time',
+        'DateTime',
+        'TradeDateTime',
+        'Date & Time',
+        'Date and Time',
+      ])
       let executedAt: string | null = null
       if (dateTime?.includes(',')) {
         // IB: "20240315,09:30:00" o "2024-03-15, 09:30:00"
@@ -406,8 +428,8 @@ export const degiroAdapter: BrokerAdapter = {
       if (price === null || price < 0) continue
 
       const executedAt = parseBrokerDate(
-        pickField(row, ['Date', 'Fecha', 'Datum', 'Date UTC']),
-        pickField(row, ['Time', 'Hora', 'Tijd', 'Time UTC']),
+        pickField(row, ['Date', 'Fecha', 'Datum', 'Date UTC', 'Boekdatum', 'Booking date']),
+        pickField(row, ['Time', 'Hora', 'Tijd', 'Time UTC', 'Tijd UTC']),
         { dayFirst: true },
       )
       if (!executedAt) continue
@@ -573,6 +595,55 @@ export function getAdapter(broker: string): BrokerAdapter | undefined {
   return BROKER_ADAPTERS.find((a) => a.id === id)
 }
 
+const AUTO_MIN_SCORE = 15
+
+/** Puntuación de confianza para AUTO (evita que XTB «robe» exports IB/DEGIRO). */
+export function scoreBrokerMatch(adapter: BrokerAdapter, headers: string[]): number {
+  if (!adapter.matches(headers)) return 0
+  let score = 20
+  switch (adapter.id) {
+    case 'XTB':
+      if (headerHas(headers, ['Close Time (UTC)', 'Close time (UTC)', 'Close Time'])) score += 8
+      if (headerHas(headers, ['Open Time (UTC)', 'Open time (UTC)'])) score += 4
+      if (headerHas(headers, ['Position ID', 'Profit/Loss', 'Net Profit'])) score += 5
+      if (headerHas(headers, ['Trade #', 'Trade#', 'Entry date', 'Exit date'])) score -= 35
+      if (headerHas(headers, ['IBCommission', 'Asset Category', 'TradeID', 'ExecID'])) score -= 40
+      if (headerHas(headers, ['ISIN', 'Order Id']) && headerHas(headers, ['Product'])) score -= 25
+      break
+    case 'INTERACTIVE_BROKERS':
+      if (headerHas(headers, ['IBCommission', 'Comm/Fee'])) score += 10
+      if (headerHas(headers, ['Asset Category', 'AssetCategory'])) score += 8
+      if (headerHas(headers, ['TradeID', 'ExecID', 'TransactionID'])) score += 6
+      if (headerHas(headers, ['Date/Time', 'DateTime'])) score += 4
+      if (headerHas(headers, ['Close Time (UTC)', 'Profit/Loss'])) score -= 20
+      break
+    case 'DEGIRO':
+      if (headerHas(headers, ['ISIN'])) score += 8
+      if (headerHas(headers, ['Order Id', 'OrderID'])) score += 6
+      if (headerHas(headers, ['Product', 'Nombre'])) score += 4
+      if (headerHas(headers, ['Venue', 'Exchange rate'])) score += 3
+      break
+    case 'FOMO':
+      if (headerHas(headers, ['Pair', 'Market'])) score += 5
+      break
+    case 'AXIOM':
+      if (headerHas(headers, ['Instrument'])) score += 3
+      break
+    default:
+      break
+  }
+  return score
+}
+
 export function detectBroker(headers: string[]): BrokerAdapter | undefined {
-  return BROKER_ADAPTERS.find((a) => a.matches(headers))
+  let best: BrokerAdapter | undefined
+  let bestScore = 0
+  for (const adapter of BROKER_ADAPTERS) {
+    const s = scoreBrokerMatch(adapter, headers)
+    if (s > bestScore) {
+      bestScore = s
+      best = adapter
+    }
+  }
+  return bestScore >= AUTO_MIN_SCORE ? best : undefined
 }

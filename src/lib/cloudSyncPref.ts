@@ -5,6 +5,8 @@ export const CLOUD_SYNC_PREF = 'atrium:cloudSyncEnabled'
 /**
  * Sync en la nube (Supabase) desactivado: sustituido por la copia automática en carpeta.
  * Con false no hay forma de activarlo (bienvenida, Ajustes, /login) y se ignora una preferencia antigua.
+ *
+ * No reactivar sin: (1) UI de conflictos, (2) versión/CAS en servidor, (3) migración 006 aplicada.
  */
 export const CLOUD_SYNC_FEATURE_ENABLED = false
 

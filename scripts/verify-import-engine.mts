@@ -2,10 +2,10 @@
  * Smoke test del motor de importación + FIFO.
  * Run: npx --yes tsx scripts/verify-import-engine.mts
  */
-import { CSVImportEngine } from '../src/lib/import/engine.ts'
-import { groupExecutionsIntoTrades } from '../src/lib/import/groupTrades.ts'
-import { parseLocaleNumber } from '../src/lib/import/parse.ts'
-import type { NormalizedExecution } from '../src/lib/import/types.ts'
+import { CSVImportEngine } from '../src/lib/import/engine'
+import { groupExecutionsIntoTrades } from '../src/lib/import/groupTrades'
+import { parseLocaleNumber } from '../src/lib/import/parse'
+import type { NormalizedExecution } from '../src/lib/import/types'
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(msg)

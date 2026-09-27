@@ -78,6 +78,59 @@ export function weightedAverage(
 }
 
 /** Normaliza cabeceras CSV para matching. */
+/** Infiere separador decimal dominante en una muestra de celdas numéricas. */
+export function inferDecimalSeparatorFromSamples(
+  samples: string[],
+): ',' | '.' | undefined {
+  let commaAsDecimal = 0
+  let dotAsDecimal = 0
+  for (const raw of samples) {
+    if (raw == null || isBlank(raw)) continue
+    const s = String(raw).trim().replace(/[\s\u00a0']/g, '')
+    if (!s || /[^\d.,\-+()]/.test(s.replace(/[€$£]/g, ''))) continue
+    const lastComma = s.lastIndexOf(',')
+    const lastDot = s.lastIndexOf('.')
+    if (lastComma >= 0 && lastDot >= 0) {
+      if (lastComma > lastDot) commaAsDecimal++
+      else dotAsDecimal++
+    } else if (lastComma >= 0) {
+      const [, dec = ''] = s.split(',')
+      if (dec.length > 0 && dec.length <= 5) commaAsDecimal++
+    } else if (lastDot >= 0) {
+      const [, dec = ''] = s.split('.')
+      if (dec.length > 0 && dec.length <= 5) dotAsDecimal++
+    }
+  }
+  if (commaAsDecimal === 0 && dotAsDecimal === 0) return undefined
+  return commaAsDecimal >= dotAsDecimal ? ',' : '.'
+}
+
+const NUMERIC_FIELD_ALIASES = [
+  'Price',
+  'Precio',
+  'Volume',
+  'Volumen',
+  'Quantity',
+  'Qty',
+  'Amount',
+  'Open Price',
+  'Close Price',
+  'T. Price',
+  'TradePrice',
+]
+
+/** Muestra valores numéricos de las primeras filas para inferir decimal. */
+export function sampleNumericCells(rows: Record<string, string>[], limitRows = 40): string[] {
+  const out: string[] = []
+  for (const row of rows.slice(0, limitRows)) {
+    for (const alias of NUMERIC_FIELD_ALIASES) {
+      const v = pickField(row, [alias])
+      if (v && !isBlank(v)) out.push(v)
+    }
+  }
+  return out
+}
+
 export function normalizeHeader(h: string): string {
   return h
     .replace(/^\ufeff/, '')

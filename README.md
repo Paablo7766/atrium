@@ -107,7 +107,7 @@ No `.env` is required. The journal is local and encrypted. Double-click `Abrir A
 | `npm run dist` | Windows installer → `release/` |
 | `npm run test` | Unit tests (crypto, repository, sync) |
 
-Optional `.env` is only for ticker logos, opt-in E2E sync, or anonymous usage. See [Getting started](docs/en/GETTING_STARTED.md) · [Primeros pasos](docs/es/PRIMEROS_PASOS.md).
+Optional `.env` is only for ticker logos or anonymous usage telemetry. Multi-device cloud sync exists in code but is **off** in this release. Web preview uses encrypted IndexedDB, not the desktop SQLCipher journal. See [Getting started](docs/en/GETTING_STARTED.md) · [Primeros pasos](docs/es/PRIMEROS_PASOS.md).
 
 ---
 

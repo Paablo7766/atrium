@@ -11,7 +11,7 @@ Este documento describe cómo Atrium protege los datos del usuario **sin custodi
 | **Réplica continua** | Litestream, proceso local gestionado por Electron |
 | **Destino de réplica** | Elegido por el usuario: carpeta local predeterminada o carpeta externa |
 | **Servidores Atrium** | No reciben, almacenan ni pueden descifrar el diario |
-| **Clave de cifrado** | Derivada de contraseña maestra (PBKDF2) o almacén seguro del SO; nunca se transmite |
+| **Clave de cifrado** | Contraseña maestra → PBKDF2 (200 000 iter, SHA-256, 32 bytes) → clave SQLCipher en hex; nunca se transmite. Legacy: almacén seguro del SO. |
 
 Atrium **no opera** un backend de backup. No existe una cuenta en la nube de Atrium que contenga el diario. La responsabilidad y el control del destino de las copias recae exclusivamente en el usuario.
 
@@ -48,7 +48,8 @@ Atrium **no opera** un backend de backup. No existe una cuenta en la nube de Atr
 
 - **Archivo:** `{userData}/journal.db` (nombre constante: `DB_FILENAME` en `src/lib/db/schema.ts`).
 - **Motor:** `better-sqlite3-multiple-ciphers` con SQLCipher legacy mode 4.
-- **Clave:** 256 000 iteraciones PBKDF2 (modo contraseña) o clave aleatoria en `safeStorage` del SO (modo almacén seguro).
+- **Clave (modo contraseña):** PBKDF2 con **200 000** iteraciones (`PBKDF2_ITERATIONS` en `src/lib/crypto/types.ts`). La clave derivada se aplica como raw 256-bit hex a SQLCipher (`PRAGMA key = "x'…'"`). El valor **256 000** en `connection.ts` es `kdf_iter` de SQLCipher solo si la clave se pasa como passphrase no-hex (ruta legacy).
+- **Clave (modo almacén seguro, legacy):** clave aleatoria en `safeStorage` del SO.
 - **Modo WAL:** SQLite escribe en WAL; Litestream captura cambios incrementales de forma segura para SQLite.
 
 El archivo en disco **ya está cifrado**. Cualquier copia — incluida la réplica Litestream — es opaca sin la clave del usuario.
@@ -108,6 +109,8 @@ La preferencia de destino personalizado se guarda en `{userData}/.litestream-set
 Si el usuario apunta a su carpeta de Dropbox/Google Drive **ya sincronizada en local**, el cliente de sync del SO sube los fragmentos cifrados. Atrium no implementa ni controla esa sincronización.
 
 ## 4. Interfaz de usuario
+
+> **Nota (producto):** el panel Litestream en Ajustes está oculto (`SHOW_LITESTREAM_PANEL = false`) y el proceso **no arranca** automáticamente mientras el flag esté apagado. Las copias rotativas `.bak` / `backups/` siguen activas en cada guardado.
 
 **Ajustes › Datos › Copias de seguridad** (`src/pages/Settings.tsx`):
 

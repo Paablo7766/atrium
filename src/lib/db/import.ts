@@ -284,6 +284,9 @@ function sanitizeSettings(raw: unknown): Settings {
     lastSeenAppVersion: typeof src.lastSeenAppVersion === 'string' && src.lastSeenAppVersion.trim()
       ? src.lastSeenAppVersion.trim()
       : undefined,
+    cloudSyncEnabled: typeof src.cloudSyncEnabled === 'boolean' ? src.cloudSyncEnabled : undefined,
+    lastCloudSyncAt:
+      typeof src.lastCloudSyncAt === 'string' && src.lastCloudSyncAt.trim() ? src.lastCloudSyncAt.trim() : undefined,
   }
 }
 

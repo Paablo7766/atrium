@@ -2,6 +2,13 @@
 
 Las versiones siguen `package.json`. Más reciente arriba.
 
+## 1.2.0-beta.5 — 2026-09-27
+
+- [Mejora] Importación desde bróker más fiable: detección Auto con puntuación, mensajes claros si no importa nada o son duplicados, resumen en Ajustes
+- [Mejora] Tests de import (XTB/IB/DEGIRO), fixture real XTB anonimizado y CI de verificación mapper/xlsx
+- [Mejora] Persistencia del diario, backup web y sync cifrado (migración Supabase 006)
+- [Mejora] Onboarding con contraseña maestra; APIs logo/quotes; workflow CI
+
 ## 1.2.0-beta.4 — 2026-09-27
 
 - [Corrección] Las operaciones se guardan al momento y al cerrar la pestaña (web)

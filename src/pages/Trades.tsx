@@ -97,7 +97,10 @@ export function Trades() {
   }, [trades, filter, market, strategy, q, sortKey, sortDir])
 
   const allStats = useMemo(() => computeStats(trades, settings.startingBalance, cashflows), [trades, settings.startingBalance, cashflows])
-  const view = useMemo(() => computeStats(rows, settings.startingBalance), [rows, settings.startingBalance])
+  const view = useMemo(
+    () => computeStats(rows, settings.startingBalance, cashflows),
+    [rows, settings.startingBalance, cashflows],
+  )
   const total = useMemo(() => rows.reduce((a, t) => a + tradePnl(t), 0), [rows])
   const isFiltered = filter !== 'all' || !!market || !!strategy || !!q.trim()
   const secondaryFilters = (market ? 1 : 0) + (strategy ? 1 : 0)

@@ -1,0 +1,8 @@
+Account,0000000,,,,,,,,,,,,,,,,,,,,,,,
+Closed Positions,,,,,,,,,,,,,,,,,,,,,,,,
+Date from (UTC),2024-12-31 23:00:00,,,,,,,,,,,,,,,,,,,,,,,
+Date to (UTC),2025-12-31 22:59:00,,,,,,,,,,,,,,,,,,,,,,,
+Instrument,Category,Ticker,Type,Volume,Open Price,Open Time (UTC),Close Price,Close Time (UTC),Product,Profit/Loss,Gross Profit,Purchase Value,Sale Value,Stop Loss,Take Profit,Commission,Margin,Swap,Rollover,Open Conversion Rate,Close Conversion Rate,Close Origin,Position ID,Comment
+Nvidia,STOCK,NVDA.US,BUY,0.4804,109.43,2025-04-10 13:30:03,183.44,2025-11-21 19:09:53,My Trades,28.66,28.66,47.52,76.18,,,0,,,,0.90398,0.86446,iOS,1760835143,
+Ferrari,STOCK,RACE.IT,BUY,0.1305,385.3,2024-06-19 07:01:01,379.6,2025-04-10 08:39:20,My Trades,-0.74,-0.74,50.28,49.54,,,0,,,,,,iOS,1359669515,
+Profit/loss,,,,,,,,,,27.92,27.92,,,,,,,,,,,,,

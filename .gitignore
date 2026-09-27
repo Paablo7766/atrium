@@ -17,6 +17,11 @@ release/
 Thumbs.db
 Desktop.ini
 
+# Broker import samples with real (anonimized) data — keep out of git
+src/lib/import/__fixtures__/user/*
+!src/lib/import/__fixtures__/user/.gitkeep
+!src/lib/import/__fixtures__/user/README.md
+
 # Temp / scratch
 .tmp*/
 .tmp-*

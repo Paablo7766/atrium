@@ -1,6 +1,6 @@
 /**
+ * @deprecated Use: npm run test:xlsx
  * Reproduce el XLSX real de XTB: 2 hojas, metadatos encima, fechas serial/Excel.
- * Run: npx --yes tsx scripts/verify-xlsx-import.mts
  */
 import * as XLSX from 'xlsx'
 import { workbookArrayBufferToCsvParts } from '../src/lib/import/spreadsheet.ts'

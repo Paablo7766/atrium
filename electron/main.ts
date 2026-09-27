@@ -39,6 +39,10 @@ import {
 
   journalSave,
 
+  journalExportEncryptedBackup,
+
+  journalImportEncryptedBackup,
+
   journalCryptoStatus,
 
   journalSetupPassword,
@@ -64,7 +68,9 @@ import {
 import { resolveNativeBindingPath, setNativeBindingPath } from '@/lib/db/connection'
 import { initDesktopUpdater, isQuittingForUpdate } from './updater'
 
-import { deriveSyncKeyHexFromPassword, getExportKeyMaterial, getSyncKeyHex } from '@/lib/crypto/keyManagerMain'
+import { deriveSyncKeyHexFromPassword, getSyncKeyHex } from '@/lib/crypto/keyManagerMain'
+import { SHOW_LITESTREAM_PANEL } from '@/lib/featureFlags'
+import { checkCryptoUnlockRateLimit } from './cryptoRateLimit'
 
 
 
@@ -110,6 +116,7 @@ let win: BrowserWindow | null = null
 const userDataDir = () => app.getPath('userData')
 
 async function maybeStartLitestream() {
+  if (!SHOW_LITESTREAM_PANEL) return
   await restartLitestream()
 }
 
@@ -367,8 +374,16 @@ function applyContentSecurityPolicy() {
 
   } else {
 
-    // Escritorio empaquetado: feedback y otros proxies HTTPS (p. ej. Vercel /api/*).
-    connect.push('https:')
+    connect.push(
+      'https://eu.i.posthog.com',
+      'https://us.i.posthog.com',
+      'https://www.googleapis.com',
+      'https://oauth2.googleapis.com',
+    )
+    const publicOrigin = (process.env.VITE_ATRIUM_PUBLIC_ORIGIN ?? process.env.ATRIUM_PUBLIC_ORIGIN ?? '')
+      .trim()
+      .replace(/\/$/, '')
+    if (publicOrigin.startsWith('https://')) connect.push(publicOrigin)
 
   }
 
@@ -500,6 +515,11 @@ ipcMain.handle('crypto:unlockPassword', async (e, password: unknown) => {
 
   if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
 
+  const limited = checkCryptoUnlockRateLimit(e.sender.id)
+  if (!limited.ok) {
+    return { ok: false as const, error: `Demasiados intentos. Espera ${limited.retryAfterSec}s.` }
+  }
+
   const pwd = sanitizePassword(password)
 
   if (!pwd) return { ok: false as const, error: 'Contraseña inválida' }
@@ -545,6 +565,11 @@ ipcMain.handle('crypto:deriveSyncKeyFromPassword', (e, password: unknown) => {
 
   if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
 
+  const limited = checkCryptoUnlockRateLimit(e.sender.id)
+  if (!limited.ok) {
+    return { ok: false as const, error: `Demasiados intentos. Espera ${limited.retryAfterSec}s.` }
+  }
+
   const pwd = sanitizePassword(password)
 
   if (!pwd) return { ok: false as const, error: 'Contraseña inválida' }
@@ -555,14 +580,36 @@ ipcMain.handle('crypto:deriveSyncKeyFromPassword', (e, password: unknown) => {
 
 
 
-ipcMain.handle('crypto:getExportMaterial', (e, password: unknown) => {
+ipcMain.handle('crypto:exportEncryptedBackup', async (e, data: unknown, password: unknown) => {
 
   if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
 
   const pwdRaw = typeof password === 'string' ? sanitizePassword(password) : undefined
-  const pwd = pwdRaw ?? undefined
+  const journal =
+    data && typeof data === 'object' ? (data as import('@/types').PersistedData) : undefined
 
-  return getExportKeyMaterial(userDataDir(), pwd)
+  return journalExportEncryptedBackup(userDataDir(), journal, pwdRaw ?? undefined)
+
+})
+
+
+
+ipcMain.handle('crypto:importEncryptedBackup', async (e, raw: unknown, password: unknown) => {
+
+  if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
+
+  if (typeof raw !== 'string' || raw.length > MAX_PAYLOAD_BYTES) {
+    return { ok: false as const, error: 'Archivo de copia inválido o demasiado grande.' }
+  }
+
+  const pwdRaw = typeof password === 'string' ? sanitizePassword(password) : undefined
+
+  const limited = pwdRaw ? checkCryptoUnlockRateLimit(e.sender.id) : { ok: true as const }
+  if (!limited.ok) {
+    return { ok: false as const, error: `Demasiados intentos. Espera ${limited.retryAfterSec}s.` }
+  }
+
+  return journalImportEncryptedBackup(userDataDir(), raw, pwdRaw ?? undefined)
 
 })
 
@@ -594,11 +641,11 @@ ipcMain.handle('data:save', (e, data: unknown) => {
 
   if (!data || typeof data !== 'object') return false
 
-  const ok = journalSave(data as import('@/types').PersistedData, userDataDir())
+  const result = journalSave(data as import('@/types').PersistedData, userDataDir())
 
-  if (ok) scheduleFolderBackup()
+  if (result.ok) scheduleFolderBackup()
 
-  return ok
+  return result
 
 })
 
@@ -622,11 +669,11 @@ ipcMain.on('data:save-sync', (e, data: unknown) => {
 
   }
 
-  const ok = journalSave(data as import('@/types').PersistedData, userDataDir())
+  const result = journalSave(data as import('@/types').PersistedData, userDataDir())
 
-  if (ok) scheduleFolderBackup()
+  if (result.ok) scheduleFolderBackup()
 
-  e.returnValue = ok
+  e.returnValue = result.ok
 
 })
 
@@ -910,7 +957,9 @@ if (!gotLock) {
 
     initLitestream(dataDir, journalDataPath())
 
-    await startLitestream()
+    if (SHOW_LITESTREAM_PANEL) {
+      await startLitestream()
+    }
 
     applyContentSecurityPolicy()
 

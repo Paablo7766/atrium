@@ -10,6 +10,12 @@ import type { MappedTrade } from './tradeMapper'
 import { CSVImportEngine } from './engine'
 import { mapConsolidatedTrades, toStoreTrades } from './tradeMapper'
 import { BROKER_FILE_ACCEPT, fileToCsvTexts, isSpreadsheetFileName } from './spreadsheet'
+import {
+  buildDuplicatesFeedback,
+  buildZeroTradesFeedback,
+  fileTooLargeMessage,
+  type ImportFeedbackLocale,
+} from './importFeedback'
 
 export type ImportBroker = BrokerId | 'AUTO'
 
@@ -31,6 +37,8 @@ export interface ImportCSVResult {
   warnings: string[]
   mapped: MappedTrade[]
   fileName?: string
+  dataRowCount: number
+  detectedHeaders: string[]
 }
 
 export interface UseImportCSVReturn {
@@ -61,6 +69,8 @@ function emptyFail(broker: string, errors: string[], fileName?: string): ImportC
     warnings: [],
     mapped: [],
     fileName,
+    dataRowCount: 0,
+    detectedHeaders: [],
   }
 }
 
@@ -108,6 +118,7 @@ export function useImportCSV(options: UseImportCSVOptions = {}): UseImportCSVRet
   const goToPage = useGoToPage()
   const existingTrades = useStore((s) => s.trades)
   const settings = useStore((s) => s.settings)
+  const feedbackLocale: ImportFeedbackLocale = settings.locale === 'en' ? 'en' : 'es'
 
   const [busy, setBusy] = useState(false)
   const [lastResult, setLastResult] = useState<ImportCSVResult | null>(null)
@@ -132,14 +143,41 @@ export function useImportCSV(options: UseImportCSVOptions = {}): UseImportCSVRet
         return fail
       }
 
-      const { executions, trades: consolidated, errors, warnings, skippedRows, broker: resolvedBroker } =
-        engineResult as ImportEngineResult & { trades: ReturnType<CSVImportEngine['toTrades']> }
+      const {
+        executions,
+        trades: consolidated,
+        errors,
+        warnings,
+        skippedRows,
+        broker: resolvedBroker,
+        dataRowCount,
+        detectedHeaders,
+      } = engineResult as ImportEngineResult & { trades: ReturnType<CSVImportEngine['toTrades']> }
+
+      if (import.meta.env.DEV) {
+        console.info('[broker-import]', {
+          fileName,
+          broker: resolvedBroker,
+          dataRowCount,
+          executions: executions.length,
+          consolidated: consolidated.length,
+          skippedRows,
+          warnings: warnings.length,
+          errors: errors.length,
+        })
+      }
+
+      const attachMeta = (fail: ImportCSVResult): ImportCSVResult => {
+        fail.warnings = warnings
+        fail.skippedRows = skippedRows
+        fail.dataRowCount = dataRowCount
+        fail.detectedHeaders = detectedHeaders
+        return fail
+      }
 
       if (errors.length && !executions.length && !consolidated.length) {
         const msg = errors[0] ?? t('import.invalidFormat')
-        const fail = emptyFail(resolvedBroker, errors, fileName)
-        fail.warnings = warnings
-        fail.skippedRows = skippedRows
+        const fail = attachMeta(emptyFail(resolvedBroker, errors, fileName))
         setLastResult(fail)
         toast(
           broker !== 'AUTO' && /no hay adaptador|no adapter/i.test(msg)
@@ -151,17 +189,21 @@ export function useImportCSV(options: UseImportCSVOptions = {}): UseImportCSVRet
       }
 
       if (!executions.length && !consolidated.length) {
-        const fail = emptyFail(resolvedBroker, [t('import.noExecutions')], fileName)
-        fail.warnings = warnings
-        fail.skippedRows = skippedRows
+        const zero = buildZeroTradesFeedback({
+          locale: feedbackLocale,
+          broker: resolvedBroker,
+          dataRowCount,
+          warnings,
+          headers: detectedHeaders,
+        })
+        const fail = attachMeta(emptyFail(resolvedBroker, [zero.title, ...zero.lines], fileName))
         setLastResult(fail)
-        toast(t('import.noExecutions'), 'error')
+        toast([zero.title, ...zero.lines.slice(0, 2)].join(' · '), 'error')
         return fail
       }
 
       if (!consolidated.length) {
-        const fail = emptyFail(resolvedBroker, [t('import.noTrades')], fileName)
-        fail.warnings = warnings
+        const fail = attachMeta(emptyFail(resolvedBroker, [t('import.noTrades')], fileName))
         setLastResult(fail)
         toast(t('import.noTrades'), 'error')
         return fail
@@ -175,6 +217,7 @@ export function useImportCSV(options: UseImportCSVOptions = {}): UseImportCSVRet
       const { trades: unique, skipped } = dedupeTrades(storeTrades, existingTrades)
 
       if (!unique.length) {
+        const dup = buildDuplicatesFeedback(skipped, feedbackLocale)
         const result: ImportCSVResult = {
           ok: false,
           broker: resolvedBroker,
@@ -184,17 +227,14 @@ export function useImportCSV(options: UseImportCSVOptions = {}): UseImportCSVRet
           openPositions: mapped.filter((m) => m.status === 'OPEN').length,
           closedTrades: mapped.filter((m) => m.status === 'CLOSED').length,
           errors: [],
-          warnings: [...warnings, t('import.allDuplicates')],
+          warnings: [...warnings, dup.title, ...dup.lines],
           mapped,
           fileName,
+          dataRowCount,
+          detectedHeaders,
         }
         setLastResult(result)
-        toast(
-          skipped === 1
-            ? t('set.alreadyThere1', { account: settings.accountName })
-            : t('set.alreadyThereN', { n: skipped, account: settings.accountName }),
-          'info',
-        )
+        toast([dup.title, dup.lines[0]].filter(Boolean).join(' · '), 'info')
         return result
       }
 
@@ -237,6 +277,8 @@ export function useImportCSV(options: UseImportCSVOptions = {}): UseImportCSVRet
         warnings,
         mapped,
         fileName,
+        dataRowCount,
+        detectedHeaders,
       }
       setLastResult(result)
 
@@ -259,6 +301,7 @@ export function useImportCSV(options: UseImportCSVOptions = {}): UseImportCSVRet
       navigateToDashboard,
       goToPage,
       settings,
+      feedbackLocale,
       t,
       toast,
     ],
@@ -277,9 +320,10 @@ export function useImportCSV(options: UseImportCSVOptions = {}): UseImportCSVRet
       setBusy(true)
       try {
         if (file.size > MAX_IMPORT_BYTES) {
-          const fail = emptyFail(String(broker), ['El archivo es demasiado grande (máx. 25 MB).'], file.name)
+          const msg = fileTooLargeMessage(feedbackLocale)
+          const fail = emptyFail(String(broker), [msg], file.name)
           setLastResult(fail)
-          toast('El archivo es demasiado grande (máx. 25 MB).', 'error')
+          toast(msg, 'error')
           return fail
         }
         const parts = await fileToCsvTexts(file)

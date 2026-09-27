@@ -1,6 +1,6 @@
 /**
+ * @deprecated Use: npm run test:mapper
  * Smoke: ConsolidatedTrade → store Trade + derivados UI.
- * Run: npx --yes tsx scripts/verify-trade-mapper.mts
  */
 import { groupExecutionsIntoTrades } from '../src/lib/import/groupTrades.ts'
 import { mapConsolidatedTrades, toStoreTrades } from '../src/lib/import/tradeMapper.ts'

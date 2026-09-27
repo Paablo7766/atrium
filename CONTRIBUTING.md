@@ -4,7 +4,7 @@
 
 1. Keep the product name **Atrium** (never “Atrium Journal”).
 2. Prefer clear, focused PRs.
-3. Run `npm run typecheck` before opening a PR.
+3. Run `npm run typecheck` and `npm test` (plus `npm run test:stats` / `test:import` when touching stats or import) before opening a PR.
 4. If you change UI that appears in the README, regenerate shots:
 
 ```bash
@@ -19,7 +19,7 @@ npm run shots
 
 1. El nombre del producto es **Atrium** (nunca “Atrium Journal”).
 2. Prefiere PRs claros y acotados.
-3. Ejecuta `npm run typecheck` antes de abrir un PR.
+3. Ejecuta `npm run typecheck` y `npm test` (y `npm run test:stats` / `test:import` si tocas stats o importación) antes de abrir un PR.
 4. Si cambias UI del README, regenera las capturas:
 
 ```bash

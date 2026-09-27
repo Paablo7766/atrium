@@ -8,7 +8,7 @@ import type {
 } from './types'
 import { parseCsvText, rowsToObjects, findHeaderRowIndex } from './csvParse'
 import { detectBroker, getAdapter } from './adapters'
-import { createId } from './parse'
+import { createId, inferDecimalSeparatorFromSamples, sampleNumericCells } from './parse'
 import { groupAllExecutionsIntoTrades, groupExecutionsIntoTrades } from './groupTrades'
 import { assembleImportTrades } from './readyTrades'
 
@@ -41,6 +41,8 @@ export class CSVImportEngine {
         errors: ['Archivo vacío.'],
         warnings: [],
         skippedRows: 0,
+        dataRowCount: 0,
+        detectedHeaders: [],
       }
     }
 
@@ -51,20 +53,33 @@ export class CSVImportEngine {
     const executions: NormalizedExecution[] = []
     const readyTrades: ReadyTradeInput[] = []
     let skippedRows = 0
+    let dataRowCount = 0
+    let detectedHeaders: string[] = []
     let resolvedBroker: BrokerId = 'OTHER'
 
     texts.forEach((text, i) => {
       const part = this.parseOne(text, broker)
       if (part.broker !== 'OTHER') resolvedBroker = part.broker
+      if (!detectedHeaders.length && part.detectedHeaders.length) detectedHeaders = part.detectedHeaders
       executions.push(...part.executions)
       readyTrades.push(...part.readyTrades)
       errors.push(...part.errors.map((e) => (texts.length > 1 ? `[hoja ${i + 1}] ${e}` : e)))
       warnings.push(...part.warnings.map((w) => (texts.length > 1 ? `[hoja ${i + 1}] ${w}` : w)))
       skippedRows += part.skippedRows
+      dataRowCount += part.dataRowCount
     })
 
     if (!executions.length && !readyTrades.length && errors.length) {
-      return { broker: resolvedBroker, executions: [], readyTrades: [], errors, warnings, skippedRows }
+      return {
+        broker: resolvedBroker,
+        executions: [],
+        readyTrades: [],
+        errors,
+        warnings,
+        skippedRows,
+        dataRowCount,
+        detectedHeaders,
+      }
     }
 
     return {
@@ -77,6 +92,8 @@ export class CSVImportEngine {
           ? [`${texts.length} hojas de posiciones procesadas (cerradas + abiertas).`, ...warnings]
           : warnings,
       skippedRows,
+      dataRowCount,
+      detectedHeaders,
     }
   }
 
@@ -124,6 +141,8 @@ export class CSVImportEngine {
         errors: ['El CSV no tiene cabecera + filas de datos.'],
         warnings,
         skippedRows: 0,
+        dataRowCount: 0,
+        detectedHeaders: [],
       }
     }
 
@@ -153,14 +172,18 @@ export class CSVImportEngine {
         errors: [`No hay adaptador para broker "${broker}". Usa XTB, INTERACTIVE_BROKERS, DEGIRO, FOMO o AXIOM.`],
         warnings,
         skippedRows: dataRowCount,
+        dataRowCount,
+        detectedHeaders: headers.filter(Boolean),
       }
     }
 
+    const inferredDec = inferDecimalSeparatorFromSamples(sampleNumericCells(dataRows))
+    const defaultDec = resolved.id === 'INTERACTIVE_BROKERS' ? '.' : ','
     const ctx: BrokerParseContext = {
       broker: resolved.id,
       defaultBaseCurrency: this.options.defaultBaseCurrency,
       defaultQuoteCurrency: this.options.defaultQuoteCurrency,
-      decimalSeparator: resolved.id === 'INTERACTIVE_BROKERS' ? '.' : ',',
+      decimalSeparator: inferredDec ?? defaultDec,
     }
 
     let executions: NormalizedExecution[] = []
@@ -171,7 +194,16 @@ export class CSVImportEngine {
       readyTrades = parsed.readyTrades
     } catch (err) {
       errors.push(err instanceof Error ? err.message : 'Error desconocido en el adaptador.')
-      return { broker: resolved.id, executions: [], readyTrades: [], errors, warnings, skippedRows: dataRowCount }
+      return {
+        broker: resolved.id,
+        executions: [],
+        readyTrades: [],
+        errors,
+        warnings,
+        skippedRows: dataRowCount,
+        dataRowCount,
+        detectedHeaders: headers.filter(Boolean),
+      }
     }
 
     executions = this.sanitize(executions, errors)
@@ -182,9 +214,15 @@ export class CSVImportEngine {
       const type = Object.entries(r).find(([k]) => /^type$|^tipo$|^side$/i.test(k.replace(/[^a-z]/gi, '')))
       return type && String(type[1]).trim() !== ''
     }).length
-    const skippedRows = Math.max(0, dataRowCount - Math.max(typedRows, accepted))
+    const useReadySkip = resolved.outputMode === 'READY_POSITIONS'
+    const skippedRows = useReadySkip
+      ? Math.max(0, dataRowCount - accepted)
+      : Math.max(0, dataRowCount - Math.max(typedRows, accepted))
     if (accepted === 0 && dataRowCount > 0) {
       warnings.push(`${dataRowCount} fila(s) omitidas por datos incompletos o no parseables.`)
+      if (resolved.id === 'XTB' && typedRows === 0) {
+        warnings.push('XTB Open Positions: filas sin Type/Tipo (resumen) no se importan.')
+      }
     } else if (typedRows > 0 && accepted === 0) {
       warnings.push(`${typedRows} fila(s) con Type no parseables.`)
     }
@@ -196,6 +234,8 @@ export class CSVImportEngine {
       errors,
       warnings,
       skippedRows,
+      dataRowCount,
+      detectedHeaders: headers.filter(Boolean),
     }
   }
 

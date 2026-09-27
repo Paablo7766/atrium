@@ -4,6 +4,13 @@ import { groupAllExecutionsIntoTrades } from './groupTrades'
 
 const EPS = 1e-8
 
+function stableIdFromExternal(broker: string, externalId: string, idFactory: () => string): string {
+  const clean = externalId.trim().replace(/[^a-zA-Z0-9._:-]/g, '_').slice(0, 100)
+  if (!clean) return idFactory()
+  const prefix = broker.toLowerCase().replace(/[^a-z0-9]/g, '_')
+  return `imp-${prefix}-${clean}`.slice(0, 180)
+}
+
 /** Adaptadores que emiten fills sueltos (pasar por FIFO). */
 export const FIFO_FILL_ADAPTERS = ['INTERACTIVE_BROKERS', 'DEGIRO', 'FOMO', 'AXIOM'] as const
 
@@ -36,7 +43,7 @@ export function finalizeReadyTrades(
   return inputs.filter(isValidReadyTrade).map((t) => {
     const closed = t.status === 'CLOSED'
     return {
-      id: idFactory(),
+      id: t.externalId?.trim() ? stableIdFromExternal('import', t.externalId, idFactory) : idFactory(),
       ticker: t.ticker.trim().toUpperCase(),
       instrumentType: t.instrumentType,
       direction: t.direction === 'SHORT' ? 'SHORT' : 'LONG',

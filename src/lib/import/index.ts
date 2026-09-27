@@ -44,6 +44,7 @@ export {
   BROKER_ADAPTERS,
   getAdapter,
   detectBroker,
+  scoreBrokerMatch,
   xtbAdapter,
   interactiveBrokersAdapter,
   degiroAdapter,

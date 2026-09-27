@@ -21,23 +21,20 @@ No `.env` is required. The journal lives on disk as **encrypted SQLite** (`journ
 
 ## First-run encryption
 
-On desktop, onboarding asks how to protect `journal.db`:
+On desktop, onboarding sets a **master password** for `journal.db` (PBKDF2, 200 000 iterations → SQLCipher AES-256). You unlock Atrium after each launch. Atrium cannot recover a forgotten password.
 
-- **OS keychain** (`safeStorage`) — a random key stored by Windows/macOS  
-- **Master password** — PBKDF2-derived key; you must unlock Atrium after each launch  
-
-Both modes encrypt the file with SQLCipher. Atrium cannot recover a forgotten password.
+Older installs may still use OS secure storage; you can migrate to a master password in **Settings › Data**.
 
 ## Optional local backup (Litestream)
 
-Litestream is bundled and replicates the **already encrypted** database to a folder (default under user data, or a folder you pick in Settings › Data). Details: [BACKUP_ARCHITECTURE.md](../BACKUP_ARCHITECTURE.md).
+Litestream can replicate the **already encrypted** database locally. The dedicated Litestream panel in Settings is currently hidden; rotating `.bak` copies under user data remain available. Details: [BACKUP_ARCHITECTURE.md](../BACKUP_ARCHITECTURE.md).
 
-## Optional cloud setup
+## Optional cloud setup (disabled in product)
 
-Sync is **not** required to use Atrium. To enable Settings › Multi-device sync (E2E encrypted blobs):
+Multi-device sync is **turned off** in the current release (`CLOUD_SYNC_FEATURE_ENABLED = false`). The steps below are for developers preparing a future enablement — run migrations **001 → 005** if you experiment:
 
 1. Create a project at [supabase.com](https://supabase.com)  
-2. Run SQL in `supabase/migrations/` (001 → 004)  
+2. Run SQL in `supabase/migrations/` (001 → 005, including `005_sync_salt.sql`)  
 3. Put URL + anon key in `.env`:
 
 ```env
@@ -51,7 +48,7 @@ VITE_SUPABASE_ANON_KEY=eyJ...
 VITE_FMP_API_KEY=your_key
 ```
 
-Then turn on **Settings › Multi-device sync**. Until you do, the app stays local-only even with env vars present.
+Re-enabling sync in code requires conflict handling and is not supported in this build.
 
 ## Build a Windows installer
 

@@ -5,6 +5,10 @@
 export const config = { runtime: 'edge' }
 
 import { cleanSymbol, corsHeaders, fmpKey } from '../lib/fmpSecurity'
+import { checkFeedbackRateLimit, clientIpFromRequest } from '../lib/feedbackRateLimit'
+
+const FMP_RATE_MAX = 60
+const FMP_RATE_WINDOW_MS = 60_000
 
 export default async function handler(req: Request): Promise<Response> {
   const CORS = corsHeaders(req)
@@ -15,6 +19,18 @@ export default async function handler(req: Request): Promise<Response> {
 
   if (req.method !== 'GET') {
     return Response.json({ error: 'Method not allowed' }, { status: 405, headers: CORS })
+  }
+
+  const ip = clientIpFromRequest(req)
+  const limited = checkFeedbackRateLimit(`fmp-logo:${ip}`, {
+    max: FMP_RATE_MAX,
+    windowMs: FMP_RATE_WINDOW_MS,
+  })
+  if (!limited.ok) {
+    return Response.json(
+      { error: 'Too many requests' },
+      { status: 429, headers: { ...CORS, 'Retry-After': String(limited.retryAfterSec) } },
+    )
   }
 
   const raw = new URL(req.url).searchParams.get('symbol')?.trim()
