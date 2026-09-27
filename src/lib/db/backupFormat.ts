@@ -12,6 +12,12 @@ export const ATRIUM_BACKUP_VERSION = 1
 /** Nombre fijo del archivo que la copia automática sobrescribe en la carpeta elegida. */
 export const FOLDER_BACKUP_FILENAME = 'Atrium - copia automática.atrium-backup'
 
+/** Temporal atómico antes de sustituir el backup final. */
+export const FOLDER_BACKUP_TMP_FILENAME = `${FOLDER_BACKUP_FILENAME}.tmp`
+
+/** Subcarpeta creada dentro de la ubicación elegida (Drive, Documentos, etc.). */
+export const ATRIUM_SYNC_FOLDER_NAME = 'Atrium'
+
 export type AtriumBackupFile = {
   magic: typeof ATRIUM_BACKUP_MAGIC
   version: typeof ATRIUM_BACKUP_VERSION

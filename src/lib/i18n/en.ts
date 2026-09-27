@@ -931,7 +931,14 @@ export const enDict: Record<MessageKey, string> = {
   'set.litestreamDestReset': 'Destination reset to the default folder.',
   'set.autoBackup': 'Automatic backup',
   'set.autoBackupSub': 'Saves an encrypted copy of your journal to a folder on your computer.',
-  'set.autoBackupWebSub': 'Automatic backup is turned on from the desktop app. Here you can recover the latest backup.',
+  'set.autoBackupWebSub':
+    'Saves an encrypted copy to a folder you choose (Documents, Drive…). Desktop Chrome or Edge only.',
+  'set.folderBackupWebUnsupported':
+    'Automatic folder backup only works in desktop Chrome or Edge. You can still export and import backups manually below.',
+  'set.autoBackupReconnect':
+    'Atrium no longer has permission to write to your chosen folder. Re-authorize it to resume automatic backup.',
+  'set.autoBackupReconnectBtn': 'Reconnect folder',
+  'set.autoBackupReconnectOk': 'Folder reconnected. Automatic backup will resume shortly.',
   'set.autoBackupToggle': 'Turn on automatic backup',
   'set.autoBackupChoose': 'Choose folder',
   'set.autoBackupChange': 'Change folder',

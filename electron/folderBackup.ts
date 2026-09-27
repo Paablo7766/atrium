@@ -3,17 +3,21 @@ import os from 'node:os'
 import path from 'node:path'
 import { journalLoad } from '@/lib/db/service'
 import { getExportKeyMaterial, readCryptoMeta } from '@/lib/crypto/keyManagerMain'
-import { buildEncryptedBackupFile, FOLDER_BACKUP_FILENAME } from '@/lib/db/backupFormat'
+import {
+  ATRIUM_SYNC_FOLDER_NAME,
+  buildEncryptedBackupFile,
+  FOLDER_BACKUP_FILENAME,
+} from '@/lib/db/backupFormat'
 import type { FolderBackupStatus } from '@/lib/db/types'
+import { FOLDER_BACKUP_UI_ENABLED } from '@/lib/featureFlags'
+
+export { ATRIUM_SYNC_FOLDER_NAME }
 
 /**
  * Copia automática: escribe un .atrium-backup cifrado en una carpeta elegida por el usuario
  * (normalmente sincronizada por Drive / Dropbox / OneDrive / iCloud). Atrium no habla con
  * ningún servicio de nube; el cliente de sincronización del sistema sube el archivo.
  */
-
-/** Carpeta que creamos dentro de la ubicación elegida (Drive, OneDrive, etc.). */
-export const ATRIUM_SYNC_FOLDER_NAME = 'Atrium'
 
 /** Preferencia de este equipo; no va dentro del diario para que no viaje al restaurar en otro. */
 const SETTINGS_FILE = '.folder-backup.json'
@@ -33,6 +37,15 @@ let timer: NodeJS.Timeout | null = null
 let queue: Promise<void> = Promise.resolve()
 let failed = false
 let pendingFolder: string | null = null
+
+/** Con la UI apagada, la copia en carpeta no debe escribir aunque `.folder-backup.json` diga enabled. */
+function folderBackupFeatureActive(): boolean {
+  return FOLDER_BACKUP_UI_ENABLED
+}
+
+function effectiveBackupEnabled(): boolean {
+  return folderBackupFeatureActive() && !!settings.enabled
+}
 
 function settingsPath(): string {
   return path.join(userDataDir, SETTINGS_FILE)
@@ -71,7 +84,7 @@ function backupMtime(folder: string): number | null {
 
 async function writeBackupNow(): Promise<void> {
   const folder = settings.folderPath
-  if (!settings.enabled || !folder || !hasMasterPassword()) return
+  if (!effectiveBackupEnabled() || !folder || !hasMasterPassword()) return
   const material = getExportKeyMaterial(userDataDir)
   if (!material.ok) return
   const loaded = journalLoad()
@@ -109,7 +122,7 @@ export function initFolderBackup(dataDir: string): void {
 
 /** Se llama tras cada guardado del diario. */
 export function scheduleFolderBackup(): void {
-  if (!settings.enabled || !settings.folderPath || timer) return
+  if (!effectiveBackupEnabled() || !settings.folderPath || timer) return
   timer = setTimeout(() => {
     timer = null
     void runBackup()
@@ -122,7 +135,7 @@ export async function flushFolderBackup(): Promise<void> {
     clearTimeout(timer)
     timer = null
   }
-  if (settings.enabled && settings.folderPath && hasMasterPassword()) {
+  if (effectiveBackupEnabled() && settings.folderPath && hasMasterPassword()) {
     return runBackup()
   }
   return queue
@@ -130,16 +143,20 @@ export async function flushFolderBackup(): Promise<void> {
 
 export function getFolderBackupStatus(): FolderBackupStatus {
   const folderPath = settings.folderPath?.trim() || null
+  const enabled = effectiveBackupEnabled()
   return {
-    enabled: !!settings.enabled,
+    enabled,
     folderPath,
-    lastBackupAt: folderPath ? backupMtime(folderPath) : null,
-    failed,
+    lastBackupAt: enabled && folderPath ? backupMtime(folderPath) : null,
+    failed: enabled ? failed : false,
     needsPassword: !hasMasterPassword(),
   }
 }
 
 export async function setFolderBackupEnabled(enabled: boolean): Promise<FolderBackupResult> {
+  if (!folderBackupFeatureActive()) {
+    return { ok: false, error: 'La copia automática en carpeta no está disponible en esta versión.' }
+  }
   if (enabled && !hasMasterPassword()) {
     return { ok: false, error: 'Para poder restaurar la copia en otro dispositivo necesitas una contraseña maestra.' }
   }
@@ -204,6 +221,9 @@ async function applyFolder(folder: string): Promise<FolderBackupResult> {
 export async function chooseFolderBackupDestination(
   folder: string,
 ): Promise<{ ok: true; needsConfirm: boolean } | { ok: false; error: string }> {
+  if (!folderBackupFeatureActive()) {
+    return { ok: false, error: 'La copia automática en carpeta no está disponible en esta versión.' }
+  }
   if (!hasMasterPassword()) {
     return { ok: false, error: 'Para poder restaurar la copia en otro dispositivo necesitas una contraseña maestra.' }
   }
@@ -219,6 +239,9 @@ export async function chooseFolderBackupDestination(
 }
 
 export async function confirmPendingFolder(): Promise<FolderBackupResult> {
+  if (!folderBackupFeatureActive()) {
+    return { ok: false, error: 'La copia automática en carpeta no está disponible en esta versión.' }
+  }
   const folder = pendingFolder
   pendingFolder = null
   if (!folder) return { ok: false, error: 'No hay ninguna carpeta pendiente de confirmar.' }

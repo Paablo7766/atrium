@@ -8,6 +8,17 @@ import {
   wipeWebCryptoMeta,
 } from '@/lib/crypto/keyManagerWeb'
 import {
+  bootstrapWebFolderBackup,
+  chooseWebFolderBackupFolder,
+  confirmWebFolderBackupFolder,
+  flushWebFolderBackup,
+  getWebFolderBackupStatus,
+  isWebFolderBackupSupported,
+  requestWebFolderBackupPermission,
+  scheduleWebFolderBackup,
+  setWebFolderBackupEnabled,
+} from './web/folderBackup'
+import {
   deleteJournalDb,
   exportEncryptedBackup as exportWebBackup,
   hasEncryptedJournal,
@@ -15,6 +26,8 @@ import {
   loadJournal as loadWebJournal,
   saveJournal as saveWebJournal,
 } from './web'
+
+export { isWebFolderBackupSupported } from './web/folderBackup'
 
 export type { DiskLoad, DiskLoadRaw, Filter, FolderBackupStatus, JournalBackup, LitestreamStatus, DesktopApi } from './types'
 export { FOLDER_BACKUP_FILENAME } from './backupFormat'
@@ -175,6 +188,7 @@ async function writeWeb(data: PersistedData): Promise<void> {
   if (getWebKeyHex()) {
     await saveWebJournal(data)
     clearLegacyBrowser()
+    scheduleWebFolderBackup()
     return
   }
   const status = await getWebCryptoStatus()
@@ -201,7 +215,10 @@ export function saveDataSync(data: PersistedData): void {
     return
   }
   if (getWebKeyHex()) {
-    void saveWebJournal(data).then(() => clearLegacyBrowser())
+    void saveWebJournal(data).then(() => {
+      clearLegacyBrowser()
+      scheduleWebFolderBackup()
+    })
     return
   }
   if (getWebCryptoMeta()) {
@@ -313,45 +330,97 @@ const EMPTY_FOLDER_BACKUP_STATUS: FolderBackupStatus = {
 }
 
 export function isFolderBackupSupported(): boolean {
-  return isDesktop() && !!window.api?.folderBackup
+  if (isDesktop() && !!window.api?.folderBackup) return true
+  return isWebFolderBackupSupported()
 }
 
 export async function getFolderBackupStatus(): Promise<FolderBackupStatus> {
-  if (!isFolderBackupSupported()) return EMPTY_FOLDER_BACKUP_STATUS
-  try {
-    return await window.api!.folderBackup!.getStatus()
-  } catch {
-    return EMPTY_FOLDER_BACKUP_STATUS
+  if (isDesktop() && window.api?.folderBackup) {
+    try {
+      return await window.api.folderBackup.getStatus()
+    } catch {
+      return EMPTY_FOLDER_BACKUP_STATUS
+    }
   }
+  if (isWebFolderBackupSupported()) {
+    try {
+      return await getWebFolderBackupStatus()
+    } catch {
+      return EMPTY_FOLDER_BACKUP_STATUS
+    }
+  }
+  return EMPTY_FOLDER_BACKUP_STATUS
 }
 
 export async function setFolderBackupEnabled(enabled: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!isFolderBackupSupported()) return { ok: false, error: 'La copia automática no está disponible aquí.' }
-  try {
-    return await window.api!.folderBackup!.setEnabled(enabled)
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'No se pudo cambiar la copia automática.' }
+  if (isDesktop() && window.api?.folderBackup) {
+    try {
+      return await window.api.folderBackup.setEnabled(enabled)
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : 'No se pudo cambiar la copia automática.' }
+    }
   }
+  if (isWebFolderBackupSupported()) {
+    try {
+      return await setWebFolderBackupEnabled(enabled)
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : 'No se pudo cambiar la copia automática.' }
+    }
+  }
+  return { ok: false, error: 'La copia automática no está disponible aquí.' }
 }
 
 export async function chooseFolderBackupFolder(): Promise<
   { ok: true; needsConfirm: boolean } | { ok: false; error: string }
 > {
-  if (!isFolderBackupSupported()) return { ok: false, error: 'La copia automática no está disponible aquí.' }
-  try {
-    return await window.api!.folderBackup!.chooseFolder()
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'No se pudo elegir la carpeta.' }
+  if (isDesktop() && window.api?.folderBackup) {
+    try {
+      return await window.api.folderBackup.chooseFolder()
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : 'No se pudo elegir la carpeta.' }
+    }
   }
+  if (isWebFolderBackupSupported()) {
+    try {
+      return await chooseWebFolderBackupFolder()
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : 'No se pudo elegir la carpeta.' }
+    }
+  }
+  return { ok: false, error: 'La copia automática no está disponible aquí.' }
 }
 
 export async function confirmFolderBackupFolder(): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (!isFolderBackupSupported()) return { ok: false, error: 'La copia automática no está disponible aquí.' }
-  try {
-    return await window.api!.folderBackup!.confirmFolder()
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'No se pudo usar la carpeta.' }
+  if (isDesktop() && window.api?.folderBackup) {
+    try {
+      return await window.api.folderBackup.confirmFolder()
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : 'No se pudo usar la carpeta.' }
+    }
   }
+  if (isWebFolderBackupSupported()) {
+    try {
+      return await confirmWebFolderBackupFolder()
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : 'No se pudo usar la carpeta.' }
+    }
+  }
+  return { ok: false, error: 'La copia automática no está disponible aquí.' }
+}
+
+export async function reconnectFolderBackup(): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!isWebFolderBackupSupported()) {
+    return { ok: false, error: 'La reconexión de carpeta solo está disponible en la web.' }
+  }
+  return requestWebFolderBackupPermission()
+}
+
+export async function initFolderBackupClient(): Promise<void> {
+  if (isWebFolderBackupSupported()) await bootstrapWebFolderBackup()
+}
+
+export async function flushFolderBackupClient(): Promise<void> {
+  if (isWebFolderBackupSupported()) await flushWebFolderBackup()
 }
 
 const EMPTY_LITESTREAM_STATUS: LitestreamStatus = {

@@ -28,7 +28,16 @@ import { Analytics } from '@/pages/Analytics'
 import { Journal } from '@/pages/Journal'
 import { Login } from '@/pages/Login'
 import { Button, Confirm } from '@/components/ui'
-import { hasLegacyBrowserJournal, isDesktop, listBackups, openDataFolder, restoreBackup, type JournalBackup } from '@/lib/db/client'
+import {
+  flushFolderBackupClient,
+  hasLegacyBrowserJournal,
+  initFolderBackupClient,
+  isDesktop,
+  listBackups,
+  openDataFolder,
+  restoreBackup,
+  type JournalBackup,
+} from '@/lib/db/client'
 import { useT } from '@/lib/useI18n'
 import { TradesProvider } from '@/hooks/useTrades'
 import { ShareRestoreBootstrap } from '@/components/ShareRestoreBootstrap'
@@ -88,6 +97,7 @@ export default function App() {
   useEffect(() => {
     initProductAnalytics()
     trackAppSessionStart()
+    void initFolderBackupClient()
   }, [])
 
   // Electron usa file:// → HashRouter; web usa BrowserRouter (mejor con OAuth).
@@ -154,6 +164,7 @@ function ProtectedApp() {
       } catch {
         /* ignore */
       }
+      void flushFolderBackupClient()
     }
     window.addEventListener('pagehide', flush)
     window.addEventListener('beforeunload', flush)

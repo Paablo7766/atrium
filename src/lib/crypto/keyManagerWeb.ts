@@ -7,6 +7,7 @@
 import type { CryptoMeta, CryptoResult, CryptoStatus } from './types'
 import { PBKDF2_ITERATIONS, SYNC_HKDF_INFO } from './types'
 import { hasCanary, verifyCanary, verifyKeyMaterial, writeCanary } from '@/lib/db/web/canary'
+import { countStore } from '@/lib/db/web/idb'
 import { clearAesKeyCache } from '@/lib/db/web/recordCrypto'
 
 export { PBKDF2_ITERATIONS } from './types'
@@ -145,11 +146,21 @@ export async function hasStagedSaltOnly(): Promise<boolean> {
   return !(await hasCanary())
 }
 
+async function webHasDatabase(): Promise<boolean> {
+  const [accounts, settings, verify] = await Promise.all([
+    countStore('accounts'),
+    countStore('settings'),
+    countStore('verify'),
+  ])
+  return accounts + settings + verify > 0
+}
+
 export async function getCryptoStatus(): Promise<CryptoStatus> {
   const meta = readMeta()
   if (!meta) {
-    return { configured: false, mode: null, secureStorageAvailable: false, needsUnlock: false }
+    return { configured: false, mode: null, secureStorageAvailable: false, needsUnlock: false, hasDatabase: false }
   }
+  const hasDatabase = await webHasDatabase()
   const staged = await hasStagedSaltOnly()
   const locked = !memoryKeyHex && !staged && (await hasCanary())
   return {
@@ -157,6 +168,7 @@ export async function getCryptoStatus(): Promise<CryptoStatus> {
     mode: 'password',
     secureStorageAvailable: false,
     needsUnlock: locked,
+    hasDatabase,
   }
 }
 

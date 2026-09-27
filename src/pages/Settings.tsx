@@ -56,7 +56,9 @@ import {
   importFile,
   isDesktop,
   isFolderBackupSupported,
+  isWebFolderBackupSupported,
   listBackups,
+  reconnectFolderBackup,
   setFolderBackupEnabled,
   type FolderBackupStatus,
   openLitestreamReplicaFolder,
@@ -777,7 +779,7 @@ export function SettingsPage() {
 
               {section === 'data' && (
                 <>
-                  {FOLDER_BACKUP_UI_ENABLED && <AutoBackupPanel />}
+                  {FOLDER_BACKUP_UI_ENABLED && isFolderBackupSupported() && <AutoBackupPanel />}
 
                   <Panel title={t('set.backupSection')} subtitle={t('set.backupSectionSub')}>
                     <div className="divide-y divide-border">
@@ -1114,6 +1116,9 @@ export function SettingsPage() {
                         <div className="text-[11px] text-dim mt-1.5 leading-relaxed">
                           {isDesktop() ? t('set.sqliteHint') : t('set.webStorageHint')}
                         </div>
+                        {!isDesktop() && !isWebFolderBackupSupported() && (
+                          <div className="text-[11px] text-dim mt-1.5 leading-relaxed">{t('set.folderBackupWebUnsupported')}</div>
+                        )}
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <Button variant="ghost" size="icon" title={t('set.copyPath')} onClick={() => void copyPath()}>
@@ -1469,7 +1474,7 @@ function AutoBackupPanel() {
   const [setupPasswordOpen, setSetupPasswordOpen] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [confirmNewPassword, setConfirmNewPassword] = useState('')
-  const autoSave = isFolderBackupSupported()
+  const autoSave = isFolderBackupSupported() && (isDesktop() || isWebFolderBackupSupported())
 
   const refresh = async () => setStatus(await getFolderBackupStatus())
 
@@ -1522,6 +1527,18 @@ function AutoBackupPanel() {
     const result = await confirmFolderBackupFolder()
     setBusy(false)
     if (!result.ok) toast(result.error, 'error')
+    await refresh()
+  }
+
+  const reconnectFolder = async () => {
+    setBusy(true)
+    const result = await reconnectFolderBackup()
+    setBusy(false)
+    if (!result.ok) {
+      toast(result.error, 'error')
+      return
+    }
+    toast(t('set.autoBackupReconnectOk'), 'success')
     await refresh()
   }
 
@@ -1612,7 +1629,13 @@ function AutoBackupPanel() {
   return (
     <Panel
       title={autoSave ? t('set.autoBackup') : t('set.mobileRestorePanelTitle')}
-      subtitle={autoSave ? t('set.autoBackupSub') : t('set.mobileRestorePanelSub')}
+      subtitle={
+        autoSave
+          ? isWebFolderBackupSupported() && !isDesktop()
+            ? t('set.autoBackupWebSub')
+            : t('set.autoBackupSub')
+          : t('set.mobileRestorePanelSub')
+      }
       action={
         autoSave ? (
           <label className="flex items-center gap-2.5 cursor-pointer select-none">
@@ -1649,6 +1672,18 @@ function AutoBackupPanel() {
             </div>
             <Button variant="primary" size="sm" className="self-start" disabled={busy} onClick={() => setSetupPasswordOpen(true)}>
               {t('set.autoBackupSetupPassword')}
+            </Button>
+          </div>
+        )}
+
+        {status?.needsFolderPermission && (
+          <div className="rounded-xl border border-border bg-surface-2/40 px-4 py-3 flex flex-col gap-3">
+            <div className="flex gap-3">
+              <ShieldAlert size={16} className="text-amber-400 shrink-0 mt-0.5" />
+              <p className="text-[12px] text-muted leading-relaxed">{t('set.autoBackupReconnect')}</p>
+            </div>
+            <Button variant="primary" size="sm" className="self-start" disabled={busy} onClick={() => void reconnectFolder()}>
+              {t('set.autoBackupReconnectBtn')}
             </Button>
           </div>
         )}

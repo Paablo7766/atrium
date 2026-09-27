@@ -235,7 +235,10 @@ export function flushPersistAsync(): Promise<void> {
     return persistChain.then(() => {})
   }
   persistChain = persistChain.then(() => persistNowAsync(get), () => persistNowAsync(get))
-  return persistChain.then(() => {})
+  return persistChain.then(async () => {
+    const { flushFolderBackupClient } = await import('@/lib/db/client')
+    await flushFolderBackupClient()
+  })
 }
 
 function normalizeTrade(t: Trade): Trade {

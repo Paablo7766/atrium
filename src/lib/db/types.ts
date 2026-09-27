@@ -40,6 +40,8 @@ export type FolderBackupStatus = {
   lastBackupAt: number | null
   failed: boolean
   needsPassword: boolean
+  /** Web: permiso de carpeta revocado — hay que reconectar. */
+  needsFolderPermission?: boolean
 }
 
 export type Filter = { name: string; extensions: string[] }

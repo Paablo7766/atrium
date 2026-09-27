@@ -29,6 +29,7 @@ import { useStore, getBackup } from '@/store'
 import { hasLegacyBrowserJournal, isDesktop, migrateLegacyBrowserToEncrypted } from '@/lib/db/client'
 import { getCryptoStatus, setupMasterPassword, unlockWithPassword } from '@/lib/crypto/keyManager'
 import { getWebCryptoMeta, hasStagedSaltOnly } from '@/lib/crypto/keyManagerWeb'
+import { hasCanary } from '@/lib/db/web/canary'
 import { ensureCryptoSaltSynced, pushRemoteSalt } from '@/lib/syncSalt'
 import { isCloudSyncActive, verifyMasterPasswordAgainstCloud } from '@/lib/tradeSync'
 import { getWebKeyHex } from '@/lib/crypto/keyManagerWeb'
@@ -307,6 +308,23 @@ export function Onboarding({
     const staged = await hasStagedSaltOnly()
     // Solo omitir si el diario cifrado ya existe en disco (hasDatabase === true).
     if (status.configured && status.hasDatabase === true && !staged) return true
+
+    const hasCanaryLocal = await hasCanary()
+    // Navegador: sal remota + canario local = desbloquear, no volver a «configurar».
+    if (status.configured && hasCanaryLocal && !staged) {
+      if (getWebKeyHex()) return true
+      setCryptoBusy(true)
+      try {
+        const unlocked = await unlockWithPassword(masterPasswordRef.current)
+        if (!unlocked.ok) {
+          toast(unlocked.error, 'error')
+          return false
+        }
+        return true
+      } finally {
+        setCryptoBusy(false)
+      }
+    }
 
     setCryptoBusy(true)
     try {

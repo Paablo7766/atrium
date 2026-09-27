@@ -108,7 +108,32 @@ La preferencia de destino personalizado se guarda en `{userData}/.litestream-set
 
 Si el usuario apunta a su carpeta de Dropbox/Google Drive **ya sincronizada en local**, el cliente de sync del SO sube los fragmentos cifrados. Atrium no implementa ni controla esa sincronización.
 
-## 4. Interfaz de usuario
+## 4. Copia automática en carpeta (`.atrium-backup`)
+
+Además de la base de datos local, Atrium puede escribir periódicamente un archivo cifrado único en una carpeta elegida por el usuario (Documentos, Google Drive montado en el equipo, OneDrive, etc.):
+
+| Aspecto | Escritorio (Electron) | Web (Chrome/Edge) |
+|--------|------------------------|-------------------|
+| Implementación | `electron/folderBackup.ts` | `src/lib/db/web/folderBackup.ts` |
+| Archivo | `{carpeta}/Atrium - copia automática.atrium-backup` | Mismo nombre |
+| Preferencias | `{userData}/.folder-backup.json` | Handle de carpeta en IndexedDB + metadatos |
+| Frecuencia | Debounce 30 s tras guardado + flush al cerrar | Igual |
+
+Escritura atómica: primero un temporal (`…atrium-backup.tmp`), luego sustitución del archivo final (renombrado en Electron; `FileSystemFileHandle.move()` en web). Si la sustitución falla, **no** se sobrescribe el backup existente; el estado pasa a `failed`.
+
+### Flag de producto `FOLDER_BACKUP_UI_ENABLED`
+
+En `src/lib/featureFlags.ts`. Cuando está en **`false`**:
+
+- No se muestra el panel «Copia automática» en Ajustes.
+- En **escritorio**, el backend **ignora** `enabled: true` en `.folder-backup.json` y **no escribe** en disco (la función queda completamente apagada, no solo oculta).
+- En **web**, la copia en carpeta tampoco está activa.
+
+Cuando está en **`true`**, la preferencia del usuario (`enabled` / carpeta elegida) vuelve a aplicarse con normalidad.
+
+Historial: el flag se introdujo en `false` en el release 1.1.0 y no consta en git ningún periodo en `true`. El riesgo de copia «silenciosa» se limita a quien activó la función en builds locales con el flag encendido o editó `.folder-backup.json` a mano.
+
+## 5. Interfaz de usuario
 
 > **Nota (producto):** el panel Litestream en Ajustes está oculto (`SHOW_LITESTREAM_PANEL = false`) y el proceso **no arranca** automáticamente mientras el flag esté apagado. Las copias rotativas `.bak` / `backups/` siguen activas en cada guardado.
 
@@ -119,7 +144,7 @@ Si el usuario apunta a su carpeta de Dropbox/Google Drive **ya sincronizada en l
 - Ruta destino y acciones: elegir carpeta, restaurar predeterminado, abrir carpeta
 - Restauración manual desde réplica Litestream (con confirmación)
 
-## 5. Restauración
+## 6. Restauración
 
 ### Desde copias automáticas (`.bak` / `backups/`)
 
@@ -134,14 +159,14 @@ Si el usuario apunta a su carpeta de Dropbox/Google Drive **ya sincronizada en l
 
 En ambos casos el archivo restaurado sigue cifrado; el usuario debe poder desbloquearlo con su contraseña o almacén seguro habitual.
 
-## 6. Lo que Atrium no puede hacer
+## 7. Lo que Atrium no puede hacer
 
 - **Leer** el contenido del diario en servidores propios (no hay ingestión).
 - **Recuperar** la contraseña maestra del usuario.
 - **Acceder** a la réplica en la nube del usuario (no hay credenciales de Dropbox/Drive en Atrium).
 - **Descifrar** `journal.db` o su réplica sin la clave local del usuario.
 
-## 7. Recomendaciones al usuario
+## 8. Recomendaciones al usuario
 
 1. Mantener activa la réplica Litestream (estado «Réplica activa» en Ajustes).
 2. Opcionalmente, elegir una carpeta sincronizada por el SO para redundancia off-device bajo su control.
@@ -158,6 +183,8 @@ En ambos casos el archivo restaurado sigue cifrado; el usuario debe poder desblo
 | UI | `src/pages/Settings.tsx` |
 | Cifrado SQLCipher | `src/lib/db/connection.ts`, `src/lib/crypto/keyManagerMain.ts` |
 | Copias rotativas | `src/lib/db/service.ts` |
+| Copia en carpeta (Electron) | `electron/folderBackup.ts` |
+| Copia en carpeta (web) | `src/lib/db/web/folderBackup.ts` |
 | Descarga binarios | `scripts/download-litestream.mts` |
 
 ---

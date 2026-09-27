@@ -929,7 +929,14 @@ export const esDict = {
   'set.litestreamDestReset': 'Destino restaurado a la carpeta predeterminada.',
   'set.autoBackup': 'Copia de seguridad automática',
   'set.autoBackupSub': 'Guarda una copia cifrada de tu diario en una carpeta de tu ordenador.',
-  'set.autoBackupWebSub': 'La copia automática se activa desde la app de ordenador. Aquí puedes recuperar la última copia.',
+  'set.autoBackupWebSub':
+    'Guarda una copia cifrada en una carpeta que elijas (Documentos, Drive…). Solo Chrome o Edge en escritorio.',
+  'set.folderBackupWebUnsupported':
+    'La copia automática en carpeta solo está disponible en Chrome o Edge (escritorio). Puedes exportar e importar copias manualmente abajo.',
+  'set.autoBackupReconnect':
+    'Atrium ya no tiene permiso para escribir en la carpeta elegida. Vuelve a autorizarla para reanudar la copia automática.',
+  'set.autoBackupReconnectBtn': 'Reconectar carpeta',
+  'set.autoBackupReconnectOk': 'Carpeta reconectada. La copia automática continuará en breve.',
   'set.autoBackupToggle': 'Activar copia automática',
   'set.autoBackupChoose': 'Elegir carpeta',
   'set.autoBackupChange': 'Cambiar carpeta',
