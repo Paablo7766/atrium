@@ -2,6 +2,10 @@
 
 Versions follow `package.json`. Newest first.
 
+## 1.1.3 — 2026-09-27
+
+- [Fix] Windows installer finds `better_sqlite3.node` in `app.asar.unpacked` even if `isPackaged` is wrong
+
 ## 1.1.2 — 2026-09-27
 
 - [Fix] Update notes render as plain text instead of raw GitHub HTML

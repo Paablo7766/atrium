@@ -2,6 +2,10 @@
 
 Las versiones siguen `package.json`. Más reciente arriba.
 
+## 1.1.3 — 2026-09-27
+
+- [Corrección] El instalado de Windows encuentra `better_sqlite3.node` en `app.asar.unpacked` aunque `isPackaged` falle
+
 ## 1.1.2 — 2026-09-27
 
 - [Corrección] Notas de actualización: se muestran como texto, no como HTML de GitHub

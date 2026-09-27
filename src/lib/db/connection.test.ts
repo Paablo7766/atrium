@@ -116,4 +116,22 @@ describe('connection (SQLCipher)', () => {
       }),
     ).toBe(expected)
   })
+
+  it('si isPackaged es falso pero el .node no está en el repo, usa app.asar.unpacked', () => {
+    const root = tempDir()
+    const unpacked = path.join(root, 'resources', 'app.asar.unpacked', 'node_modules', 'better-sqlite3-multiple-ciphers', 'prebuilds')
+    fs.mkdirSync(unpacked, { recursive: true })
+    const prebuild = `${process.platform}-${process.arch}.node`
+    const expected = path.join(unpacked, prebuild)
+    fs.writeFileSync(expected, '')
+
+    expect(
+      resolveNativeBindingPath({
+        isPackaged: false,
+        resourcesPath: path.join(root, 'resources'),
+        projectRoot: path.join(root, 'empty-project'),
+        execDir: root,
+      }),
+    ).toBe(expected)
+  })
 })

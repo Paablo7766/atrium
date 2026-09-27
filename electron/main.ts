@@ -89,6 +89,7 @@ const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
     isPackaged: app.isPackaged,
     resourcesPath: process.resourcesPath,
     projectRoot: path.join(__dirname, '..'),
+    execDir: path.dirname(process.execPath),
   })
   console.error('[db] native binding', app.isPackaged ? 'packaged' : 'dev', nativeBinding)
   setNativeBindingPath(nativeBinding)

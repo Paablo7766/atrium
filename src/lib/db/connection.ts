@@ -11,7 +11,11 @@ export type NativeBindingEnv = {
   resourcesPath: string
   /** Repo root in development (`dist-electron/..`). Unused when packaged. */
   projectRoot: string
+  /** Directory of the running exe (`Atrium.exe`). Used if `isPackaged` is wrong. */
+  execDir?: string
 }
+
+const SQLITE_PKG = 'better-sqlite3-multiple-ciphers'
 
 function prebuildFileName(): string {
   const musl =
@@ -25,23 +29,43 @@ function bindingCandidates(pkgRoot: string): string[] {
   return [path.join(pkgRoot, 'build', 'Release', 'better_sqlite3.node'), path.join(pkgRoot, 'prebuilds', prebuildFileName())]
 }
 
+function unpackedPkgRoot(resourcesDir: string): string {
+  return path.join(resourcesDir, 'app.asar.unpacked', 'node_modules', SQLITE_PKG)
+}
+
+function uniqueRoots(roots: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const root of roots) {
+    if (!root || seen.has(root)) continue
+    seen.add(root)
+    out.push(root)
+  }
+  return out
+}
+
 /**
  * Absolute path to better_sqlite3.node.
  *
  * Development (`npm run dev`, vitest):
  *   `<projectRoot>/node_modules/better-sqlite3-multiple-ciphers/...`
- *   Do not use `process.resourcesPath` here — in dev it points at Electron's
- *   own resources folder, not the project.
+ *   Prefer this over `process.resourcesPath` — in dev that folder belongs to Electron.
  *
  * Packaged (electron-builder installer / `--dir`):
  *   `{resourcesPath}/app.asar.unpacked/node_modules/better-sqlite3-multiple-ciphers/...`
  *   `.node` binaries cannot be `dlopen`'d from inside `app.asar`.
+ *
+ * Some Windows installs report `app.isPackaged === false` even though the exe
+ * lives in Local\\Programs\\Atrium. Always fall back to the unpacked resources.
  */
 export function resolveNativeBindingPath(env: NativeBindingEnv): string {
-  const pkgRoot = env.isPackaged
-    ? path.join(env.resourcesPath, 'app.asar.unpacked', 'node_modules', 'better-sqlite3-multiple-ciphers')
-    : path.join(env.projectRoot, 'node_modules', 'better-sqlite3-multiple-ciphers')
-  const candidates = bindingCandidates(pkgRoot)
+  const devRoot = path.join(env.projectRoot, 'node_modules', SQLITE_PKG)
+  const resourceRoots = [
+    env.resourcesPath ? unpackedPkgRoot(env.resourcesPath) : '',
+    env.execDir ? unpackedPkgRoot(path.join(env.execDir, 'resources')) : '',
+  ]
+  const pkgRoots = uniqueRoots(env.isPackaged ? [...resourceRoots, devRoot] : [devRoot, ...resourceRoots])
+  const candidates = pkgRoots.flatMap(bindingCandidates)
   const found = candidates.find((p) => fs.existsSync(p))
   if (!found) {
     throw new Error(
