@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { compareSemver, formatReleaseDate, parseChangelog, unseenReleases } from './changelog'
+import { compareSemver, formatReleaseDate, parseChangelog, parseChangelogItem, releaseHighlights, unseenReleases } from './changelog'
 
 const SAMPLE = `
 # Novedades
@@ -53,10 +53,52 @@ describe('unseenReleases', () => {
   })
 })
 
+describe('parseChangelogItem', () => {
+  it('lee el prefijo opcional y deja el texto limpio', () => {
+    expect(parseChangelogItem('[Nuevo] Envío de sugerencias')).toEqual({ kind: 'new', text: 'Envío de sugerencias' })
+    expect(parseChangelogItem('[Mejora] Calendario más limpio')).toEqual({ kind: 'improve', text: 'Calendario más limpio' })
+    expect(parseChangelogItem('[Fix] Overlay del tour')).toEqual({ kind: 'fix', text: 'Overlay del tour' })
+  })
+
+  it('infiere el tipo por la primera palabra si no hay prefijo', () => {
+    expect(parseChangelogItem('Nueva analítica').kind).toBe('new')
+    expect(parseChangelogItem('Mejora del calendario').kind).toBe('improve')
+    expect(parseChangelogItem('Primera versión pública del diario').kind).toBe('other')
+  })
+})
+
+describe('releaseHighlights', () => {
+  it('prioriza items etiquetados y si no hay, los dos primeros', () => {
+    expect(releaseHighlights({ version: '1.0.0', date: null, items: ['Uno', 'Dos', 'Tres'] })).toEqual(['Uno', 'Dos'])
+    expect(
+      releaseHighlights({
+        version: '1.0.0',
+        date: null,
+        items: ['Base', '[Mejora] Calendario', '[Nuevo] Feedback'],
+      }),
+    ).toEqual(['[Mejora] Calendario', '[Nuevo] Feedback'])
+  })
+})
+
 describe('compareSemver', () => {
   it('ordena semver de tres números', () => {
     expect(compareSemver('1.1.0', '1.0.0')).toBeGreaterThan(0)
     expect(compareSemver('1.0.0', '1.0.0')).toBe(0)
+  })
+
+  it('trata el sufijo beta como anterior a la estable', () => {
+    expect(compareSemver('1.2.0-beta.1', '1.2.0')).toBeLessThan(0)
+    expect(compareSemver('1.2.0', '1.2.0-beta.1')).toBeGreaterThan(0)
+    expect(compareSemver('1.2.0-beta.2', '1.2.0-beta.1')).toBeGreaterThan(0)
+    expect(compareSemver('1.1.0', '1.2.0-beta.1')).toBeLessThan(0)
+  })
+})
+
+describe('parseChangelog betas', () => {
+  it('lee headings con sufijo pre-release', () => {
+    expect(
+      parseChangelog('## 1.2.0-beta.1 — 2026-10-02\n\n- [Nuevo] Canal beta\n'),
+    ).toEqual([{ version: '1.2.0-beta.1', date: '2026-10-02', items: ['[Nuevo] Canal beta'] }])
   })
 })
 

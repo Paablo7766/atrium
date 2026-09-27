@@ -28,6 +28,7 @@ import {
   Sparkles,
   Trash2,
   Upload,
+  FlaskConical,
 } from 'lucide-react'
 import { version as appVersion } from '../../package.json'
 import { useStore, flushPersist, getBackup } from '@/store'
@@ -71,6 +72,7 @@ import { fmtDate, fmtMoney, todayKey } from '@/lib/format'
 import { accountEquity, signedCashflow } from '@/lib/capital'
 import { parseJournalText } from '@/lib/db/client'
 import { LanguageSwitch } from '@/components/LanguageSwitch'
+import { useDesktopUpdaterStatus } from '@/lib/desktopUpdater'
 import { useT } from '@/lib/useI18n'
 import { accountTypeHint, accountTypeLabel, marketLabel } from '@/lib/i18n'
 import {
@@ -159,6 +161,7 @@ export function SettingsPage() {
   const [section, setSection] = useState<Section>('accounts')
   const [confirmClear, setConfirmClear] = useState(false)
   const openFeedback = useStore((s) => s.openFeedback)
+  const openWhatsNew = useStore((s) => s.openWhatsNew)
   const [confirmDemo, setConfirmDemo] = useState(false)
   const [confirmDeleteAcc, setConfirmDeleteAcc] = useState(false)
   const [restoreId, setRestoreId] = useState<string | null>(null)
@@ -1138,6 +1141,7 @@ export function SettingsPage() {
                 <>
                   <Panel title={t('set.advanced')} subtitle={t('set.advancedSub')}>
                     <div className="flex flex-col gap-3">
+                      {isDesktop() && window.api?.updater && <BetaUpdatesRow />}
                       <DangerRow
                         icon={<MessageSquare size={16} className="text-sky" />}
                         title={t('set.feedback')}
@@ -1187,7 +1191,16 @@ export function SettingsPage() {
                   </Panel>
                   <Panel title={t('set.about')}>
                     <p className="text-[13px] text-muted leading-relaxed">{t('set.aboutBody')}</p>
-                    <p className="text-[12px] text-dim mt-2">{t('set.version', { n: appVersion })}</p>
+                    <button
+                      type="button"
+                      onClick={openWhatsNew}
+                      aria-label={t('set.whatsNew')}
+                      className="mt-3 inline-flex items-center gap-2 text-[12px] font-medium text-text-2 hover:text-text transition-colors"
+                    >
+                      <Sparkles size={12} className="text-accent" />
+                      <span>{t('set.version', { n: appVersion })}</span>
+                      <span className="text-dim">· {t('set.whatsNew')}</span>
+                    </button>
                   </Panel>
                 </>
               )}
@@ -1920,6 +1933,53 @@ function ActionCard({
         <div className="mt-3">{action}</div>
       </div>
     </div>
+  )
+}
+
+function BetaUpdatesRow() {
+  const t = useT()
+  const status = useDesktopUpdaterStatus()
+  const on = status.allowPrerelease
+  const [busy, setBusy] = useState(false)
+
+  const toggle = async () => {
+    const api = window.api?.updater
+    if (!api || busy) return
+    setBusy(true)
+    try {
+      await api.setAllowPrerelease(!on)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <DangerRow
+      icon={<FlaskConical size={16} className="text-amber" />}
+      title={t('set.betaUpdates')}
+      body={t('set.betaUpdatesBody')}
+      action={
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          aria-label={t('set.betaUpdates')}
+          disabled={busy}
+          onClick={() => void toggle()}
+          className={clsx(
+            'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
+            on ? 'bg-accent border-accent/60' : 'bg-surface-3 border-border-2',
+          )}
+        >
+          <span
+            className={clsx(
+              'inline-block h-4 w-4 rounded-full bg-white shadow transition-transform',
+              on ? 'translate-x-6' : 'translate-x-1',
+            )}
+          />
+        </button>
+      }
+    />
   )
 }
 

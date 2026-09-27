@@ -1,7 +1,7 @@
 {
   "name": "atrium",
   "productName": "Atrium",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Diario de trading profesional para escritorio",
   "private": true,
   "main": "dist-electron/main.js",
@@ -63,6 +63,11 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "perMachine": false
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Paablo7766",
+      "repo": "atrium"
     }
   },
   "dependencies": {
@@ -71,6 +76,7 @@
     "better-sqlite3-multiple-ciphers": "^13.0.3",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
+    "electron-updater": "^6.8.9",
     "idb": "^8.0.3",
     "lucide-react": "^1.47.0",
     "react": "^19.3.0",

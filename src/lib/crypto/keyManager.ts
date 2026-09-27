@@ -22,7 +22,7 @@ export async function getCryptoStatus(): Promise<CryptoStatusResponse> {
   if (!isDesktop()) return web.getCryptoStatus()
   const api = cryptoApi()
   if (!api) {
-    return { configured: false, mode: null, secureStorageAvailable: false, needsUnlock: false }
+    return { configured: false, mode: null, secureStorageAvailable: false, needsUnlock: false, hasDatabase: false }
   }
   return api.getStatus()
 }

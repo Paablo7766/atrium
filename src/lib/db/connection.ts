@@ -241,6 +241,11 @@ export function isDatabaseOpen(): boolean {
 
 export function closeDatabase(): void {
   if (dbInstance) {
+    try {
+      dbInstance.pragma('wal_checkpoint(TRUNCATE)')
+    } catch {
+      /* la base puede estar a medias; cerrar igual */
+    }
     dbInstance.close()
     dbInstance = null
   }

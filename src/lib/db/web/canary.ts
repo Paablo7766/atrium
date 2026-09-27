@@ -24,3 +24,23 @@ export async function verifyCanary(keyHex: string): Promise<boolean> {
     return false
   }
 }
+
+/**
+ * Comprueba la clave contra el canario o, si no se llegó a guardar, contra settings.
+ * `absent` = no hay nada cifrado todavía (la contraseña puede establecer la clave).
+ */
+export async function verifyKeyMaterial(keyHex: string): Promise<'ok' | 'mismatch' | 'absent'> {
+  if (await hasCanary()) {
+    return (await verifyCanary(keyHex)) ? 'ok' : 'mismatch'
+  }
+  const db = await openJournalDb()
+  const settings = await db.get('settings', '1')
+  if (settings == null) return 'absent'
+  if (!isEncryptedBlob(settings)) return 'mismatch'
+  try {
+    await decryptRecord(settings, keyHex)
+    return 'ok'
+  } catch {
+    return 'mismatch'
+  }
+}

@@ -62,6 +62,7 @@ import {
 } from '@/lib/db/service'
 
 import { resolveNativeBindingPath, setNativeBindingPath } from '@/lib/db/connection'
+import { initDesktopUpdater } from './updater'
 
 import { deriveSyncKeyHexFromPassword, getExportKeyMaterial, getSyncKeyHex } from '@/lib/crypto/keyManagerMain'
 
@@ -913,6 +914,13 @@ if (!gotLock) {
     applyContentSecurityPolicy()
 
     createWindow()
+
+    initDesktopUpdater({
+      isPackaged: app.isPackaged,
+      userDataDir: dataDir,
+      isTrustedSender,
+      getWindow: () => win,
+    })
 
   })
 

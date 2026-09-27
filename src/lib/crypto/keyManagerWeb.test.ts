@@ -18,7 +18,7 @@ import {
   unlockWithPassword,
   WEB_CRYPTO_META_KEY,
 } from './keyManagerWeb'
-import { deleteJournalDb } from '@/lib/db/web'
+import { deleteJournalDb, openJournalDb } from '@/lib/db/web'
 
 class MemoryStorage implements Storage {
   private data = new Map<string, string>()
@@ -99,6 +99,19 @@ describe('keyManagerWeb', () => {
     expect(status.configured).toBe(true)
     expect(status.secureStorageAvailable).toBe(false)
     expect(status.needsUnlock).toBe(false)
+  })
+
+  it('no rechaza la contraseña si la sal se guardó y el canario no', async () => {
+    await setupMasterPassword('ClaveLarga1')
+    const metaRaw = localStorage.getItem(WEB_CRYPTO_META_KEY)
+    const db = await openJournalDb()
+    await db.delete('verify', 'canary')
+    resetWebCryptoForTests()
+    localStorage.setItem(WEB_CRYPTO_META_KEY, metaRaw!)
+
+    const ok = await unlockWithPassword('ClaveLarga1')
+    expect(ok).toEqual({ ok: true })
+    expect(await db.get('verify', 'canary')).toBeTruthy()
   })
 
   it('no ofrece clave automática del sistema', async () => {

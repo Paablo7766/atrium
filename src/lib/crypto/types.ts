@@ -11,6 +11,11 @@ export type CryptoMeta = {
   salt?: string
   kdf: 'pbkdf2'
   iterations: number
+  /**
+   * HMAC-SHA256 de la clave derivada. Vive junto a la sal (fuera de la BD cifrada):
+   * la tabla settings no se puede leer hasta tener la clave, así que no sirve para comprobar la contraseña.
+   */
+  verifier?: string
 }
 
 export type CryptoStatus = {
@@ -18,6 +23,8 @@ export type CryptoStatus = {
   mode: CryptoMode | null
   secureStorageAvailable: boolean
   needsUnlock: boolean
+  /** Escritorio: existe journal.db. Sin archivo no hay diario que desbloquear. */
+  hasDatabase?: boolean
 }
 
 export type CryptoStatusResponse = CryptoStatus

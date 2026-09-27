@@ -262,9 +262,18 @@ export function Onboarding({
       void (async () => {
         if (committed.current) return
         const status = await getCryptoStatus()
-        if (!status.configured) {
+        const needsCryptoSetup =
+          !status.configured || (isDesktop() && status.configured && status.hasDatabase === false)
+        if (needsCryptoSetup) {
           const ok = await setupCrypto()
           if (!ok) return
+        }
+        if (isDesktop()) {
+          const after = await getCryptoStatus()
+          if (after.hasDatabase === false) {
+            toast(t('crypto.journalDbMissing'), 'error')
+            return
+          }
         }
         committed.current = true
         completeOnboarding({
@@ -296,7 +305,8 @@ export function Onboarding({
   const setupCrypto = async (): Promise<boolean> => {
     const status = await getCryptoStatus()
     const staged = await hasStagedSaltOnly()
-    if (status.configured && !staged) return true
+    // Solo omitir si el diario cifrado ya existe en disco (hasDatabase === true).
+    if (status.configured && status.hasDatabase === true && !staged) return true
 
     setCryptoBusy(true)
     try {
@@ -323,6 +333,14 @@ export function Onboarding({
       if (!result.ok) {
         toast(result.error, 'error')
         return false
+      }
+
+      if (isDesktop()) {
+        const after = await getCryptoStatus()
+        if (after.hasDatabase === false) {
+          toast(t('crypto.journalDbMissing'), 'error')
+          return false
+        }
       }
 
       if (cryptoChoice === 'password' && isCloudSyncActive()) {

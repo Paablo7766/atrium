@@ -1,4 +1,4 @@
-import { Area, AreaChart, Bar, BarChart, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts'
+import { Area, AreaChart, Bar, BarChart, Cell, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts'
 import { ChartTooltip } from './ui'
 import { fmtMoney, fmtDate } from '@/lib/format'
 import { getAppLocale, t } from '@/lib/i18n'
@@ -195,20 +195,36 @@ export function DrawdownChart({ data, currency, height = 180 }: { data: EquityPo
 export function Sparkline({ data, positive, height = 36 }: { data: number[]; positive: boolean; height?: number }) {
   const color = positive ? GREEN : RED
   const pts = data.map((v, i) => ({ i, v }))
+  const last = pts[pts.length - 1]
   const id = `spark-${positive ? 'g' : 'r'}`
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={pts} margin={{ top: 2, right: 0, left: 0, bottom: -2 }}>
-        <defs>
-          <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.4} />
-            <stop offset="100%" stopColor={color} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <YAxis hide domain={['dataMin', 'dataMax']} />
-        <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.75} fill={`url(#${id})`} dot={false} isAnimationActive={false} />
-      </AreaChart>
-    </ResponsiveContainer>
+    <div className="pointer-events-none">
+      <ResponsiveContainer width="100%" height={height}>
+        <AreaChart data={pts} margin={{ top: 6, right: 8, left: 0, bottom: 2 }}>
+          <defs>
+            <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity={0.4} />
+              <stop offset="100%" stopColor={color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <XAxis dataKey="i" hide height={0} />
+          <YAxis hide domain={['dataMin', 'dataMax']} />
+          <Area
+            type="monotone"
+            dataKey="v"
+            stroke={color}
+            strokeWidth={1.75}
+            fill={`url(#${id})`}
+            dot={false}
+            activeDot={false}
+            isAnimationActive={false}
+          />
+          {last && (
+            <ReferenceDot x={last.i} y={last.v} r={3.5} fill="#f4f4f5" stroke={color} strokeWidth={1.75} ifOverflow="visible" />
+          )}
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
   )
 }
 

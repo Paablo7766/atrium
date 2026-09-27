@@ -6,7 +6,7 @@
  */
 import type { CryptoMeta, CryptoResult, CryptoStatus } from './types'
 import { PBKDF2_ITERATIONS, SYNC_HKDF_INFO } from './types'
-import { hasCanary, verifyCanary, writeCanary } from '@/lib/db/web/canary'
+import { hasCanary, verifyCanary, verifyKeyMaterial, writeCanary } from '@/lib/db/web/canary'
 import { clearAesKeyCache } from '@/lib/db/web/recordCrypto'
 
 export { PBKDF2_ITERATIONS } from './types'
@@ -44,13 +44,18 @@ export function generateSaltHex(): string {
   return bytesToHex(crypto.getRandomValues(new Uint8Array(16)))
 }
 
-export async function deriveKeyFromPassword(password: string, saltHex: string): Promise<string> {
+export async function deriveKeyFromPassword(
+  password: string,
+  saltHex: string,
+  iterations: number = PBKDF2_ITERATIONS,
+): Promise<string> {
+  const rounds = iterations >= PBKDF2_ITERATIONS ? iterations : PBKDF2_ITERATIONS
   const salt = asBufferSource(hexToBytes(saltHex))
   const baseKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, [
     'deriveBits',
   ])
   const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt, iterations: rounds, hash: 'SHA-256' },
     baseKey,
     KEY_BYTES * 8,
   )
@@ -178,7 +183,9 @@ export async function setupMasterPassword(
     return { ok: false, error: 'La sal de cifrado no es válida.' }
   }
 
-  const key = await deriveKeyFromPassword(trimmed, salt)
+  const iterations =
+    existing?.iterations && existing.iterations >= PBKDF2_ITERATIONS ? existing.iterations : PBKDF2_ITERATIONS
+  const key = await deriveKeyFromPassword(trimmed, salt, iterations)
 
   if (options?.verifyWithCloud) {
     const verified = await options.verifyWithCloud(key)
@@ -200,7 +207,7 @@ export async function setupMasterPassword(
     mode: 'password',
     salt,
     kdf: 'pbkdf2',
-    iterations: existing?.iterations ?? PBKDF2_ITERATIONS,
+    iterations,
   })
   memoryKeyHex = key
   try {
@@ -222,11 +229,19 @@ export async function unlockWithPassword(password: string): Promise<CryptoResult
   if (!meta?.salt) return { ok: false, error: 'No hay contraseña maestra configurada.' }
   const trimmed = password.trim()
   if (!trimmed) return { ok: false, error: 'Introduce tu contraseña maestra.' }
-  const key = await deriveKeyFromPassword(trimmed, meta.salt)
-  if (!(await verifyCanary(key))) {
+  const key = await deriveKeyFromPassword(trimmed, meta.salt, meta.iterations)
+  const gate = await verifyKeyMaterial(key)
+  if (gate === 'mismatch') {
     return { ok: false, error: 'Contraseña incorrecta.' }
   }
   memoryKeyHex = key
+  if (gate === 'absent' || !(await hasCanary())) {
+    try {
+      await writeCanary(key)
+    } catch {
+      /* la clave ya encaja con settings, o todavía no hay datos */
+    }
+  }
   return { ok: true }
 }
 
@@ -252,7 +267,7 @@ export async function deriveSyncKeyFromPassword(
   if (!meta?.salt) return { ok: false, error: 'El cifrado por contraseña no está configurado.' }
   const trimmed = password.trim()
   if (!trimmed) return { ok: false, error: 'Introduce tu contraseña maestra.' }
-  const dbKey = await deriveKeyFromPassword(trimmed, meta.salt)
+  const dbKey = await deriveKeyFromPassword(trimmed, meta.salt, meta.iterations)
   return { ok: true, keyHex: await deriveSyncKeyHexFromDbKey(dbKey) }
 }
 

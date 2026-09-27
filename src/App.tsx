@@ -35,6 +35,7 @@ import { ShareRestoreBootstrap } from '@/components/ShareRestoreBootstrap'
 import { SHARE_RESTORE_BOOTSTRAP_ENABLED } from '@/lib/featureFlags'
 import { FeedbackModal } from '@/components/FeedbackModal'
 import { WhatsNewModal } from '@/components/WhatsNewModal'
+import { UpdateAvailableModal } from '@/components/UpdateAvailableModal'
 
 const SettingsPage = lazy(() => import('@/pages/Settings').then((m) => ({ default: m.SettingsPage })))
 const TradeModal = lazy(() => import('@/components/TradeModal').then((m) => ({ default: m.TradeModal })))
@@ -201,6 +202,7 @@ function ProtectedApp() {
       <>
         <LoadErrorScreen message={loadError} />
         <Toasts />
+        {isDesktop() && <UpdateAvailableModal />}
       </>
     )
   }
@@ -210,6 +212,7 @@ function ProtectedApp() {
       <>
         <MasterPasswordUnlock />
         <Toasts />
+        {isDesktop() && <UpdateAvailableModal />}
       </>
     )
   }
@@ -222,6 +225,7 @@ function ProtectedApp() {
           onLegacyMigrated={() => setLegacyMigrationPending(hasLegacyBrowserJournal())}
         />
         <Toasts />
+        {isDesktop() && <UpdateAvailableModal />}
       </>
     )
   }
@@ -231,6 +235,7 @@ function ProtectedApp() {
       <>
         <Onboarding />
         <Toasts />
+        {isDesktop() && <UpdateAvailableModal />}
       </>
     )
   }
@@ -281,6 +286,7 @@ function ProtectedApp() {
           onSent={() => toast(t('feedback.sent'), 'success')}
         />
         <WhatsNewModal />
+        <UpdateAvailableModal />
       </div>
     </TradesProvider>
   )

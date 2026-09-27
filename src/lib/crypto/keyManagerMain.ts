@@ -46,9 +46,28 @@ export function generateRandomKeyHex(): string {
   return crypto.randomBytes(KEY_BYTES).toString('hex')
 }
 
-export function deriveKeyFromPassword(password: string, saltHex: string): string {
+/** Etiqueta fija del HMAC que comprueba la contraseña sin abrir SQLite. */
+export const PASSWORD_VERIFIER_LABEL = 'atrium-master-password-verifier-v1'
+
+export function deriveKeyFromPassword(
+  password: string,
+  saltHex: string,
+  iterations: number = PBKDF2_ITERATIONS,
+): string {
+  const rounds = iterations >= PBKDF2_ITERATIONS ? iterations : PBKDF2_ITERATIONS
   const salt = Buffer.from(saltHex, 'hex')
-  return crypto.pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, KEY_BYTES, 'sha256').toString('hex')
+  return crypto.pbkdf2Sync(password, salt, rounds, KEY_BYTES, 'sha256').toString('hex')
+}
+
+export function passwordVerifierHex(keyHex: string): string {
+  return crypto.createHmac('sha256', Buffer.from(keyHex, 'hex')).update(PASSWORD_VERIFIER_LABEL).digest('hex')
+}
+
+export function passwordVerifierMatches(keyHex: string, verifier: string): boolean {
+  if (!/^[0-9a-f]{64}$/i.test(verifier) || !/^[0-9a-f]{64}$/i.test(keyHex)) return false
+  const actual = Buffer.from(passwordVerifierHex(keyHex), 'hex')
+  const expected = Buffer.from(verifier, 'hex')
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected)
 }
 
 /** HKDF-SHA256 — misma derivación que syncCrypto.ts en el renderer. */
@@ -76,7 +95,7 @@ export function deriveSyncKeyHexFromPassword(userDataDir: string, password: stri
   }
   const trimmed = password.trim()
   if (!trimmed) return { ok: false, error: 'Introduce tu contraseña maestra.' }
-  const dbKey = deriveKeyFromPassword(trimmed, meta.salt)
+  const dbKey = deriveKeyFromPassword(trimmed, meta.salt, meta.iterations)
   return { ok: true, keyHex: deriveSyncKeyHexFromDbKey(dbKey) }
 }
 
@@ -97,11 +116,14 @@ export function readCryptoMeta(userDataDir: string): CryptoMeta | null {
     if (raw.kdf !== 'pbkdf2') return null
     if (typeof raw.iterations !== 'number' || raw.iterations < PBKDF2_ITERATIONS) return null
     if (raw.mode === 'password' && (typeof raw.salt !== 'string' || !/^[0-9a-f]+$/i.test(raw.salt))) return null
+    const verifier =
+      typeof raw.verifier === 'string' && /^[0-9a-f]{64}$/i.test(raw.verifier) ? raw.verifier.toLowerCase() : undefined
     return {
       mode: raw.mode,
       salt: raw.salt,
       kdf: 'pbkdf2',
       iterations: raw.iterations,
+      verifier,
     }
   } catch {
     return null
@@ -111,6 +133,22 @@ export function readCryptoMeta(userDataDir: string): CryptoMeta | null {
 export function writeCryptoMeta(userDataDir: string, meta: CryptoMeta): void {
   fs.mkdirSync(userDataDir, { recursive: true })
   fs.writeFileSync(metaPath(userDataDir), JSON.stringify(meta, null, 2), { encoding: 'utf-8', mode: 0o600 })
+}
+
+export function removeCryptoMeta(userDataDir: string): void {
+  try {
+    const p = metaPath(userDataDir)
+    if (fs.existsSync(p)) fs.unlinkSync(p)
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Añade el verificador HMAC si esta instalación aún no lo tenía (la BD acaba de abrirse con la clave buena). */
+export function ensurePasswordVerifier(userDataDir: string, keyHex: string): void {
+  const meta = readCryptoMeta(userDataDir)
+  if (!meta || meta.mode !== 'password' || !meta.salt || meta.verifier) return
+  writeCryptoMeta(userDataDir, { ...meta, verifier: passwordVerifierHex(keyHex) })
 }
 
 export function isSecureStorageAvailable(): boolean {
@@ -208,6 +246,7 @@ export function getCryptoStatus(userDataDir: string, dbFileExists: boolean): Cry
       mode: null,
       secureStorageAvailable,
       needsUnlock: false,
+      hasDatabase: dbFileExists,
     }
   }
 
@@ -217,6 +256,7 @@ export function getCryptoStatus(userDataDir: string, dbFileExists: boolean): Cry
       mode: 'password',
       secureStorageAvailable,
       needsUnlock: dbFileExists,
+      hasDatabase: dbFileExists,
     }
   }
 
@@ -225,10 +265,11 @@ export function getCryptoStatus(userDataDir: string, dbFileExists: boolean): Cry
     mode: 'secure-storage',
     secureStorageAvailable,
     needsUnlock: dbFileExists && !loadKeyFromSecureStorage(userDataDir),
+    hasDatabase: dbFileExists,
   }
 }
 
-type KeyResult = { ok: true; key: string } | { ok: false; error: string }
+type KeyResult = { ok: true; key: string; verifierMatched?: boolean } | { ok: false; error: string }
 
 export function setupWithPassword(userDataDir: string, password: string): KeyResult {
   const trimmed = password.trim()
@@ -240,12 +281,13 @@ export function setupWithPassword(userDataDir: string, password: string): KeyRes
   }
 
   const salt = generateSaltHex()
-  const key = deriveKeyFromPassword(trimmed, salt)
+  const key = deriveKeyFromPassword(trimmed, salt, PBKDF2_ITERATIONS)
   const meta: CryptoMeta = {
     mode: 'password',
     salt,
     kdf: 'pbkdf2',
     iterations: PBKDF2_ITERATIONS,
+    verifier: passwordVerifierHex(key),
   }
   writeCryptoMeta(userDataDir, meta)
   deleteSecureKeyFile(userDataDir)
@@ -285,8 +327,11 @@ export function unlockWithPassword(userDataDir: string, password: string): KeyRe
   if (!trimmed) {
     return { ok: false, error: 'Introduce tu contraseña maestra.' }
   }
-  const key = deriveKeyFromPassword(trimmed, meta.salt)
-  return { ok: true, key }
+  const key = deriveKeyFromPassword(trimmed, meta.salt, meta.iterations)
+  if (meta.verifier && !passwordVerifierMatches(key, meta.verifier)) {
+    return { ok: false, error: 'Contraseña incorrecta. Sin la contraseña maestra, los datos cifrados no son recuperables.' }
+  }
+  return { ok: true, key, verifierMatched: !!meta.verifier }
 }
 
 export function getExportKeyMaterial(

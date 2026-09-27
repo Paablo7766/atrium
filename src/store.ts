@@ -100,6 +100,12 @@ interface State {
   openFeedback: (from: FeedbackOpenFrom) => void
   closeFeedback: () => void
 
+  whatsNewOpen: boolean
+  whatsNewVisible: boolean
+  openWhatsNew: () => void
+  closeWhatsNew: () => void
+  setWhatsNewVisible: (visible: boolean) => void
+
   init: () => Promise<void>
   unlockDatabase: () => Promise<void>
   retryLoad: () => Promise<void>
@@ -153,8 +159,8 @@ interface State {
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let persistFailNotified = false
 
-function persistNow(get: () => State, sync = false) {
-  if (get().loadError) return
+function persistNow(get: () => State, sync = false): boolean {
+  if (get().loadError) return false
   const { settings, accounts } = snapshot(get())
   const payload = { version: 2 as const, settings, accounts, trades: [] as Trade[], notes: [] as JournalEntry[] }
   const fail = (e: unknown) => {
@@ -172,10 +178,11 @@ function persistNow(get: () => State, sync = false) {
           console.warn('[store] cloud push:', e instanceof Error ? e.message : e)
         })
       }
+      return true
     } catch (e) {
       fail(e)
+      return false
     }
-    return
   }
   void saveData(payload)
     .then(() => {
@@ -188,6 +195,7 @@ function persistNow(get: () => State, sync = false) {
       }
     })
     .catch(fail)
+  return true
 }
 
 export function flushPersist() {
@@ -416,11 +424,16 @@ export const useStore = create<State>((set, get) => ({
   shareTarget: null,
   feedbackOpen: false,
   feedbackContext: null,
+  whatsNewOpen: false,
+  whatsNewVisible: false,
 
   openFeedback: (from) => {
     set({ feedbackOpen: true, feedbackContext: captureFeedbackContext(from) })
   },
   closeFeedback: () => set({ feedbackOpen: false, feedbackContext: null }),
+  openWhatsNew: () => set({ whatsNewOpen: true }),
+  closeWhatsNew: () => set({ whatsNewOpen: false }),
+  setWhatsNewVisible: (visible) => set({ whatsNewVisible: visible }),
 
   init: async () => {
     const result = await loadData()
@@ -880,7 +893,12 @@ export const useStore = create<State>((set, get) => ({
     const others = flushed.filter((a) => a.id !== account.id)
     writePref('atrium.page', 'dashboard')
     set({ accounts: [account, ...others], trades, notes, cashflows, settings, page: 'dashboard', tutorialActive: false, loadError: null })
-    persistNow(get)
+    if (isDesktop() && !persistNow(get, true)) {
+      set({
+        settings: { ...settings, onboardingCompleted: false },
+        page: s.page,
+      })
+    }
   },
 
   startTutorial: () => {

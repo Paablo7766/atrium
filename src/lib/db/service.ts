@@ -15,6 +15,9 @@ import {
   tryAutoUnlock as tryAutoUnlockKey,
   unlockWithPassword,
   writeCryptoMeta,
+  removeCryptoMeta,
+  ensurePasswordVerifier,
+  passwordVerifierHex,
   pinSessionDbKey,
   clearSessionDbKey,
 } from '@/lib/crypto/keyManagerMain'
@@ -29,6 +32,7 @@ import {
   getUserDataDir,
   hasEncryptionKey,
   isDatabaseOpen,
+  openDatabase,
   openDatabaseWithKey,
   rekeyDatabase,
   setEncryptionKey,
@@ -146,6 +150,23 @@ function logInitError(err: unknown, context: string): void {
     console.error('[journal-db] stack:', err.stack)
     const extra = err as Error & { code?: unknown }
     if (extra.code != null) console.error('[journal-db] code:', extra.code)
+  }
+}
+
+/** Tras abrir SQLCipher, confirma que journal.db existe en disco (WAL incluido). */
+export function journalMaterializeOnDisk(): { ok: true } | { ok: false; error: string } {
+  const missingFile =
+    'No se pudo crear el archivo del diario (journal.db). Comprueba permisos en la carpeta de datos de Atrium.'
+  try {
+    if (!hasEncryptionKey()) {
+      return { ok: false, error: 'El diario no está desbloqueado; no se puede crear la base de datos.' }
+    }
+    if (!isDatabaseOpen()) openDatabase()
+    checkpointWal()
+    if (!dbFileExists()) return { ok: false, error: missingFile }
+    return { ok: true }
+  } catch {
+    return { ok: false, error: initError() }
   }
 }
 
@@ -273,8 +294,10 @@ export function journalSetupPassword(password: string): { ok: true } | { ok: fal
   const dir = getUserDataDir()
   const existing = readCryptoMeta(dir)
   if (existing?.mode === 'password') {
-    if (isDatabaseOpen()) return { ok: true }
-    return journalUnlockPassword(password)
+    if (isDatabaseOpen() && dbFileExists()) return { ok: true }
+    const unlocked = journalUnlockPassword(password)
+    if (!unlocked.ok) return unlocked
+    return journalMaterializeOnDisk()
   }
   if (existing) {
     return { ok: false, error: 'El cifrado ya está configurado.' }
@@ -284,9 +307,23 @@ export function journalSetupPassword(password: string): { ok: true } | { ok: fal
   if (!result.ok) return result
   if (!openWithKey(result.key)) {
     removeDbFiles()
-    if (!openWithKey(result.key)) return { ok: false, error: initError() }
+    if (!openWithKey(result.key)) {
+      // La sal no puede quedar huérfana: si no, el siguiente intento entra por «desbloquear» y cualquier fallo parece contraseña incorrecta.
+      removeCryptoMeta(dir)
+      removeDbFiles()
+      return { ok: false, error: initError() }
+    }
   }
   migrateLegacyJsonIfNeeded(getDatabase(), dir)
+  const materialized = journalMaterializeOnDisk()
+  if (!materialized.ok) {
+    removeCryptoMeta(dir)
+    removeDbFiles()
+    closeDatabase()
+    clearEncryptionKey()
+    clearSessionDbKey()
+    return materialized
+  }
   return { ok: true }
 }
 
@@ -298,17 +335,17 @@ export function journalSetupSecureStorage(): { ok: true } | { ok: false; error: 
     if (existing.mode !== 'secure-storage') {
       return { ok: false, error: 'El cifrado ya está configurado con contraseña maestra.' }
     }
-    if (isDatabaseOpen()) return { ok: true }
+    if (isDatabaseOpen() && dbFileExists()) return { ok: true }
     const unlocked = tryAutoUnlockKey(dir)
     if (!unlocked.ok) return unlocked
     if (openWithKey(unlocked.key)) {
       migrateLegacyJsonIfNeeded(getDatabase(), dir)
-      return { ok: true }
+      return journalMaterializeOnDisk()
     }
     removeDbFiles()
     if (openWithKey(unlocked.key)) {
       migrateLegacyJsonIfNeeded(getDatabase(), dir)
-      return { ok: true }
+      return journalMaterializeOnDisk()
     }
     return { ok: false, error: initError() }
   }
@@ -320,21 +357,32 @@ export function journalSetupSecureStorage(): { ok: true } | { ok: false; error: 
     if (!openWithKey(result.key)) return { ok: false, error: initError() }
   }
   migrateLegacyJsonIfNeeded(getDatabase(), dir)
-  return { ok: true }
+  return journalMaterializeOnDisk()
 }
+
+const WRONG_PASSWORD = 'Contraseña incorrecta. Sin la contraseña maestra, los datos cifrados no son recuperables.'
 
 export function journalUnlockPassword(password: string): { ok: true } | { ok: false; error: string } {
   const dir = getUserDataDir()
   const derived = unlockWithPassword(dir, password)
   if (!derived.ok) return derived
+  const hadDb = dbFileExists()
   if (!openWithKey(derived.key)) {
-    return {
-      ok: false,
-      error: 'Contraseña incorrecta. Sin la contraseña maestra, los datos cifrados no son recuperables.',
-    }
+    // Sin archivo, o con la contraseña ya comprobada por el HMAC, el fallo es de la base, no de la clave.
+    if (!hadDb || derived.verifierMatched) return { ok: false, error: initError() }
+    return { ok: false, error: WRONG_PASSWORD }
   }
+  if (hadDb) ensurePasswordVerifier(dir, derived.key)
   migrateLegacyJsonIfNeeded(getDatabase(), dir)
-  return { ok: true }
+  const materialized = journalMaterializeOnDisk()
+  if (!materialized.ok && !hadDb) {
+    removeCryptoMeta(dir)
+    removeDbFiles()
+    closeDatabase()
+    clearEncryptionKey()
+    clearSessionDbKey()
+  }
+  return materialized.ok ? { ok: true } : materialized
 }
 
 /** Pasa de clave automática del sistema a contraseña maestra (copia automática y restauración en móvil). */
@@ -379,6 +427,7 @@ export function journalMigrateToMasterPassword(password: string): { ok: true } |
     salt,
     kdf: 'pbkdf2',
     iterations: PBKDF2_ITERATIONS,
+    verifier: passwordVerifierHex(newKey),
   })
   deleteSecureKeyFile(dir)
   setEncryptionKey(newKey)
@@ -416,7 +465,12 @@ export function journalLoad(): DiskLoad {
     const status = getCryptoStatus(dir, dbFileExists())
     if (!status.configured && !dbFileExists()) return { status: 'empty' }
     if (status.configured && !isDatabaseOpen()) {
-      if (status.mode === 'password') return { status: 'locked' }
+      if (status.mode === 'password') {
+        // Sal guardada pero sin journal.db: no hay nada que descifrar. Pedir la contraseña aquí
+        // hacía que un fallo al crear el archivo se viera como contraseña incorrecta.
+        if (!dbFileExists()) return { status: 'empty' }
+        return { status: 'locked' }
+      }
       if (bootstrapEncryptionKey(dir)) {
         migrateLegacyJsonIfNeeded(getDatabase(), dir)
       } else {
@@ -436,9 +490,13 @@ export function journalSave(data: PersistedData, userDataDir: string): boolean {
   if (isJournalLocked() || isJournalUnrecoverable() || !looksLikeJournalData(data)) return false
   try {
     if (!isDatabaseOpen()) {
-      const status = getCryptoStatus(userDataDir, dbFileExists())
-      if (!status.configured) return false
-      if (!bootstrapEncryptionKey(userDataDir)) return false
+      if (hasEncryptionKey()) {
+        openDatabase()
+      } else {
+        const status = getCryptoStatus(userDataDir, dbFileExists())
+        if (!status.configured) return false
+        if (!bootstrapEncryptionKey(userDataDir)) return false
+      }
     }
     rotateBackups(userDataDir)
     const db = getDatabase()

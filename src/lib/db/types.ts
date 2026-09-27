@@ -1,5 +1,6 @@
 import type { PersistedData } from '@/types'
 import type { CryptoResult, CryptoStatusResponse } from '@/lib/crypto/types'
+import type { DesktopUpdaterStatus } from '@/lib/desktopUpdater'
 
 export type DiskLoad =
   | { status: 'empty' }
@@ -80,6 +81,13 @@ export interface DesktopApi {
     getExportMaterial?: (password?: string) => Promise<
       { ok: true; keyHex: string; salt: string; iterations: number } | { ok: false; error: string }
     >
+  }
+  updater?: {
+    getStatus: () => Promise<DesktopUpdaterStatus>
+    setAllowPrerelease: (enabled: boolean) => Promise<DesktopUpdaterStatus>
+    download: () => Promise<{ ok: true } | { ok: false; error: string }>
+    dismiss: () => Promise<DesktopUpdaterStatus>
+    onStatus: (cb: (status: DesktopUpdaterStatus) => void) => () => void
   }
 }
 
