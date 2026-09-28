@@ -16,7 +16,7 @@ import { useStore, flushPersist, flushPersistAsync, type Page } from '@/store'
 import { pathForPage, pageFromPath } from '@/lib/routes'
 import { useActivePage } from '@/lib/useActivePage'
 import { useGoToPage } from '@/lib/useGoToPage'
-import { Sidebar } from '@/components/Sidebar'
+import { AppBar } from '@/components/AppBar'
 import { Toasts } from '@/components/Toasts'
 import { Onboarding } from '@/components/Onboarding'
 import { MasterPasswordUnlock } from '@/components/MasterPasswordUnlock'
@@ -109,7 +109,7 @@ export default function App() {
   )
 }
 
-/** Journal autenticado: hidrata store, onboarding y shell con Sidebar. */
+/** Journal autenticado: hidrata store, onboarding y shell con barra superior. */
 function ProtectedApp() {
   const { session, cloudEnabled } = useAuth()
   const syncRequired = cloudEnabled && readCloudSyncPref()
@@ -125,7 +125,6 @@ function ProtectedApp() {
   const tradeModalOpen = useStore((s) => s.tradeModal.open)
   const shareTarget = useStore((s) => s.shareTarget)
   const setPage = useStore((s) => s.setPage)
-  const toggleSidebar = useStore((s) => s.toggleSidebar)
   const feedbackOpen = useStore((s) => s.feedbackOpen)
   const feedbackContext = useStore((s) => s.feedbackContext)
   const closeFeedback = useStore((s) => s.closeFeedback)
@@ -192,7 +191,7 @@ function ProtectedApp() {
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
         e.preventDefault()
-        toggleSidebar()
+        window.dispatchEvent(new Event('atrium:focus-search'))
         return
       }
       if (typing || e.ctrlKey || e.metaKey || e.altKey) return
@@ -208,7 +207,7 @@ function ProtectedApp() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onboardingCompleted, tutorialActive, loadError, openTradeModal, goToPage, toggleSidebar])
+  }, [onboardingCompleted, tutorialActive, loadError, openTradeModal, goToPage])
 
   if ((syncRequired && session && !loaded) || (!syncRequired && !loaded)) {
     return <AuthLoadingScreen />
@@ -260,9 +259,9 @@ function ProtectedApp() {
   return (
     <TradesProvider>
       {SHARE_RESTORE_BOOTSTRAP_ENABLED && <ShareRestoreBootstrap />}
-      <div className="h-full flex bg-bg">
-        <Sidebar />
-        <main data-tour="stage" className="flex-1 min-w-0 flex flex-col h-full stage-ambient">
+      <div className="h-full flex flex-col bg-bg">
+        <AppBar />
+        <main data-tour="stage" className="flex-1 min-w-0 min-h-0 flex flex-col stage-ambient">
           <StagePage active={activePage === 'dashboard'}>
             <Dashboard />
           </StagePage>

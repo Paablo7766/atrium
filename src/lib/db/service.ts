@@ -535,6 +535,7 @@ export function journalSave(data: PersistedData, userDataDir: string): JournalSa
     return { ok: true }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'No se pudo guardar en la base de datos.'
+    console.error('[journalSave]', message, err)
     return { ok: false, error: message }
   }
 }

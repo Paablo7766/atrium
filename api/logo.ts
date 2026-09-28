@@ -4,14 +4,16 @@
  */
 export const config = { runtime: 'edge' }
 
-import { cleanSymbol, corsHeaders, fmpKey } from '../lib/fmpSecurity'
+import { cleanSymbol, enforceRequestOrigin, fmpKey } from '../lib/fmpSecurity'
 import { checkFeedbackRateLimit, clientIpFromRequest } from '../lib/feedbackRateLimit'
 
 const FMP_RATE_MAX = 60
 const FMP_RATE_WINDOW_MS = 60_000
 
 export default async function handler(req: Request): Promise<Response> {
-  const CORS = corsHeaders(req)
+  const origin = enforceRequestOrigin(req)
+  if (!origin.ok) return origin.response
+  const CORS = origin.headers
 
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS })

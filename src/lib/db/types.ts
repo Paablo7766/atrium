@@ -49,7 +49,7 @@ export type Filter = { name: string; extensions: string[] }
 export interface DesktopApi {
   load: () => Promise<DiskLoadRaw | PersistedData | null>
   save: (data: PersistedData) => Promise<{ ok: true } | { ok: false; error: string }>
-  saveSync?: (data: PersistedData) => boolean
+  saveSync?: (data: PersistedData) => { ok: true } | { ok: false; error: string }
   dataPath: () => Promise<string>
   openDataFolder: () => Promise<void>
   wipeLocal?: () => Promise<void>

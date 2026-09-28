@@ -12,7 +12,8 @@ contextBridge.exposeInMainWorld('api', {
 
   save: (data: unknown) => ipcRenderer.invoke('data:save', data),
 
-  saveSync: (data: unknown) => ipcRenderer.sendSync('data:save-sync', data) as boolean,
+  saveSync: (data: unknown) =>
+    ipcRenderer.sendSync('data:save-sync', data) as { ok: true } | { ok: false; error: string },
 
   dataPath: () => ipcRenderer.invoke('app:dataPath'),
 

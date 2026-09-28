@@ -13,6 +13,34 @@ export type ReleaseStory = {
 type StoriesByLocale = Record<AppLocale, ReleaseStory[]>
 
 const STORIES: Record<string, StoriesByLocale> = {
+  '1.2.0-beta.6': {
+    es: [
+      {
+        kind: 'improve',
+        title: 'La barra superior deja más sitio al diario',
+        body: 'Resumen, operaciones, calendario y el resto van en una barra arriba. Ctrl+B abre la búsqueda de operaciones al instante.',
+        visual: 'dashboard',
+      },
+      {
+        kind: 'improve',
+        title: 'Las APIs web son más estrictas',
+        body: 'Logos, cotizaciones y feedback solo responden a orígenes permitidos. Menos superficie para abusos desde otros sitios.',
+      },
+    ],
+    en: [
+      {
+        kind: 'improve',
+        title: 'The top bar gives the journal more room',
+        body: 'Overview, trades, calendar, and the rest live in a bar at the top. Ctrl+B jumps straight to trade search.',
+        visual: 'dashboard',
+      },
+      {
+        kind: 'improve',
+        title: 'Web APIs are tighter',
+        body: 'Logos, quotes, and feedback only answer allowed origins. Less room for abuse from other sites.',
+      },
+    ],
+  },
   '1.2.0-beta.3': {
     es: [
       {

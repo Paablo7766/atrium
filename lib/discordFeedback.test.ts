@@ -23,7 +23,6 @@ const baseDiagnostics: FeedbackDiagnostics = {
   defaultMarket: 'forex',
   tradeModalOpen: false,
   statsRange: 'month',
-  sidebarCollapsed: false,
   visibility: 'visible',
   utcOffset: '+02:00',
   openedFrom: 'sidebar',

@@ -401,7 +401,7 @@ function applyContentSecurityPolicy() {
 
     "style-src 'self' 'unsafe-inline'",
 
-    "img-src 'self' data: https: blob:",
+    "img-src 'self' data: blob: https://financialmodelingprep.com https://images.fmp.com https://cdn.jsdelivr.net https://assets.parqet.com",
 
     "font-src 'self' data:",
 
@@ -637,9 +637,11 @@ ipcMain.handle('data:load', (e) => {
 
 ipcMain.handle('data:save', (e, data: unknown) => {
 
-  if (!isTrustedSender(e)) return false
+  if (!isTrustedSender(e)) return { ok: false as const, error: 'IPC no autorizado' }
 
-  if (!data || typeof data !== 'object') return false
+  if (!data || typeof data !== 'object') {
+    return { ok: false as const, error: 'Datos de diario no válidos' }
+  }
 
   const result = journalSave(data as import('@/types').PersistedData, userDataDir())
 
@@ -655,7 +657,7 @@ ipcMain.on('data:save-sync', (e, data: unknown) => {
 
   if (!isTrustedSender(e)) {
 
-    e.returnValue = false
+    e.returnValue = { ok: false as const, error: 'IPC no autorizado' }
 
     return
 
@@ -663,7 +665,7 @@ ipcMain.on('data:save-sync', (e, data: unknown) => {
 
   if (!data || typeof data !== 'object') {
 
-    e.returnValue = false
+    e.returnValue = { ok: false as const, error: 'Datos de diario no válidos' }
 
     return
 
@@ -673,7 +675,7 @@ ipcMain.on('data:save-sync', (e, data: unknown) => {
 
   if (result.ok) scheduleFolderBackup()
 
-  e.returnValue = result.ok
+  e.returnValue = result
 
 })
 

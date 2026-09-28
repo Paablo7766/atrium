@@ -48,8 +48,6 @@ export type FeedbackDiagnostics = {
 
   statsRange: string
 
-  sidebarCollapsed: boolean
-
   visibility: string
 
   utcOffset: string
@@ -220,7 +218,7 @@ function parseDiagnostics(raw: unknown): FeedbackDiagnostics | { error: string }
 
   }
 
-  if (typeof o.tradeModalOpen !== 'boolean' || typeof o.sidebarCollapsed !== 'boolean') {
+  if (typeof o.tradeModalOpen !== 'boolean') {
 
     return { error: 'Invalid diagnostics UI flags' }
 
@@ -309,8 +307,6 @@ function parseDiagnostics(raw: unknown): FeedbackDiagnostics | { error: string }
     tradeModalOpen: o.tradeModalOpen,
 
     statsRange,
-
-    sidebarCollapsed: o.sidebarCollapsed,
 
     visibility,
 
@@ -750,7 +746,7 @@ function diagnosticsEmbedValue(d: FeedbackDiagnostics): string {
 
     `Moneda: ${d.currency} · Mercado: ${d.defaultMarket} · Rango stats: ${d.statsRange}`,
 
-    `Modal trade: ${d.tradeModalOpen ? 'abierto' : 'cerrado'} · Sidebar: ${d.sidebarCollapsed ? 'colapsada' : 'expandida'}`,
+    `Modal trade: ${d.tradeModalOpen ? 'abierto' : 'cerrado'}`,
 
     `Abierto desde: ${d.openedFrom}`,
 

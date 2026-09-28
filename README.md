@@ -48,6 +48,14 @@ Nothing is uploaded unless you turn that on. There is no Atrium cloud account ho
 
 Atrium es un diario de escritorio: varias cuentas, importación de bróker y analítica, en SQLite cifrado. Nada se sube si tú no lo activas. Atrium no custodia tu libro.
 
+## About this project · Sobre el proyecto
+
+Atrium is built and maintained by **one developer** (Pablo Sanz) in spare time — not a company roadmap. **Replies, bug fixes, and new features may take a while**; there is no SLA.
+
+**Feedback:** use the in-app **Send feedback** flow (Settings or sidebar). Reports go to the same beta channel (Discord) as suggestions and bugs — no separate forum required. For security issues, see [SECURITY.md](SECURITY.md) (private report before a public issue).
+
+Atrium lo mantiene **una sola persona** en tiempo libre. Las respuestas y las funciones pueden tardar. El canal de feedback es el modal **Enviar feedback** de la app (Discord). Vulnerabilidades: [SECURITY.md](SECURITY.md).
+
 | | What you get |
 |:--:|:--|
 | **Local-first** | Works offline. No sign-in to journal. |

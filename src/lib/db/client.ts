@@ -210,8 +210,8 @@ export async function saveData(data: PersistedData): Promise<void> {
 export function saveDataSync(data: PersistedData): void {
   if (isDesktop()) {
     const fn = window.api!.saveSync
-    const ok = fn ? fn(data) : false
-    if (!ok) throw new Error('No se pudo guardar en la base de datos.')
+    const result = fn ? fn(data) : { ok: false as const, error: 'Guardado síncrono no disponible.' }
+    if (!result.ok) throw new Error(result.error || 'No se pudo guardar en la base de datos.')
     return
   }
   if (getWebKeyHex()) {

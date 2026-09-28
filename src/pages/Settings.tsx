@@ -515,7 +515,7 @@ export function SettingsPage() {
                   <Panel title={t('set.shortcuts')}>
                     <div className="flex flex-col gap-2">
                       <ShortcutRow keys={`${modKey}+N`} label={t('set.shortcut.newTrade')} />
-                      <ShortcutRow keys={`${modKey}+B`} label={t('set.shortcut.sidebar')} />
+                      <ShortcutRow keys={`${modKey}+B`} label={t('set.shortcut.search')} />
                       <ShortcutRow keys="1–6" label={t('set.shortcut.pages')} />
                       <ShortcutRow keys={`${modKey}+Enter`} label={t('set.shortcut.save')} />
                     </div>

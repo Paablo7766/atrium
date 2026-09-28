@@ -6,9 +6,7 @@ import {
   ArrowLeft,
   ArrowRight,
   BarChart3,
-  BookOpen,
   Building2,
-  CalendarDays,
   Check,
   Coins,
   Ellipsis,
@@ -17,8 +15,6 @@ import {
   Gem,
   Globe,
   Layers,
-  LayoutDashboard,
-  ListOrdered,
   Lock,
   KeyRound,
   Play,
@@ -1299,13 +1295,7 @@ function Horizon({ className, style, live }: { className?: string; style?: React
   )
 }
 
-const FRAME_NAV = [
-  ['nav.dashboard', LayoutDashboard],
-  ['nav.trades', ListOrdered],
-  ['nav.calendar', CalendarDays],
-  ['nav.analytics', BarChart3],
-  ['nav.journal', BookOpen],
-] as const
+const FRAME_NAV = ['nav.dashboard', 'nav.trades', 'nav.calendar', 'nav.analytics', 'nav.journal'] as const
 
 function AppFrame({ live }: { live: boolean }) {
   const t = useT()
@@ -1313,36 +1303,32 @@ function AppFrame({ live }: { live: boolean }) {
     <div className="relative rounded-[22px] p-1.5 border border-white/[0.08] bg-white/[0.025] backdrop-blur-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_-24px_80px_-36px_rgba(255,255,255,0.22),0_60px_120px_-40px_rgba(0,0,0,1)]">
       <div aria-hidden className="absolute inset-x-16 -top-px h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
       <div className="relative rounded-[16px] border border-white/[0.06] bg-[#0b0b0d] overflow-hidden">
-        <div className="h-10 flex items-center gap-4 px-4 border-b border-white/[0.05]">
-          <span className="flex gap-1.5">
+        <div className="h-9 flex items-center gap-3 px-3.5 border-b border-white/[0.05]">
+          <span className="flex gap-1.5 shrink-0">
             {[0, 1, 2].map((i) => (
               <span key={i} className="w-2.5 h-2.5 rounded-full bg-white/[0.08]" />
             ))}
           </span>
-          <span className="flex items-center gap-2 text-[11.5px] text-dim">
+          <span className="flex items-center gap-1.5 text-[11.5px] text-text font-medium tracking-tight shrink-0">
             <BrandMark size={13} />
             Atrium
-            <span className="text-white/[0.15]">/</span>
-            <span className="text-muted">{t('nav.dashboard')}</span>
           </span>
-        </div>
-        <div className="grid md:grid-cols-[180px_minmax(0,1fr)]">
-          <nav className="hidden md:flex flex-col gap-0.5 p-3 border-r border-white/[0.05]">
-            {FRAME_NAV.map(([key, Icon], i) => (
+          <nav className="flex-1 min-w-0 flex items-center justify-center gap-0.5 overflow-hidden">
+            {FRAME_NAV.map((key, i) => (
               <span
                 key={key}
                 className={clsx(
-                  'flex items-center gap-2.5 h-8 px-2.5 rounded-[8px] text-[12px]',
-                  i === 0 ? 'bg-white/[0.06] text-text shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]' : 'text-dim',
+                  'relative h-9 px-2 inline-flex items-center text-[11px] font-medium tracking-tight whitespace-nowrap',
+                  i === 0 ? 'text-text' : 'text-dim',
                 )}
               >
-                <Icon size={13} />
                 {t(key)}
+                {i === 0 && <span className="absolute inset-x-2 bottom-0 h-px bg-white/80" />}
               </span>
             ))}
           </nav>
-          <LedgerPreview live={live} bare />
         </div>
+        <LedgerPreview live={live} bare />
       </div>
     </div>
   )

@@ -163,7 +163,12 @@ export function Trades() {
         <header className="flex items-end justify-between gap-x-6 gap-y-4 flex-wrap shrink-0 animate-fade-up">
           {trades.length > 0 && (
             <div className="min-w-0">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">{isFiltered ? tx('trades.viewPnl') : tx('trades.bookPnl')}</div>
+              <div
+                className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim cursor-help w-fit border-b border-dotted border-border-3/80"
+                title={tx('trades.pnlKpiHint')}
+              >
+                {isFiltered ? tx('trades.viewPnl') : tx('trades.bookPnl')}
+              </div>
               <div className="flex items-baseline gap-x-4 gap-y-1.5 mt-2 flex-wrap">
                 <Pnl value={kpi.pnl} className="text-[30px] font-semibold tracking-[-0.035em] leading-none">
                   {fmtMoney(kpi.pnl, settings.currency, { sign: true })}

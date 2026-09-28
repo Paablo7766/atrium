@@ -83,7 +83,6 @@ interface State {
   page: Page
   tradesQuery: string
   statsRange: Range
-  sidebarCollapsed: boolean
   toasts: Toast[]
   tutorialActive: boolean
   loadError: string | null
@@ -111,8 +110,6 @@ interface State {
   setPage: (p: Page) => void
   setTradesQuery: (q: string) => void
   setStatsRange: (r: Range) => void
-  toggleSidebar: () => void
-  setSidebarCollapsed: (collapsed: boolean) => void
 
   addTrade: (t: Omit<Trade, 'id' | 'createdAt' | 'updatedAt'>) => Trade
   updateTrade: (id: string, patch: Partial<Trade>) => void
@@ -167,6 +164,7 @@ function buildPersistPayload(get: () => State): PersistedData | null {
 function notifyPersistFail(get: () => State, e: unknown) {
   if (persistFailNotified) return
   persistFailNotified = true
+  console.error('[store] persist failed:', e)
   get().toast(e instanceof Error ? e.message : t(getAppLocale(), 'err.saveFail'), 'error')
 }
 
@@ -463,7 +461,6 @@ export const useStore = create<State>((set, get) => ({
   page: storedPage(),
   tradesQuery: '',
   statsRange: storedRange(),
-  sidebarCollapsed: typeof localStorage !== 'undefined' && localStorage.getItem('atrium.sidebar') === '1',
   toasts: [],
   tutorialActive: false,
   loadError: null,
@@ -561,24 +558,6 @@ export const useStore = create<State>((set, get) => ({
   setStatsRange: (statsRange) => {
     writePref('atrium.range', statsRange)
     set({ statsRange })
-  },
-  toggleSidebar: () =>
-    set((s) => {
-      const sidebarCollapsed = !s.sidebarCollapsed
-      try {
-        localStorage.setItem('atrium.sidebar', sidebarCollapsed ? '1' : '0')
-      } catch {
-        /* ignore */
-      }
-      return { sidebarCollapsed }
-    }),
-  setSidebarCollapsed: (sidebarCollapsed) => {
-    try {
-      localStorage.setItem('atrium.sidebar', sidebarCollapsed ? '1' : '0')
-    } catch {
-      /* ignore */
-    }
-    set({ sidebarCollapsed })
   },
 
   addTrade: (t) => {
@@ -956,16 +935,10 @@ export const useStore = create<State>((set, get) => ({
   },
 
   startTutorial: () => {
-    try {
-      localStorage.setItem('atrium.sidebar', '0')
-    } catch {
-      /* ignore */
-    }
     writePref('atrium.page', 'dashboard')
     set({
       tutorialActive: true,
       page: 'dashboard',
-      sidebarCollapsed: false,
       tradeModal: { open: false },
       shareTarget: null,
     })

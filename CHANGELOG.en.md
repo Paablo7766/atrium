@@ -2,6 +2,21 @@
 
 Versions follow `package.json`. Newest first.
 
+## 1.2.0-beta.6 — 2026-09-28
+
+- [Improvement] Top app bar navigation: more room for the journal; Ctrl+B focuses trade search
+- [Improvement] Web APIs (logos, quotes, feedback) with origin allowlist and tighter CSP
+- [Improvement] Desktop save returns clear errors when IPC or journal data is invalid
+- [Improvement] Refined journal persistence and web migrations; partial-close fees documented
+- [Improvement] README, SECURITY.md, and DECISIONS.md for project expectations and security reports
+
+## 1.2.0-beta.5 — 2026-09-27
+
+- [Improvement] More reliable broker import: Auto scoring, clearer empty/duplicate messages, summary in Settings
+- [Improvement] Import tests (XTB/IB/DEGIRO), anonymized XTB fixture, CI for mapper/xlsx
+- [Improvement] Journal persistence, web backup, and encrypted sync (Supabase migration 006)
+- [Improvement] Onboarding with master password; logo/quotes APIs; CI workflow
+
 ## 1.2.0-beta.4 — 2026-09-27
 
 - [Fix] Trades persist immediately and when you hide or close the tab (web)

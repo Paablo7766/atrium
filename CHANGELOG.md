@@ -2,6 +2,14 @@
 
 Las versiones siguen `package.json`. Más reciente arriba.
 
+## 1.2.0-beta.6 — 2026-09-28
+
+- [Mejora] Navegación en barra superior: más espacio para el diario; Ctrl+B enfoca la búsqueda de operaciones
+- [Mejora] APIs web (logos, cotizaciones y feedback) con allowlist de origen y CSP más estricta
+- [Mejora] Guardado en escritorio con mensajes claros si falla el IPC o los datos no son válidos
+- [Mejora] Persistencia del diario y migraciones web refinadas; comisiones en cierres parciales documentadas
+- [Mejora] README, SECURITY.md y DECISIONS.md para expectativas del proyecto y reportes de seguridad
+
 ## 1.2.0-beta.5 — 2026-09-27
 
 - [Mejora] Importación desde bróker más fiable: detección Auto con puntuación, mensajes claros si no importa nada o son duplicados, resumen en Ajustes

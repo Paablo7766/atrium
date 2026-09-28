@@ -24,7 +24,8 @@ export function migrateLegacyJsonIfNeeded(db: Database.Database, userDataDir: st
     const migrated = `${jsonPath}.migrated`
     fs.renameSync(jsonPath, migrated)
     return true
-  } catch {
+  } catch (err) {
+    console.error('[migrateLegacyJson] failed to migrate journal-data.json', err)
     return false
   }
 }

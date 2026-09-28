@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { accountEquity } from '@/lib/capital'
 import { generateDemoTrades } from '@/lib/demo'
-import { computeStats, dailyFlow, dailyPnl, equityCurve, sortByExit, tradePnl } from '@/lib/stats'
+import { computeStats, dailyFlow, dailyPnl, equityCurve, sortByExit, tradePnl, unrealizedPnl } from '@/lib/stats'
+import type { Trade } from '@/types'
 import { csvToTrades, dedupeTrades, tradesToCsv } from '@/lib/csv'
 import { deltaPct, filterByRange, priorEquity } from '@/lib/range'
 import { toDateKey } from '@/lib/format'
@@ -87,5 +88,30 @@ ES,Corto,2026-01-16,50,40,2,-15`
     expect(near(stats.netPnl, statsMid.netPnl)).toBe(true)
     expect(near(stats.sharpe, statsMid.sharpe, 1e-4)).toBe(false)
     expect(csv.includes('setupId') && csv.includes('mistakes') && csv.includes('pnlOverride')).toBe(true)
+  })
+
+  it('unrealizedPnl resta solo las comisiones prorrateadas del remanente abierto', () => {
+    const openLeg: Trade = {
+      id: 'open-remainder',
+      symbol: 'AAPL',
+      market: 'Acciones',
+      direction: 'LONG',
+      status: 'OPEN',
+      entryDate: '2024-06-01T10:00:00.000Z',
+      entryPrice: 100,
+      quantity: 40,
+      multiplier: 1,
+      fees: 40,
+      strategy: 'test',
+      tags: [],
+      notes: '',
+      rating: 0,
+      createdAt: '2024-06-01T10:00:00.000Z',
+      updatedAt: '2024-06-01T10:00:00.000Z',
+    }
+    const live = 110
+    const gross = (live - openLeg.entryPrice) * openLeg.quantity
+    expect(unrealizedPnl(openLeg, live)).toBeCloseTo(gross - openLeg.fees!, 6)
+    expect(unrealizedPnl(openLeg, live)).toBeCloseTo(360, 6)
   })
 })
